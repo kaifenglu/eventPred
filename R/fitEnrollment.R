@@ -1,35 +1,39 @@
 #' @title Fit enrollment model
-#' @description Fit a specified enrollment model to the enrollment data.
+#' @description Fits a specified enrollment model to the enrollment data.
 #'
-#' @param df Input data set containing \code{RANDDT}.
-#' @param enroll_model Enrollment model: Poisson (homogeneous), time-decay,
-#'   or B-spline.
-#' @param nknots Number of inner knots for B-spline. Defaults to 1.
+#' @param df The input data set which includes information on
+#'   \code{randdt} and \code{cutoffdt}.
+#' @param enroll_model The enrollment model which can be specified as
+#'   Poisson (homogeneous), time-decay, or B-spline. The default is
+#'   B-spline with one inner knot.
+#' @param nknots The number of inner knots for the B-spline model.
+#'   By default, it is set to 1.
 #'
-#' @details For time-decay model, the mean function is
+#' @details
+#' For the time-decay model, the mean function is
 #' \code{mu(t) = (mu/delta) (t - (1/delta)(1 - exp(-delta*t)))}
 #' and the rate function is
-#' \code{lambda(t) = (mu/delta) (1 - exp(-delta*t))}
-#' For B-spline model, the daily enrollment rate is approximated using
+#' \code{lambda(t) = (mu/delta) (1 - exp(-delta*t))}.
+#' For the B-spline model, the daily enrollment rate is approximated using
 #' the exponential of a B-spline function:
-#' \code{lambda(t) = exp(B(t)*theta)}
-#' where B(t) are the B-spline basis functions.
+#' \code{lambda(t) = exp(B(t)*theta)},
+#' where B(t) represents the B-spline basis functions.
 #'
-#' @return A list of results from model fit including: \code{model},
-#'   \code{theta}, \code{vtheta}, \code{bic}, and the design marix
-#'   \code{x} for B-spline enrollment model.
+#' @return
+#' A list of results from the model fit including key information
+#' such as the enrollment model, \code{model}, the estimated model
+#' parameters, \code{theta}, the covariance matrix, \code{vtheta}, and
+#' the Bayesian information criterion, \code{bic}, as well as
+#' the design matrix \code{x} for the B-spline enrollment model.
 #'
 #' @examples
 #'
-#' observed <- summarizeObserved(df = observedData,
-#'                               to_predict = "enrollment and event")
-#'
-#' fitEnr <- fitEnrollment(df = observed$adsl, enroll_model = "b-spline",
-#'                         nknots = 1)
+#' enroll_fit <- fitEnrollment(df = observedData, enroll_model = "b-spline",
+#'                             nknots = 1)
 #'
 #' @export
 #'
-fitEnrollment <- function(df, enroll_model, nknots = 1) {
+fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1) {
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(enroll_model),
@@ -37,14 +41,16 @@ fitEnrollment <- function(df, enroll_model, nknots = 1) {
 
   erify::check_n(nknots)
 
-  trialsdt = min(df$RANDDT)
-  cutoffdt = df$CUTOFFDT[1]
+  names(df) <- tolower(names(df))
+  trialsdt = min(df$randdt)
+  cutoffdt = df$cutoffdt[1]
   n0 = nrow(df)
   t0 = as.numeric(cutoffdt - trialsdt + 1)
 
   df1 <- df %>%
-    mutate(time = as.numeric(.data$RANDDT - trialsdt + 1))
-
+    arrange(.data$randdt) %>%
+    mutate(time = as.numeric(.data$randdt - trialsdt + 1),
+           n = row_number())
 
   if (tolower(enroll_model) == "poisson") {
     # a(t) = lambda
