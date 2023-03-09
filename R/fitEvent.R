@@ -1,43 +1,55 @@
 #' @title Fit time-to-event model
-#' @description Fit a specified time-to-event model to the event data.
+#' @description Fits a specified time-to-event model to the event data.
 #'
-#' @param df Input data set containing \code{time}, \code{event}.
-#' @param kmdf Data set containing Kaplan-Meier estimates: \code{time},
-#'   \code{surv}.
-#' @param event_model Event model: exponential, Weibull, log-normal,
-#'   piecewise exponential, model averaging (of Weibull and
-#'   log-normal using \code{exp(-bic)} weighting). Defaults to model
+#' @param df The input data set which includes information on
+#'   \code{time} and \code{event}.
+#' @param event_model The event model which specifies the type of event
+#'   model to be used in the analysis and can be set to one of the
+#'   following options: exponential, Weibull, log-normal,
+#'   piecewise exponential, or model averaging, which uses the
+#'   \code{exp(-bic)} weighting and combines Weibull and
+#'   log-normal models. If not provided, defaults to model
 #'   averaging.
-#' @param npieces Number of pieces for piecewise exponential event model.
-#'   Defaults to 3.
+#' @param npieces The number of pieces for the piecewise exponential
+#'   event model. If not provided, defaults to 3.
 #'
-#' @return A list of results from model fit including: \code{model},
-#'   \code{theta}, \code{vtheta}, \code{bic}, \code{npieces} and
-#'   \code{knots} for piecewise exponential, and the weight \code{w1}
-#'   for the Weibull component for model averaging.
+#' @return
+#' A list of results from the model fit including key information
+#' such as the event model, \code{model}, the estimated model parameters,
+#' \code{theta}, the covariance matrix, \code{vtheta}, as well as the
+#' Bayesian Information Criterion, \code{bic}.
+#'
+#' If the piecewise exponential model was used, additional
+#' variables will be included in the list of results, such as the
+#' number of pieces specified, \code{npieces}, and the location
+#' of knots used in the model, \code{knots}.
+#'
+#' If the model averaging option is chosen, the weight assigned
+#' to the Weibull component is indicated by the \code{w1} variable.
 #'
 #' @examples
 #'
-#' observed <- summarizeObserved(df = observedData,
-#'                               to_predict = "enrollment and event")
-#'
-#' fitEvt <- fitEvent(df = observed$adtte, kmdf = observed$kmdfEvt,
-#'                    event_model = "piecewise exponential", npieces = 3)
+#' event_fit <- fitEvent(df = observedData,
+#'                       event_model = "piecewise exponential", npieces = 3)
 #'
 #' @export
 #'
-fitEvent <- function(df, kmdf, event_model = "model averaging", npieces = 3) {
+fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
   erify::check_class(df, "data.frame")
   erify::check_content(tolower(event_model),
                        c("exponential", "weibull", "log-normal",
                          "piecewise exponential", "model averaging"))
-  erify::check_class(kmdf, "data.frame")
   erify::check_n(npieces)
 
+  names(df) <- tolower(names(df))
   n0 = nrow(df)
   d0 = sum(df$event)
   ex0 = sum(df$time)
 
+  kmfit <- survival::survfit(survival::Surv(time, event) ~ 1, data = df)
+  kmdf <- tibble(time = kmfit$time, surv = kmfit$surv)
+  kmdf <- tibble(time = 0, surv = 1) %>%
+    bind_rows(kmdf)
 
   if (tolower(event_model) == "exponential") {
     # lambda(t) = lambda
