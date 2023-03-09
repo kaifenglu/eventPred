@@ -1,35 +1,37 @@
-#' @title Fit time to dropout model
-#' @description Fit a specified time to dropout model to the dropout data.
+#' @title Fit time-to-dropout model
+#' @description Fits a specified time-to-dropout model to the dropout data.
 #'
-#' @param df Input data set containing \code{time}, \code{dropout}.
-#' @param kmdf Data set containing Kaplan-Meier estimates: \code{time},
-#'   \code{surv}.
-#' @param dropout_model Dropout model: none, exponential, Weibull,
-#'   log-normal. Defaults to Weibull.
+#' @param df The input data set which includes information on
+#'   \code{time} and \code{dropout}.
+#' @param dropout_model The dropout model used to analyze the dropout data
+#'   which can be set to one of three options: exponential, Weibull, or
+#'   log-normal. If not provided, defaults to Weibull.
 #'
-#' @return A list of results from model fit including: \code{model},
-#'   \code{theta}, \code{vtheta}, and \code{bic}.
+#' @return A list of results from the model fit including key information
+#'   such as the dropout model, \code{model}, the estimated model parameters,
+#'   \code{theta}, the covariance matrix, \code{vtheta}, as well as the
+#'   Bayesian Information Criterion, \code{bic}.
 #'
 #' @examples
 #'
-#' observed <- summarizeObserved(df = observedData,
-#'                               to_predict = "enrollment and event")
-#'
-#' fitDrp <- fitDropout(df = observed$adtte, kmdf = observed$kmdfDrp,
-#'                      dropout_model = "exponential")
+#' dropout_fit <- fitDropout(df = observedData, dropout_model = "exponential")
 #'
 #' @export
 #'
-fitDropout <- function(df, kmdf, dropout_model = "weibull") {
+fitDropout <- function(df, dropout_model = "weibull") {
   erify::check_class(df, "data.frame")
   erify::check_content(tolower(dropout_model),
                        c("exponential", "weibull", "log-normal"))
-  erify::check_class(kmdf, "data.frame")
 
+  names(df) <- tolower(names(df))
   n0 = nrow(df)
   d0 = sum(df$dropout)
   ex0 = sum(df$time)
 
+  kmfit <- survival::survfit(survival::Surv(time, dropout) ~ 1, data = df)
+  kmdf <- tibble(time = kmfit$time, surv = kmfit$surv)
+  kmdf <- tibble(time = 0, surv = 1) %>%
+    bind_rows(kmdf)
 
   if (tolower(dropout_model) == "exponential") {
     # lambda(t) = lambda
@@ -138,7 +140,7 @@ fitDropout <- function(df, kmdf, dropout_model = "weibull") {
 
     grob2 <- grid::grobTree(grid::textGrob(
       paste("BIC:", round(fit3$bic, 2)), x=0.75, y=0.88, hjust=0,
-      gp=gpar(col="red", fontsize=11, fontface="italic")))
+      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
 
     fittedDropout <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
     print(fittedDropout)
