@@ -1,21 +1,22 @@
 #' @title Summarize observed data
-#' @description Summarize the observed data in terms of trial start date,
-#'   data cutoff date, number of subjects enrolled, enrollment duration,
-#'   number of events and number of dropouts that have occurred,
-#'   number of subjects at risk, cumulative enrollment and event data,
-#'   daily enrollment rate, Kaplan-Meier plots for time to event and
-#'   time to dropout.
+#' @description Provides an overview of the observed data, including
+#' the trial start date, data cutoff date, number of subjects
+#' enrolled, enrollment duration, number of events and dropouts,
+#' number of subjects at risk, cumulative enrollment and event data,
+#' daily enrollment rate, and Kaplan-Meier plots for time to event
+#' and time to dropout.
 #'
-#' @param df Input data set containing the following variables:
-#'   \code{RANDDT}, \code{CUTOFFDT}, (for event prediction) \code{ADT},
-#'   \code{event}, \code{dropout}.
-#' @param to_predict What to predict: enrollment only, event only,
-#'   enrollment and event.
-#' @param dropout_model Dropout model: none, exponential, Weibull,
-#'   log-normal. Defaults to Weibull.
+#' @param df The observed subject-level data, including
+#'   \code{randdt} and \code{cutoffdt}, as well as
+#'   \code{time}, \code{event}, and \code{dropout}
+#'   used for event prediction.
+#' @param to_predict Specified what to predict: enrollment only, event
+#'   only, or enrollment and event.
+#' @param dropout_model The dropout model with options including none,
+#'   exponential, Weibull, and log-normal, with the default being Weibull.
 #'
-#' @return A list of summary statistics and data sets depending on the value
-#'   of \code{to_predict}.
+#' @return A list that includes a range of summary statistics and
+#' data sets depending on the value of \code{to_predict}.
 #'
 #' @examples
 #'
@@ -30,10 +31,11 @@ summarizeObserved <- function(df, to_predict, dropout_model = "weibull") {
                        c("enrollment only", "event only",
                          "enrollment and event"))
   erify::check_content(tolower(dropout_model),
-                       c("exponential", "weibull", "log-normal"))
+                       c("none", "exponential", "weibull", "log-normal"))
 
-  trialsdt = min(df$RANDDT)
-  cutoffdt = df$CUTOFFDT[1]
+  names(df) <- tolower(names(df))
+  trialsdt = min(df$randdt)
+  cutoffdt = df$cutoffdt[1]
   n0 = nrow(df)  # current number of subjects enrolled
   t0 = as.numeric(cutoffdt - trialsdt + 1)
 
@@ -45,25 +47,26 @@ summarizeObserved <- function(df, to_predict, dropout_model = "weibull") {
 
   # enrollment data
   adsl <- df %>%
-    arrange(.data$RANDDT) %>%
+    arrange(.data$randdt) %>%
     mutate(n = row_number(),
            parameter = "subjects",
-           date = .data$RANDDT) %>%
+           date = .data$randdt) %>%
     mutate(year = format(.data$date, format = "%Y"))
 
 
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     # time to event data
     adtte <- df %>%
-      arrange(.data$ADT) %>%
+      mutate(adt = as.Date(.data$time - 1, origin = .data$randdt)) %>%
+      arrange(.data$adt) %>%
       mutate(n = cumsum(.data$event),
              parameter = "events",
-             date = .data$ADT) %>%
+             date = .data$adt) %>%
       mutate(year = format(.data$date, format = "%Y"))
 
     # dummy subject to initialize time to event axis at trial start
     adtte0 <- first(df) %>%
-      mutate(RANDDT = trialsdt, ADT = trialsdt,
+      mutate(randdt = trialsdt, adt = trialsdt,
              event = 0, dropout = 0,
              n = 0, parameter = "events", date = trialsdt) %>%
       mutate(year = format(.data$date, format = "%Y"))
@@ -86,7 +89,7 @@ summarizeObserved <- function(df, to_predict, dropout_model = "weibull") {
   n_months = lubridate::interval(min(ad$date), max(ad$date)) %/% months(1)
   bw = fbw(n_months)
 
-  # plot cumulative enrollment (and event data if requested)
+  # plot cumulative enrollment and event data
   g1 <- ggplot() +
     geom_step(data = ad, aes(x = .data$date, y = .data$n,
                              group = .data$parameter)) +
@@ -110,7 +113,7 @@ summarizeObserved <- function(df, to_predict, dropout_model = "weibull") {
   # daily enrollment plot with loess smoothing
   if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
     adsl <- adsl %>%
-      mutate(time = as.numeric(.data$RANDDT - trialsdt + 1))
+      mutate(time = as.numeric(.data$randdt - trialsdt + 1))
 
     days = seq(1, t0)
     n = sapply(days, function(i) sum(adsl$time == i))
@@ -130,7 +133,7 @@ summarizeObserved <- function(df, to_predict, dropout_model = "weibull") {
   # Kaplan-Meier plot
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     adtte <- adtte %>%
-      mutate(time = as.numeric(.data$ADT - .data$RANDDT + 1))
+      mutate(time = as.numeric(.data$adt - .data$randdt + 1))
 
     kmfitEvt <- survival::survfit(survival::Surv(time, event) ~ 1,
                                   data = adtte)
