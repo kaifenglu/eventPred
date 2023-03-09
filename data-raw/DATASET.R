@@ -16,10 +16,10 @@ arrivalTime = ceiling(accrualTime[j1] +
                         (rhs - psum[j1])/accrualIntensity[j1])
 
 # time of data cut
-analysisTime <- max(arrivalTime) + 1
+analysisTime <- max(arrivalTime)
 
 # potential follow-up time for each subject
-followupTime <- analysisTime - arrivalTime
+followupTime <- analysisTime - arrivalTime + 1
 
 # underlying time to event and time to dropout
 treatmentGroup <- rbinom(n0, 1, 0.5)
@@ -35,9 +35,9 @@ dropout <- 1*(time == dropoutTime)
 
 # observed data
 observedData <- data.frame(
-  RANDDT = as.Date(arrivalTime - 1, origin = trialsdt),
-  CUTOFFDT = as.Date(analysisTime - 1, origin = trialsdt),
-  ADT = as.Date(arrivalTime + time - 1, origin = trialsdt),
+  randdt = as.Date(arrivalTime, origin = trialsdt),
+  cutoffdt = as.Date(analysisTime, origin = trialsdt),
+  time = time,
   event = event, dropout = dropout)
 
 # save to data/ folder
