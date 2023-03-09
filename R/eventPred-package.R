@@ -22,8 +22,8 @@
 #' during each specified time interval. At the analysis stage,
 #' before enrollment completion, the \code{eventPred} package
 #' considers several models, including the homogeneous Poisson
-#' model, the time-decay model with an enrollment rate function
-#' \code{lambda(t) = mu/delta*(1 - exp(-delta*t))},
+#' model, the time-decay model with an enrollment
+#' rate function \code{lambda(t) = mu/delta*(1 - exp(-delta*t))},
 #' and the B-spline model with the daily enrollment rate
 #' \code{lambda(t) = exp(B(t)*theta)}. If prior information exists
 #' on the model parameters, it can be combined with the likelihood
@@ -33,8 +33,8 @@
 #' models, including exponential, Weibull, log-normal, piecewise
 #' exponential, and model-averaging of Weibull and log-normal,
 #' for event prediction. For time to dropout, exponential, Weibull,
-#' and log-normal distributions are considered. If enrollment is
-#' complete, ongoing subjects who have not had the event of interest
+#' and log-normal distributions are considered. If enrollment
+#' is complete, ongoing subjects who have not had the event of interest
 #' or dropped out of the study before the data cut contribute
 #' additional events in the future. Their event times are generated
 #' from the conditional distribution given that they have survived
@@ -56,6 +56,42 @@
 #' and a summary of simulation results. Other functions perform
 #' individual tasks and can be used to select an appropriate
 #' prediction model.
+#'
+#' The \code{eventPred} package implements a model
+#' parameterization that enhances the asymptotic normality of
+#' parameter estimates. Specifically, the package utilizes the
+#' following parameterization to achieve this goal:
+#' \itemize{
+#'   \item Enrollment models
+#'   \itemize{
+#'     \item Poisson: \code{theta = log(rate)}
+#'     \item Time-decay: \code{theta = (log(mu), log(delta))}
+#'     \item B-spline: no reparametrization is needed
+#'   }
+#'
+#'   \item Event or dropout models
+#'   \itemize{
+#'     \item Exponential: \code{theta = log(rate)}
+#'     \item Weibull: \code{theta = (log(shape), log(scale))}
+#'     \item Log-normal: \code{theta = (meanlog, log(sdlog))}
+#'     \item Piecewise exponential: \code{theta = log(rates)}
+#'     \item Model averaging: \code{theta = (log(weibull$shape),
+#'     log(weibull$scale), lnorm$meanlog, log(lnorm$sdlog))}.
+#'     The covariance matrix for \code{theta} is structured
+#'     as a block diagonal matrix, with the upper-left block
+#'     corresponding to the Weibull component and the
+#'     lower-right block corresponding to the log-normal
+#'     component. In other words, the covariance matrix is
+#'     partitioned into two distinct blocks, with no
+#'     off-diagonal elements connecting the two components.
+#'     The weight assigned to the Weibull component, denoted as
+#'     \code{w1}, is considered fixed.
+#'   }
+#' }
+#'
+#' The \code{eventPred} package uses days as its primary time unit.
+#' If you need to convert enrollment or event rates per month to
+#' rates per day, simply divide by 30.4375.
 #'
 #' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
 #'
