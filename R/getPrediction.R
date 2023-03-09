@@ -108,8 +108,8 @@
 #' # Example 1: Enrollment prediction at analysis stage
 #'
 #' pred <- getPrediction(
-#'   df = observedData, target_n = 480,
-#'   to_predict = "enrollment only",
+#'   df = observedData, to_predict = "enrollment only",
+#'   target_n = 480,
 #'   enroll_model = "b-spline", nknots = 1, lags = 30,
 #'   pilevel = 0.90, nreps = 500)
 #'
@@ -122,8 +122,8 @@
 #'   accrualIntensity = 26/9*seq(1, 9)/30.4375)
 #'
 #' pred <- getPrediction(
-#'   target_n = 480,
 #'   to_predict = "enrollment only",
+#'   target_n = 480,
 #'   parameter_enroll_model = parameter_enroll_model,
 #'   pilevel = 0.90, nreps = 500)
 #'
@@ -131,8 +131,8 @@
 #' # Example 3: Event prediction at analysis stage after enrollment ends
 #'
 #' pred <- getPrediction(
-#'   df = observedData, target_d = 200,
-#'   to_predict = "event only",
+#'   df = observedData, to_predict = "event only",
+#'   target_d = 200,
 #'   event_model = "piecewise exponential", npieces = 3,
 #'   dropout_model = "exponential",
 #'   pilevel = 0.90, nreps = 500)
@@ -141,8 +141,8 @@
 #' # Example 4: Event prediction at analysis stage before enrollment ends
 #'
 #' pred <- getPrediction(
-#'   df = observedData, target_n = 480, target_d = 200,
-#'   to_predict = "enrollment and event",
+#'   df = observedData, to_predict = "enrollment and event",
+#'   target_n = 480, target_d = 200,
 #'   enroll_model = "b-spline", nknots = 1, lags = 30,
 #'   event_model = "piecewise exponential", npieces = 3,
 #'   dropout_model = "exponential",
@@ -172,8 +172,8 @@
 #'   vtheta = diag(2)*1e-8)
 #'
 #' pred <- getPrediction(
-#'   target_n = 480, target_d = 200,
 #'   to_predict = "enrollment and event",
+#'   target_n = 480, target_d = 200,
 #'   parameter_enroll_model = parameter_enroll_model,
 #'   parameter_event_model = parameter_event_model,
 #'   parameter_dropout_model = parameter_dropout_model,
@@ -185,7 +185,7 @@
 getPrediction <- function(
     df = NULL, to_predict = "enrollment and event",
     target_n = NA, target_d = NA,
-    enroll_model = "B-spline", nknots = 1,
+    enroll_model = "b-spline", nknots = 1,
     parameter_enroll_model = NULL, lags = 30,
     event_model = "model averaging", npieces = 3,
     parameter_event_model = NULL,

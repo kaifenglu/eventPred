@@ -76,7 +76,7 @@
 #' dropout_fit <- fitDropout(df = observedData,
 #'                           dropout_model = "exponential")
 #'
-#' event_pred <- predictEvent(target_d = 200, df = observedData,
+#' event_pred <- predictEvent(df = observedData, target_d = 200,
 #'                            event_fit = event_fit,
 #'                            dropout_fit = dropout_fit,
 #'                            pilevel = 0.90, nreps = 500)
@@ -90,7 +90,7 @@
 #' enroll_fit <- fitEnrollment(df = observed$adsl, enroll_model = "b-spline",
 #'                             nknots = 1)
 #'
-#' enroll_pred <- predictEnrollment(target_n = 480, df = observed$adsl,
+#' enroll_pred <- predictEnrollment(df = observed$adsl, target_n = 480,
 #'                                  enroll_fit = enroll_fit,
 #'                                  lags = 30, pilevel = 0.90, nreps = 500)
 #'
@@ -100,7 +100,7 @@
 #' dropout_fit <- fitDropout(df = observed$adtte,
 #'                           dropout_model = "exponential")
 #'
-#' event_pred <- predictEvent(target_d = 200, df = observed$adtte,
+#' event_pred <- predictEvent(df = observed$adtte, target_d = 200,
 #'                            newSubjects = enroll_pred$newSubjects,
 #'                            event_fit = event_fit,
 #'                            dropout_fit = dropout_fit,
@@ -129,12 +129,12 @@
 #'   vtheta = diag(2)*1e-8)
 #'
 #' enroll_pred <- predictEnrollment(
-#'   target_n = 480,
 #'   enroll_fit = parameter_enroll_model,
+#'   target_n = 480,
 #'   pilevel = 0.90, nreps = 500)
 #'
 #' event_pred <- predictEvent(
-#'   target_d = 200, df = NULL,
+#'   target_d = 200,
 #'   newSubjects = enroll_pred$newSubjects,
 #'   event_fit = parameter_event_model,
 #'   dropout_fit = parameter_dropout_model,
