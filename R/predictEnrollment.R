@@ -230,7 +230,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   t1 = pred1dy[3] + 30 # extend time to 30 days after
 
   # future time points at which to predict number of subjects
-  t = c(seq(t0, pred1dy[2], by=30), seq(pred1dy[2], pred1dy[3]), t1)
+  t = sort(c(seq(t0, t1, 30), pred1dy[2], pred1dy[3]))
 
   # predicted number of subjects enrolled after data cut
   dfb = data.frame(matrix(nrow=length(t), ncol=4))
