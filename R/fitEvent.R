@@ -1,17 +1,17 @@
 #' @title Fit time-to-event model
 #' @description Fits a specified time-to-event model to the event data.
 #'
-#' @param df The input data set which includes information on
-#'   \code{time} and \code{event}.
+#' @param df The subject-level event data, including \code{time}
+#'   and \code{event}.
 #' @param event_model The event model which specifies the type of event
 #'   model to be used in the analysis and can be set to one of the
-#'   following options: exponential, Weibull, log-normal,
-#'   piecewise exponential, or model averaging, which uses the
+#'   following options: "exponential", "Weibull", "log-normal",
+#'   "piecewise exponential", or "model averaging", which uses the
 #'   \code{exp(-bic)} weighting and combines Weibull and
-#'   log-normal models. If not provided, defaults to model
-#'   averaging.
+#'   log-normal models. By default, it is set to "model
+#'   averaging".
 #' @param npieces The number of pieces for the piecewise exponential
-#'   event model. If not provided, defaults to 3.
+#'   event model. By default, it is set to 3.
 #'
 #' @return
 #' A list of results from the model fit including key information
@@ -19,9 +19,9 @@
 #' \code{theta}, the covariance matrix, \code{vtheta}, as well as the
 #' Bayesian Information Criterion, \code{bic}.
 #'
-#' If the piecewise exponential model was used, additional
+#' If the piecewise exponential model is used, additional
 #' variables will be included in the list of results, such as the
-#' number of pieces specified, \code{npieces}, and the location
+#' number of pieces, \code{npieces}, and the location
 #' of knots used in the model, \code{knots}.
 #'
 #' If the model averaging option is chosen, the weight assigned

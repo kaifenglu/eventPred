@@ -1,23 +1,22 @@
 #' @title Fit enrollment model
 #' @description Fits a specified enrollment model to the enrollment data.
 #'
-#' @param df The input data set which includes information on
+#' @param df The subject-level enrollment data, including
 #'   \code{randdt} and \code{cutoffdt}.
 #' @param enroll_model The enrollment model which can be specified as
-#'   Poisson (homogeneous), time-decay, or B-spline. The default is
-#'   B-spline with one inner knot.
-#' @param nknots The number of inner knots for the B-spline model.
-#'   By default, it is set to 1.
+#'   "Poisson", "time-decay", or "B-spline". By default, it
+#'   is set to "B-spline".
+#' @param nknots The number of inner knots for the B-spline enrollment
+#'   model. By default, it is set to 1.
 #'
 #' @details
 #' For the time-decay model, the mean function is
 #' \code{mu(t) = (mu/delta) (t - (1/delta)(1 - exp(-delta*t)))}
 #' and the rate function is
 #' \code{lambda(t) = (mu/delta) (1 - exp(-delta*t))}.
-#' For the B-spline model, the daily enrollment rate is approximated using
-#' the exponential of a B-spline function:
+#' For the B-spline model, the daily enrollment rate is approximated as
 #' \code{lambda(t) = exp(B(t)*theta)},
-#' where B(t) represents the B-spline basis functions.
+#' where \code{B(t)} represents the B-spline basis functions.
 #'
 #' @return
 #' A list of results from the model fit including key information

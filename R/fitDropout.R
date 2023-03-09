@@ -1,11 +1,11 @@
 #' @title Fit time-to-dropout model
 #' @description Fits a specified time-to-dropout model to the dropout data.
 #'
-#' @param df The input data set which includes information on
-#'   \code{time} and \code{dropout}.
+#' @param df The subject-level dropout data, including \code{time} and
+#'   \code{dropout}.
 #' @param dropout_model The dropout model used to analyze the dropout data
-#'   which can be set to one of three options: exponential, Weibull, or
-#'   log-normal. If not provided, defaults to Weibull.
+#'   which can be set to one of three options: "exponential", "Weibull", or
+#'   "log-normal". By default, it is set to "Weibull".
 #'
 #' @return A list of results from the model fit including key information
 #'   such as the dropout model, \code{model}, the estimated model parameters,

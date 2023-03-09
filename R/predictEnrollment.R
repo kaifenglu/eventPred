@@ -3,40 +3,42 @@
 #'   enrollment times for new subjects and also provide a prediction
 #'   interval for the expected time to reach the enrollment target.
 #'
+#' @param df The subject-level enrollment data, including
+#'   \code{randdt} and \code{cutoffdt}. By default, it is set to
+#'   \code{NULL} for enrollment prediction at the design stage.
 #' @param target_n The target number of subjects to enroll in the study.
-#' @param df The observed subject-level enrollment data, which includes
-#'   information on \code{randdt} and \code{cutoffdt}. If not provided,
-#'   defaults to \code{NULL} for enrollment prediction at the design stage.
 #' @param enroll_fit the pre-fitted enrollment model used to
 #'   generate predictions.
 #' @param lags The day lags to compute the average enrollment rate to
-#'   carry forward for the B-spline enrollment model. If not provided,
-#'   defaults to 30.
-#' @param pilevel The prediction interval level. If not provided,
-#'   defaults to 0.90.
-#' @param nreps The number of replications for simulation. If not
-#'   provided, defaults to 500.
+#'   carry forward for the B-spline enrollment model. By default,
+#'   it is set to 30.
+#' @param pilevel The prediction interval level. By default,
+#'   it is set to 0.90.
+#' @param nreps The number of replications for simulation. By default,
+#'   it is set to 500.
 #' @param showplot A Boolean variable to control whether or not
-#'   the prediction plot is displayed. If not provided, defaults to
+#'   the prediction plot is displayed. By default, it is set to
 #'   \code{TRUE}.
 #'
 #' @details
-#' Design stage enrollment prediction can be specified using
-#' the \code{enroll_fit} variable, which can be used to specify
-#' a piecewise Poisson model that is parameterized through
-#' \code{accrualTime} and \code{accrualIntensity}, which are treated
-#' as fixed. For the homogeneous Poisson and time-decay models,
+#' The \code{enroll_fit} variable can be used for enrollment
+#' prediction at the design stage. A piecewise Poisson enrollment
+#' model can be parameterized through the time intervals,
+#' \code{accrualTime}, and the enrollment rates in the intervals,
+#' \code{accrualIntensity}. These are treated as fixed for
+#' design-stage enrollment prediction.
+#' For the homogeneous Poisson and time-decay models,
 #' \code{enroll_fit} is used to specify the prior distribution of
 #' model parameters, with a very small variance being used to fix
 #' the parameter values. It should be noted that the B-spline model
 #' is not appropriate for use during the design stage.
 #'
 #' @return
-#' A list of prediction results, which includes the median, lower,
-#' and upper percentiles for both the time and date to reach the
-#' enrollment target. Additionally, the list includes simulated
-#' enrollment data for new subjects, as well as the data
-#' necessary to create the prediction plot.
+#' A list of prediction results, which includes important information
+#' such as the median, lower and upper percentiles for the estimated
+#' time to reach the target number of subjects, as well as simulated
+#' enrollment data for new subjects. Additionally, the data for the
+#' prediction plot is also included within the list.
 #'
 #' @examples
 #'
@@ -61,11 +63,11 @@
 #'
 #' @export
 #'
-predictEnrollment <- function(target_n, df = NULL, enroll_fit, lags = 30,
+predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                               pilevel = 0.90, nreps = 500,
                               showplot = TRUE) {
-  erify::check_n(target_n)
   if (!is.null(df)) erify::check_class(df, "data.frame")
+  erify::check_n(target_n)
   erify::check_class(enroll_fit, "list")
   erify::check_n(lags, zero = TRUE)
   erify::check_positive(pilevel)

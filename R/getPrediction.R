@@ -2,64 +2,67 @@
 #' @description Performs enrollment and event prediction by utilizing
 #'   observed data and specified enrollment and event models.
 #'
-#' @param df The observed subject-level enrollment and event data,
+#' @param df The subject-level enrollment and event data,
 #'   including \code{randdt}, \code{cutoffdt}, \code{time}, \code{event},
-#'   and \code{dropout}. If not provided, defaults to \code{NULL} for
+#'   and \code{dropout}. By default, it is set to \code{NULL} for
 #'   enrollment and event prediction at the design stage.
+#' @param to_predict Specifies what to predict: "enrollment only", "event
+#'   only", or "enrollment and event". By default, it is set to
+#'   "enrollment and event".
 #' @param target_n The target number of subjects to enroll in the study.
 #' @param target_d The target number of events to reach in the study.
-#' @param to_predict Specified what to predict: enrollment only, event
-#'   only, or enrollment and event. If not provided, defaults to
-#'   enrollment and event.
-#' @param enroll_model The available enrollment models are Poisson,
-#'   time-decay, and B-spline. If not provided, defaults to B-spine,
-#'   in which case the number of knots and day lags need to be specified
-#'   to compute the average enrollment rate to carry forward.
+#' @param enroll_model The enrollment model which can be specified as
+#'   "Poisson", "time-decay", or "B-spline". By default, it
+#'   is set to "B-spline".
 #' @param nknots The number of inner knots for the B-spline enrollment
-#'   model. If not provided, defaults 1.
-#' @param lags The day lags to compute the average enrollment rate to
-#'   carry forward for the B-spline enrollment model. If not provided,
-#'   defaults to 30.
+#'   model. By default, it is set to 1.
 #' @param parameter_enroll_model The enrollment model parameters for
-#'   design stage enrollment prediction.
-#' @param event_model The available event models are exponential,
-#'   Weibull, log-normal, piecewise exponential, and model averaging (of
-#'   Weibull and log-normal). If the piecewise exponential model is
-#'   chosen, the number of pieces needs to be specified. If the event
-#'   model is not provided, it is set to model averaging.
+#'   design-stage enrollment prediction.
+#' @param lags The day lags to compute the average enrollment rate to
+#'   carry forward for the B-spline enrollment model. By default,
+#'   it is set to 30.
+#' @param event_model The event model which specifies the type of event
+#'   model to be used in the analysis and can be set to one of the
+#'   following options: "exponential", "Weibull", "log-normal",
+#'   "piecewise exponential", or "model averaging", which uses the
+#'   \code{exp(-bic)} weighting and combines Weibull and
+#'   log-normal models. By default, it is set to "model
+#'   averaging".
 #' @param npieces The number of pieces for the piecewise exponential
-#'   event model. If not provided, defaults to 3.
-#' @param parameter_event_model The event model parameters for design
-#'   stage event prediction.
-#' @param dropout_model The available dropout models are none,
-#'   exponential, Weibull, and log-normal. If not provided, defaults
-#'   to Weibull.
+#'   event model. By default, it is set to 3.
+#' @param parameter_event_model The event model parameters for
+#'   design-stage event prediction.
+#' @param dropout_model The dropout model with options including "none",
+#'   "exponential", "Weibull", and "log-normal". By default, it is
+#'   set to "Weibull".
 #' @param parameter_dropout_model The dropout model parameters for
-#'   design stage event prediction.
+#'   design-stage event prediction.
 #' @param fixedFollowup A Boolean variable indicating whether a fixed
-#'   follow-up design is used. If not provided, defaults to \code{FALSE}
+#'   follow-up design is used. By default, it is set to \code{FALSE}
 #'   for a variable follow-up design.
-#' @param followupTime The follow-up time for a fixed follow-up design,
-#'   in days. If not provided, defaults to 365.
-#' @param pilevel The prediction interval level. If not provided,
-#'   defaults to 0.90.
-#' @param nreps The number of replications for simulation. If not
-#'   provided, defaults to 500.
+#' @param followupTime The follow-up time for a fixed
+#'   follow-up design, in days. By default, it is set to 365.
+#' @param pilevel The prediction interval level. By default,
+#'   it is set to 0.90.
+#' @param nreps The number of replications for simulation. By default,
+#'   it is set to 500.
 #'
 #' @details
 #' For the time-decay model, the mean function is
 #' \code{mu(t) = (mu/delta) (t - (1/delta)(1 - exp(-delta*t)))}
 #' and the rate function is
-#' \code{lambda(t) = (mu/delta) (1 - exp(-delta*t))}
-#' For the B-spline model, the daily enrollment rate is approximated using
-#' the exponential of a B-spline function:
+#' \code{lambda(t) = (mu/delta) (1 - exp(-delta*t))}.
+#' For the B-spline model, the daily enrollment rate is approximated as
 #' \code{lambda(t) = exp(B(t)*theta)},
-#' where B(t) represents the B-spline basis functions.
+#' where \code{B(t)} represents the B-spline basis functions.
 #'
-#' For the \code{parameter_enroll_model}, it can be used to specify
-#' a piecewise Poisson model that is parameterized through
-#' \code{accrualTime} and \code{accrualIntensity} (which are treated
-#' as fixed). For the homogeneous Poisson and time-decay models,
+#' The \code{parameter_enroll_model} variable can be used for
+#' enrollment prediction at the design stage. A piecewise Poisson
+#' can be parameterized through the time
+#' intervals, \code{accrualTime}, and the enrollment rates in
+#' the intervals, \code{accrualIntensity}. These are treated as
+#' fixed for design-stage enrollment prediction.
+#' For the homogeneous Poisson and time-decay models,
 #' \code{parameter_enroll_model} is used to specify the prior
 #' distribution of model parameters, with a very small variance
 #' being used to fix the parameter values. It should be noted
@@ -67,7 +70,7 @@
 #' the design stage.
 #'
 #' For the \code{parameter_event_model}, it should be a list that
-#' includes the \code{model} used to specify the event process,
+#' includes \code{model} to specify the event process,
 #' \code{ngroups} to indicate the number of treatment groups,
 #' \code{prob} to indicate the randomization probabilities
 #' for each group, \code{theta} and \code{vtheta} to indicate
@@ -76,12 +79,11 @@
 #' the prior distribution of model parameters for the \code{j}-th
 #' treatment group. For the piecewise exponential event model,
 #' this should also include \code{knots} to indicate the location
-#' of inner knots. It is important to note that the
-#' \code{model averaging} event model cannot be used at the
-#' design stage.
+#' of inner knots. It should be noted that the model averaging
+#' option is not appropriate for use during the design stage.
 #'
 #' For the \code{parameter_dropout_model}, it should be a list that
-#' includes the \code{model} to specify the dropout process,
+#' includes \code{model} to specify the dropout process,
 #' \code{ngroups} to indicate the number of treatment groups,
 #' \code{prob} to indicate the randomization probabilities
 #' for each group, \code{theta} and \code{vtheta} to indicate
@@ -90,7 +92,7 @@
 #' the prior distribution of model parameters for the \code{j}-th
 #' treatment group.
 #'
-#' For analysis stage enrollment and event prediction, the
+#' For analysis-stage enrollment and event prediction, the
 #' \code{parameter_enroll_model}, \code{parameter_event_model}, and
 #' \code{parameter_dropout_model} are either set to \code{NULL} to
 #' use the observed data only, or specify the prior distribution
@@ -181,10 +183,10 @@
 #' @export
 #'
 getPrediction <- function(
-    df = NULL, target_n = NA, target_d = NA,
-    to_predict = "enrollment and event",
-    enroll_model = "B-spline", nknots = 1, lags = 30,
-    parameter_enroll_model = NULL,
+    df = NULL, to_predict = "enrollment and event",
+    target_n = NA, target_d = NA,
+    enroll_model = "B-spline", nknots = 1,
+    parameter_enroll_model = NULL, lags = 30,
     event_model = "model averaging", npieces = 3,
     parameter_event_model = NULL,
     dropout_model = "weibull",
@@ -203,9 +205,9 @@ getPrediction <- function(
   erify::check_content(tolower(enroll_model),
                        c("poisson", "time-decay", "b-spline"))
   erify::check_n(nknots)
-  erify::check_n(lags, zero=TRUE)
   if (!is.null(parameter_enroll_model))
     erify::check_class(parameter_enroll_model, "list")
+  erify::check_n(lags, zero=TRUE)
   erify::check_content(tolower(event_model),
                        c("exponential", "weibull", "log-normal",
                          "piecewise exponential", "model averaging"))

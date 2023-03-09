@@ -5,37 +5,37 @@
 #'   prediction interval for the expected time to reach the target
 #'   number of events.
 #'
+#' @param df The subject-level enrollment and event data,
+#'   including \code{randdt}, \code{cutoffdt},
+#'   \code{time}, \code{event}, and \code{dropout}. By default, it
+#'   is set to \code{NULL} for event prediction at the design stage.
 #' @param target_d The target number of events to reach in the study.
-#' @param df The observed subject-level enrollment and event data,
-#'   which includes information on \code{randdt}, \code{cutoffdt},
-#'   \code{time}, \code{event}, and \code{dropout}. If not provided,
-#'   defaults to \code{NULL} for event prediction at the design stage.
-#' @param newSubjects The enrollment data for new subjects. If not
-#'   provided, defaults to \code{NULL}, indicating the completion of
+#' @param newSubjects The enrollment data for new subjects. By default,
+#'   it is set to \code{NULL}, indicating the completion of
 #'   subject enrollment.
 #' @param event_fit The pre-fitted event model used to generate
 #'   predictions.
 #' @param dropout_fit The pre-fitted dropout model used to generate
-#'   predictions. If not provided, defaults to \code{NULL},
+#'   predictions. By default, it is set to \code{NULL},
 #'   indicating no dropout.
 #' @param fixedFollowup A Boolean variable indicating whether a fixed
-#'   follow-up design is used. If not provided, defaults to \code{FALSE}
+#'   follow-up design is used. By default, it is set to \code{FALSE}
 #'   for a variable follow-up design.
 #' @param followupTime The follow-up time for a fixed
-#'   follow-up design, in days. If not provided, defaults to 365.
-#' @param pilevel The prediction interval level. If not provided,
-#'   defaults to 0.90.
-#' @param nreps The number of replications for simulation. If not
-#'   provided, defaults to 500.
+#'   follow-up design, in days. By default, it is set to 365.
+#' @param pilevel The prediction interval level. By default,
+#'   it is set to 0.90.
+#' @param nreps The number of replications for simulation. By default,
+#'   it is set to 500.
 #' @param showplot A Boolean variable to control whether or not
-#'   the prediction plot is displayed. If not provided, defaults to
+#'   the prediction plot is displayed. By default, it is set to
 #'   \code{TRUE}.
 #'
 #' @details
 #' To ensure successful event prediction at the design stage, it is
 #' important to provide the \code{newSubjects} data set.
 #'
-#' To specify the event model used during the design stage event
+#' To specify the event model used during the design-stage event
 #' prediction, the \code{event_fit} list should include the event model,
 #' \code{model}, the number of treatment groups,
 #' \code{ngroups}, the randomization probabilities for each group,
@@ -142,13 +142,13 @@
 #'
 #' @export
 #'
-predictEvent <- function(target_d, df = NULL, newSubjects = NULL,
+predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                          event_fit, dropout_fit = NULL,
                          fixedFollowup = FALSE, followupTime = 365,
                          pilevel = 0.90, nreps = 500, showplot = TRUE) {
 
-  erify::check_n(target_d)
   if (!is.null(df)) erify::check_class(df, "data.frame")
+  erify::check_n(target_d)
   if (!is.null(newSubjects)) erify::check_class(newSubjects, "data.frame")
   if (is.null(df) & is.null(newSubjects)) {
     stop("At least one of df and newSubjects must be specified.")

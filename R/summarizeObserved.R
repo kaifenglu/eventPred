@@ -6,15 +6,16 @@
 #' daily enrollment rate, and Kaplan-Meier plots for time to event
 #' and time to dropout.
 #'
-#' @param df The observed subject-level data, including
-#'   \code{randdt} and \code{cutoffdt}, as well as
-#'   \code{time}, \code{event}, and \code{dropout}
-#'   used for event prediction.
-#' @param to_predict Specified what to predict: enrollment only, event
-#'   only, or enrollment and event.
-#' @param dropout_model The dropout model with options including none,
-#'   exponential, Weibull, and log-normal, with the default being Weibull.
-#'
+#' @param df The subject-level data, including \code{randdt} and
+#'   \code{cutoffdt} for enrollment prediction,
+#'   as well as \code{time}, \code{event} and \code{dropout}
+#'   for event prediction.
+#' @param to_predict Specifies what to predict: "enrollment only",
+#'   "event only", or "enrollment and event". By default, it is set to
+#'   "enrollment and event".
+#' @param dropout_model The dropout model with options including "none",
+#'   "exponential", "Weibull", and "log-normal". By default, it is
+#'   set to "Weibull".
 #' @return A list that includes a range of summary statistics and
 #' data sets depending on the value of \code{to_predict}.
 #'
@@ -25,7 +26,8 @@
 #'
 #' @export
 #'
-summarizeObserved <- function(df, to_predict, dropout_model = "weibull") {
+summarizeObserved <- function(df, to_predict = "enrollment and event",
+                              dropout_model = "weibull") {
   erify::check_class(df, "data.frame")
   erify::check_content(tolower(to_predict),
                        c("enrollment only", "event only",
