@@ -576,7 +576,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     # check if the quantile can be estimated from observed data
     if (sdf(t1, target_d, d0, newEventx) <= q[j]) {
       pred2dy[j] = uniroot(function(x) sdf(x, target_d, d0, newEventx) - q[j],
-                           c(t0, t1))$root
+                           c(t0, t1), tol = 1)$root
       pred2dy[j] = ceiling(pred2dy[j])
     }
   }
