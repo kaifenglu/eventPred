@@ -45,7 +45,7 @@
 #' # Enrollment prediction at the design stage
 #'
 #' enroll_pred <- predictEnrollment(
-#'   target_n = 480,
+#'   target_n = 400,
 #'   enroll_fit = list(model = "piecewise poisson",
 #'                     accrualTime = seq(0, 8)*30.4375,
 #'                     accrualIntensity = 26/9*seq(1, 9)/30.4375),
