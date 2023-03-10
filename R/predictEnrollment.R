@@ -42,16 +42,7 @@
 #'
 #' @examples
 #'
-#' # Example 1: Enrollment prediction at analysis stage
-#'
-#' enroll_fit <- fitEnrollment(
-#'   df = observedData, enroll_model = "b-spline", nknots = 1)
-#'
-#' enroll_pred <- predictEnrollment(
-#'   df = observedData, target_n = 480, enroll_fit = enroll_fit,
-#'   lags = 30, pilevel = 0.90, nreps = 500)
-#'
-#' # Example 2: Enrollment prediction at design stage
+#' # Enrollment prediction at the design stage
 #'
 #' enroll_pred <- predictEnrollment(
 #'   target_n = 480,

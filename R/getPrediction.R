@@ -105,40 +105,7 @@
 #'
 #' @examples
 #'
-#' # Example 1: Enrollment prediction at analysis stage
-#'
-#' pred <- getPrediction(
-#'   df = observedData, to_predict = "enrollment only",
-#'   target_n = 480,
-#'   enroll_model = "b-spline", nknots = 1, lags = 30,
-#'   pilevel = 0.90, nreps = 500)
-#'
-#'
-#' # Example 2: Enrollment prediction at design stage
-#'
-#' parameter_enroll_model <- list(
-#'   model = "piecewise poisson",
-#'   accrualTime = seq(0, 8)*30.4375,
-#'   accrualIntensity = 26/9*seq(1, 9)/30.4375)
-#'
-#' pred <- getPrediction(
-#'   to_predict = "enrollment only",
-#'   target_n = 480,
-#'   parameter_enroll_model = parameter_enroll_model,
-#'   pilevel = 0.90, nreps = 500)
-#'
-#'
-#' # Example 3: Event prediction at analysis stage after enrollment ends
-#'
-#' pred <- getPrediction(
-#'   df = observedData, to_predict = "event only",
-#'   target_d = 200,
-#'   event_model = "piecewise exponential", npieces = 3,
-#'   dropout_model = "exponential",
-#'   pilevel = 0.90, nreps = 500)
-#'
-#'
-#' # Example 4: Event prediction at analysis stage before enrollment ends
+#' # Enrollment and event prediction before enrollment completion
 #'
 #' pred <- getPrediction(
 #'   df = observedData, to_predict = "enrollment and event",
@@ -147,38 +114,6 @@
 #'   event_model = "piecewise exponential", npieces = 3,
 #'   dropout_model = "exponential",
 #'   pilevel = 0.90, nreps = 500)
-#'
-#'
-#' # Example 5: Event prediction at design stage
-#'
-#' parameter_enroll_model <- list(
-#'   model = "piecewise poisson",
-#'   accrualTime = seq(0, 8)*30.4375,
-#'   accrualIntensity = 26/9*seq(1, 9)/30.4375)
-#'
-#' parameter_event_model <- list(
-#'   model = "piecewise exponential",
-#'   ngroups = 2,
-#'   prob = c(0.5, 0.5),
-#'   theta = log(c(0.0533, 0.0309, 0.0533, 0.0533)/30.4375),
-#'   vtheta = diag(4)*1e-8,
-#'   knots = 6*30.4375)
-#'
-#' parameter_dropout_model <- list(
-#'   model = "exponential",
-#'   ngroups = 2,
-#'   prob = c(0.5, 0.5),
-#'   theta = log(rep(-log(1-0.05)/12, 2)/30.4375),
-#'   vtheta = diag(2)*1e-8)
-#'
-#' pred <- getPrediction(
-#'   to_predict = "enrollment and event",
-#'   target_n = 480, target_d = 200,
-#'   parameter_enroll_model = parameter_enroll_model,
-#'   parameter_event_model = parameter_event_model,
-#'   parameter_dropout_model = parameter_dropout_model,
-#'   pilevel = 0.90, nreps = 500)
-#'
 #'
 #' @export
 #'
