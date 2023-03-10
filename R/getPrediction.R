@@ -109,7 +109,7 @@
 #'
 #' pred <- getPrediction(
 #'   df = observedData, to_predict = "enrollment and event",
-#'   target_n = 400, target_d = 150,
+#'   target_n = 400, target_d = 200,
 #'   enroll_model = "b-spline", nknots = 1, lags = 30,
 #'   event_model = "piecewise exponential", npieces = 3,
 #'   dropout_model = "exponential",
