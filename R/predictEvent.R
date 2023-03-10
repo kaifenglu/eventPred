@@ -68,7 +68,7 @@
 #'
 #' @examples
 #'
-#' # Example 1: Event prediction at analysis stage after enrollment ends
+#' # Event prediction after enrollment completion
 #'
 #' event_fit <- fitEvent(df = observedData,
 #'                       event_model = "piecewise exponential", npieces = 3)
@@ -80,65 +80,6 @@
 #'                            event_fit = event_fit,
 #'                            dropout_fit = dropout_fit,
 #'                            pilevel = 0.90, nreps = 500)
-#'
-#'
-#' # Example 2: Event prediction at analysis stage before enrollment ends
-#'
-#' observed <- summarizeObserved(df = observedData,
-#'                               to_predict = "enrollment and event")
-#'
-#' enroll_fit <- fitEnrollment(df = observed$adsl, enroll_model = "b-spline",
-#'                             nknots = 1)
-#'
-#' enroll_pred <- predictEnrollment(df = observed$adsl, target_n = 480,
-#'                                  enroll_fit = enroll_fit,
-#'                                  lags = 30, pilevel = 0.90, nreps = 500)
-#'
-#' event_fit <- fitEvent(df = observed$adtte,
-#'                       event_model = "piecewise exponential", npieces = 3)
-#'
-#' dropout_fit <- fitDropout(df = observed$adtte,
-#'                           dropout_model = "exponential")
-#'
-#' event_pred <- predictEvent(df = observed$adtte, target_d = 200,
-#'                            newSubjects = enroll_pred$newSubjects,
-#'                            event_fit = event_fit,
-#'                            dropout_fit = dropout_fit,
-#'                            pilevel = 0.90, nreps = 500)
-#'
-#' # Example 3: Event prediction at design stage
-#'
-#' parameter_enroll_model <- list(
-#'   model = "piecewise poisson",
-#'   accrualTime = seq(0, 8)*30.4375,
-#'   accrualIntensity = 26/9*seq(1, 9)/30.4375)
-#'
-#' parameter_event_model <- list(
-#'   model = "piecewise exponential",
-#'   ngroups = 2,
-#'   prob = c(0.5, 0.5),
-#'   theta = log(c(0.0533, 0.0309, 0.0533, 0.0533)/30.4375),
-#'   vtheta = diag(4)*1e-8,
-#'   knots = 6*30.4375)
-#'
-#' parameter_dropout_model <- list(
-#'   model = "exponential",
-#'   ngroups = 2,
-#'   prob = c(0.5, 0.5),
-#'   theta = log(rep(-log(1-0.05)/12, 2)/30.4375),
-#'   vtheta = diag(2)*1e-8)
-#'
-#' enroll_pred <- predictEnrollment(
-#'   enroll_fit = parameter_enroll_model,
-#'   target_n = 480,
-#'   pilevel = 0.90, nreps = 500)
-#'
-#' event_pred <- predictEvent(
-#'   target_d = 200,
-#'   newSubjects = enroll_pred$newSubjects,
-#'   event_fit = parameter_event_model,
-#'   dropout_fit = parameter_dropout_model,
-#'   pilevel = 0.90, nreps = 500)
 #'
 #' @export
 #'
@@ -606,7 +547,11 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   newEvents <- newEvents %>%
     mutate(totalTime = .data$arrivalTime + .data$time)
 
-  t1 = min(max(newEvents$totalTime[newEvents$event == 1]), t0 + 365*4)
+  # Only include subjects that have experienced the event
+  newEventx <- newEvents %>% filter(.data$event == 1)
+
+
+  t1 = min(max(newEventx$totalTime), t0 + 365*4)
 
   # lower and upper percentages
   plower = (1 - pilevel)/2
@@ -617,10 +562,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   # This works because {D_i(t) < target_d} = {T_i(target_d) > t},
   # where D_i(t) is the cumulative number of events at time t, and
   # T_i(target_d) is the time to reach target_d for data set i.
-  sdf <- function(t, target_d, d0, newEvents) {
-    sumdata <- newEvents %>%
+  sdf <- function(t, target_d, d0, newEventx) {
+    sumdata <- newEventx %>%
       group_by(.data$draw) %>%
-      summarize(n = sum(.data$totalTime <= t & .data$event == 1) + d0)
+      summarize(n = sum(.data$totalTime <= t) + d0)
     mean(sumdata$n < target_d)
   }
 
@@ -629,8 +574,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   pred2dy = rep(NA, length(q))
   for (j in 1:length(q)) {
     # check if the quantile can be estimated from observed data
-    if (sdf(t1, target_d, d0, newEvents) <= q[j]) {
-      pred2dy[j] = uniroot(function(x) sdf(x, target_d, d0, newEvents) - q[j],
+    if (sdf(t1, target_d, d0, newEventx) <= q[j]) {
+      pred2dy[j] = uniroot(function(x) sdf(x, target_d, d0, newEventx) - q[j],
                            c(t0, t1))$root
       pred2dy[j] = ceiling(pred2dy[j])
     }
@@ -645,9 +590,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   colnames(dfb) = c('time', 'n', 'lower', 'upper')
   for (i in 1:length(t)) {
     # number of events after data cut in each simulated data set
-    sumdata <- newEvents %>%
+    sumdata <- newEventx %>%
       group_by(.data$draw) %>%
-      summarize(n = sum(.data$totalTime <= t[i] & .data$event == 1) + d0)
+      summarize(n = sum(.data$totalTime <= t[i]) + d0)
 
     # summary across simulated data sets
     dfb[i, 'time'] = t[i]
