@@ -49,7 +49,7 @@
 #'   enroll_fit = list(model = "piecewise poisson",
 #'                     accrualTime = seq(0, 8)*30.4375,
 #'                     accrualIntensity = 26/9*seq(1, 9)/30.4375),
-#'   pilevel = 0.90, nreps = 500)
+#'   pilevel = 0.90, nreps = 200)
 #'
 #'
 #' @export

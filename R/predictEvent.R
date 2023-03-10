@@ -79,7 +79,7 @@
 #' event_pred <- predictEvent(df = observedData, target_d = 150,
 #'                            event_fit = event_fit,
 #'                            dropout_fit = dropout_fit,
-#'                            pilevel = 0.90, nreps = 500)
+#'                            pilevel = 0.90, nreps = 200)
 #'
 #' @export
 #'
