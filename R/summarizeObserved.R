@@ -67,7 +67,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       mutate(year = format(.data$date, format = "%Y"))
 
     # dummy subject to initialize time to event axis at trial start
-    adtte0 <- first(df) %>%
+    adtte0 <- df %>% slice(1) %>%
       mutate(randdt = trialsdt, adt = trialsdt,
              event = 0, dropout = 0,
              n = 0, parameter = "events", date = trialsdt) %>%

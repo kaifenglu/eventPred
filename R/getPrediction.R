@@ -402,11 +402,11 @@ getPrediction <- function(
     } else if (tolower(to_predict) == "enrollment and event") {
       df1 <- enroll_pred$plotdata %>%
         mutate(parameter = "subjects")
-      df1last <- last(df1)
+      df1last <- df1 %>% slice(n())
 
       df2 <- event_pred$plotdata %>%
         mutate(parameter = "events")
-      df2last <- last(df2)
+      df2last <- df2 %>% slice(n())
 
       # extend enrollment prediction time to event prediction time
       df3 <- df2last %>%
@@ -507,11 +507,11 @@ getPrediction <- function(
     } else if (tolower(to_predict) == "enrollment and event") {
       df1 <- enroll_pred$plotdata %>%
         mutate(parameter = "subjects")
-      df1last <- last(df1)
+      df1last <- df1 %>% slice(n())
 
       df2 <- event_pred$plotdata %>%
         mutate(parameter = "events")
-      df2last <- last(df2)
+      df2last <- df2 %>% slice(n())
 
       # extend enrollment prediction time to event prediction time
       df3 <- df2last %>%
