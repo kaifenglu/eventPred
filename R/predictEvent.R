@@ -25,6 +25,8 @@
 #'   follow-up design, in days. By default, it is set to 365.
 #' @param pilevel The prediction interval level. By default,
 #'   it is set to 0.90.
+#' @param nyears The number of years after the data cut for prediction.
+#'   By default, it is set to 4.
 #' @param nreps The number of replications for simulation. By default,
 #'   it is set to 500.
 #' @param showplot A Boolean variable to control whether or not
@@ -86,7 +88,8 @@
 predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                          event_fit, dropout_fit = NULL,
                          fixedFollowup = FALSE, followupTime = 365,
-                         pilevel = 0.90, nreps = 500, showplot = TRUE) {
+                         pilevel = 0.90, nyears = 4,
+                         nreps = 500, showplot = TRUE) {
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_d)
@@ -104,6 +107,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   erify::check_bool(showplot)
 
   if (!is.null(df)) {
+    df <- dplyr::as_tibble(df)
     names(df) <- tolower(names(df))
     trialsdt = min(df$randdt)
     cutoffdt = df$cutoffdt[1]
@@ -119,8 +123,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   if (!is.null(df)) {
     ongoingSubjects <- df %>%
-      filter(.data$event == 0 & .data$dropout == 0) %>%
-      mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1))
+      dplyr::filter(.data$event == 0 & .data$dropout == 0) %>%
+      dplyr::mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1))
 
     arrivalTimeOngoing <- ongoingSubjects$arrivalTime
     time0 = t0 - arrivalTimeOngoing
@@ -236,9 +240,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   if (!is.null(df)) { # analysis stage event prediction
     # output data frame
     m = r0 + n1 # number of ongoing and new subjects
-    newEvents = data.frame(matrix(nrow = nreps*m, ncol = 5))
-    colnames(newEvents) = c("draw", "arrivalTime", "time", "event",
-                            "dropout")
+    newEvents = dplyr::as_tibble(matrix(
+      nrow = nreps*m, ncol = 5,
+      dimnames = list(NULL, c("draw", "arrivalTime", "time", "event",
+                              "dropout"))))
 
     for (i in 1:nreps) {
       # concatenate arrival time for ongoing and new subjects
@@ -295,14 +300,14 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
         # find the interval containing time0
         j0 = findInterval(time0, u)
-        rhs = psum[j0] + lambda[j0]*(time0 - u[j0]) - log(runif(r0))
+        rhs = psum[j0] + lambda[j0]*(time0 - u[j0]) + rexp(r0)
 
         # find the interval containing time
         j1 = findInterval(rhs, psum)
         survivalTimeOngoing = u[j1] + (rhs - psum[j1])/lambda[j1]
 
         if (n1 > 0) {
-          rhs = -log(runif(n1))
+          rhs = rexp(n1)
           j1 = findInterval(rhs, psum)
           survivalTimeNew = u[j1] + (rhs - psum[j1])/lambda[j1]
           survivalTime = c(survivalTimeOngoing, survivalTimeNew)
@@ -415,9 +420,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   } else { # design stage event prediction
     # output data frame
     m = r0 + n1 # number of ongoing and new subjects
-    newEvents = data.frame(matrix(nrow = nreps*m, ncol = 6))
-    colnames(newEvents) = c("draw", "arrivalTime", "treatment", "time",
-                            "event", "dropout")
+    newEvents = dplyr::as_tibble(matrix(
+      nrow = nreps*m, ncol = 6,
+      dimnames = list(NULL, c("draw", "arrivalTime", "treatment", "time",
+                              "event", "dropout"))))
 
     k = event_fit$ngroups # number of treatment groups
     prob = event_fit$prob # randomization probabilities
@@ -426,7 +432,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       arrivalTime = newSubjects$arrivalTime[newSubjects$draw == i]
 
       # draw treatment for each subject
-      w = rmultinom(n1, size = 1, prob = prob)
+      w = rmultinom(n1, size = 1, prob = prob)  # k x n1 matrix
       treatment = as.numeric((1:k) %*% w)
 
       # draw event time for new subjects
@@ -466,7 +472,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             lambda = exp(theta2[[j]][i,]) # hazard rates in the intervals
             # partial sums of lambda*interval_width
             psum = c(0, cumsum(lambda[1:(J-1)] * diff(u)))
-            rhs = -log(runif(length(cols))) # cumulative hazard
+            rhs = rexp(length(cols)) # cumulative hazard
             j1 = findInterval(rhs, psum)
             survivalTime[cols] = u[j1] + (rhs - psum[j1])/lambda[j1]
           }
@@ -545,13 +551,15 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   # calculate total time since trial start
   newEvents <- newEvents %>%
-    mutate(totalTime = .data$arrivalTime + .data$time)
+    dplyr::mutate(totalTime = .data$arrivalTime + .data$time)
 
   # Only include subjects that have experienced the event
-  newEventx <- newEvents %>% filter(.data$event == 1)
+  newEventx <- newEvents %>%
+    dplyr::filter(.data$event == 1) %>%
+    dplyr::select(.data$draw, .data$totalTime)
 
 
-  t1 = min(max(newEventx$totalTime), t0 + 365*4)
+  t1 = min(max(newEventx$totalTime), t0 + 365*nyears)
 
   # lower and upper percentages
   plower = (1 - pilevel)/2
@@ -564,8 +572,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   # T_i(target_d) is the time to reach target_d for data set i.
   sdf <- function(t, target_d, d0, newEventx) {
     sumdata <- newEventx %>%
-      group_by(.data$draw) %>%
-      summarize(n = sum(.data$totalTime <= t) + d0)
+      dplyr::group_by(.data$draw) %>%
+      dplyr::summarize(n = sum(.data$totalTime <= t) + d0)
     mean(sumdata$n < target_d)
   }
 
@@ -583,22 +591,17 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
 
   # set up time points for plotting
-  t = c(seq(t0, t1, 30), t1)
+  t = unique(c(seq(t0, t1, 30), t1))
 
   # predicted number of events after data cut
-  dfb = data.frame(matrix(nrow=length(t), ncol=4))
-  colnames(dfb) = c('time', 'n', 'lower', 'upper')
-  for (i in 1:length(t)) {
-    # number of events after data cut in each simulated data set
-    sumdata <- newEventx %>%
-      group_by(.data$draw) %>%
-      summarize(n = sum(.data$totalTime <= t[i]) + d0)
-
-    # summary across simulated data sets
-    dfb[i, 'time'] = t[i]
-    dfb[i, c('n', 'lower', 'upper')] =
-      quantile(sumdata$n, probs = c(0.5, plower, pupper))
-  }
+  dfb = dplyr::tibble(time = t) %>%
+    dplyr::cross_join(newEventx) %>%
+    dplyr::group_by(.data$time, .data$draw) %>%
+    dplyr::summarise(m = sum(.data$totalTime <= .data$time) + d0,
+                     .groups = "drop_last") %>%
+    dplyr::summarise(n = quantile(.data$m, probs = 0.5),
+                     lower = quantile(.data$m, probs = plower),
+                     upper = quantile(.data$m, probs = pupper))
 
 
   if (!is.null(df)) {
@@ -606,28 +609,28 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # observed number of events before data cut
     dfa <- df %>%
-      filter(.data$event == 1 | .data$dropout == 1) %>%
-      mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1)) %>%
-      mutate(totalTime = .data$arrivalTime + .data$time) %>%
-      arrange(.data$totalTime) %>%
-      mutate(time = .data$totalTime,
-             n = cumsum(.data$event),
-             lower = NA,
-             upper = NA) %>%
-      select(.data$time, .data$n, .data$lower, .data$upper)
+      dplyr::filter(.data$event == 1 | .data$dropout == 1) %>%
+      dplyr::mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1)) %>%
+      dplyr::mutate(totalTime = .data$arrivalTime + .data$time) %>%
+      dplyr::arrange(.data$totalTime) %>%
+      dplyr::mutate(time = .data$totalTime,
+                    n = cumsum(.data$event),
+                    lower = NA,
+                    upper = NA) %>%
+      dplyr::select(.data$time, .data$n, .data$lower, .data$upper)
 
 
     # add time zero and concatenate events before and after data cut
-    dfs <- tibble(time = 0, n = 0, lower = NA, upper = NA) %>%
-      bind_rows(dfa) %>%
-      bind_rows(dfb) %>%
-      mutate(date = as.Date(.data$time - 1, origin = trialsdt)) %>%
-      mutate(year = format(.data$date, format = "%Y"))
+    dfs <- dplyr::tibble(time = 0, n = 0, lower = NA, upper = NA) %>%
+      dplyr::bind_rows(dfa) %>%
+      dplyr::bind_rows(dfb) %>%
+      dplyr::mutate(date = as.Date(.data$time - 1, origin = trialsdt)) %>%
+      dplyr::mutate(year = format(.data$date, format = "%Y"))
 
     if (showplot) {
       # separate data into observed and predicted
-      dfa <- dfs %>% filter(is.na(.data$lower))
-      dfb <- dfs %>% filter(!is.na(.data$lower))
+      dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
+      dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
       n_months = lubridate::interval(min(dfs$date),
                                      max(dfs$date)) %/% months(1)
@@ -637,21 +640,24 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
       # plot the enrollment and time to event data with month as x-axis label
       # generate the plot
-      g1 <- ggplot() +
-        geom_ribbon(data=dfb,
-                    aes(x=.data$date, ymin=.data$lower, ymax=.data$upper),
-                    alpha=0.5, fill="lightblue") +
-        geom_step(data=dfa, aes(x=.data$date, y=.data$n), color="black") +
-        geom_line(data=dfb, aes(x=.data$date, y=.data$n), color="blue") +
-        geom_vline(xintercept = cutoffdt, linetype = 2) +
-        geom_hline(yintercept = target_d, linetype = 2) +
-        scale_x_date(name = NULL,
-                     labels = scales::date_format("%b"),
-                     breaks = scales::breaks_width(bw),
-                     minor_breaks = NULL,
-                     expand = c(0.01, 0.01)) +
-        labs(y = "Events", title = "Predicted events") +
-        theme_bw()
+      g1 <- ggplot2::ggplot() +
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$date,
+                                                    ymin=.data$lower,
+                                                    ymax=.data$upper),
+                             alpha=0.5, fill="lightblue") +
+        ggplot2::geom_step(data=dfa, ggplot2::aes(x=.data$date, y=.data$n),
+                           color="black") +
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$date, y=.data$n),
+                           color="blue") +
+        ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
+        ggplot2::geom_hline(yintercept = target_d, linetype = 2) +
+        ggplot2::scale_x_date(name = NULL,
+                              labels = scales::date_format("%b"),
+                              breaks = scales::breaks_width(bw),
+                              minor_breaks = NULL,
+                              expand = c(0.01, 0.01)) +
+        ggplot2::labs(y = "Events", title = "Predicted events") +
+        ggplot2::theme_bw()
 
       # stack them together
       p1 <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
@@ -662,16 +668,18 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
          newEvents = newEvents, plotdata = dfs)
   } else {
     if (showplot) {
-      g1 <- ggplot() +
-        geom_ribbon(data=dfb,
-                    aes(x=.data$time, ymin=.data$lower, ymax=.data$upper),
-                    alpha=0.5, fill="lightblue") +
-        geom_line(data=dfb, aes(x=.data$time, y=.data$n), color="blue") +
-        geom_hline(yintercept = target_d, linetype = 2) +
-        scale_x_continuous(name = "Days since randomization",
-                           expand = c(0.01, 0.01)) +
-        labs(y = "Events", title = "Predicted events") +
-        theme_bw()
+      g1 <- ggplot2::ggplot() +
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$time,
+                                                    ymin=.data$lower,
+                                                    ymax=.data$upper),
+                             alpha=0.5, fill="lightblue") +
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$time, y=.data$n),
+                           color="blue") +
+        ggplot2::geom_hline(yintercept = target_d, linetype = 2) +
+        ggplot2::scale_x_continuous(name = "Days since randomization",
+                                    expand = c(0.01, 0.01)) +
+        ggplot2::labs(y = "Events", title = "Predicted events") +
+        ggplot2::theme_bw()
 
       print(g1)
     }

@@ -44,6 +44,8 @@
 #'   follow-up design, in days. By default, it is set to 365.
 #' @param pilevel The prediction interval level. By default,
 #'   it is set to 0.90.
+#' @param nyears The number of years after the data cut for prediction.
+#'   By default, it is set to 4.
 #' @param nreps The number of replications for simulation. By default,
 #'   it is set to 500.
 #'
@@ -127,7 +129,7 @@ getPrediction <- function(
     dropout_model = "weibull",
     parameter_dropout_model = NULL,
     fixedFollowup = FALSE, followupTime = 365,
-    pilevel = 0.90, nreps = 500) {
+    pilevel = 0.90, nyears = 4, nreps = 500) {
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
   if (!is.na(target_n)) erify::check_n(target_n)
@@ -160,6 +162,7 @@ getPrediction <- function(
   erify::check_n(nreps)
 
   if (!is.null(df)) {
+    df <- dplyr::as_tibble(df)
     names(df) <- tolower(names(df))
     trialsdt = min(df$randdt)
     cutoffdt = df$cutoffdt[1]
@@ -201,12 +204,14 @@ getPrediction <- function(
 
       # enrollment prediction at the analysis stage
       enroll_pred <- predictEnrollment(
-        target_n, df = observed$adsl, enroll_fit = enroll_fit,
+        target_n, df = observed$adsl,
+        enroll_fit = enroll_fit,
         lags, pilevel, nreps, showplot = FALSE)
     } else {
       # enrollment prediction at the design stage
       enroll_pred <- predictEnrollment(
-        target_n, df = NULL, enroll_fit = parameter_enroll_model,
+        target_n, df = NULL,
+        enroll_fit = parameter_enroll_model,
         lags, pilevel, nreps, showplot = FALSE)
     }
   }
@@ -275,14 +280,17 @@ getPrediction <- function(
           event_pred <- predictEvent(
             target_d, df = observed$adtte,
             newSubjects = enroll_pred$newSubjects,
-            event_fit = event_fit, dropout_fit = dropout_fit,
-            fixedFollowup, followupTime, pilevel, nreps,
+            event_fit = event_fit,
+            dropout_fit = dropout_fit,
+            fixedFollowup, followupTime, pilevel, nyears, nreps,
             showplot = FALSE)
         } else {
           event_pred <- predictEvent(
-            target_d, df = observed$adtte, newSubjects = NULL,
-            event_fit = event_fit, dropout_fit = dropout_fit,
-            fixedFollowup, followupTime, pilevel, nreps,
+            target_d, df = observed$adtte,
+            newSubjects = NULL,
+            event_fit = event_fit,
+            dropout_fit = dropout_fit,
+            fixedFollowup, followupTime, pilevel, nyears, nreps,
             showplot = FALSE)
         }
       } else {
@@ -290,30 +298,34 @@ getPrediction <- function(
           event_pred <- predictEvent(
             target_d, df = observed$adtte,
             newSubjects = enroll_pred$newSubjects,
-            event_fit = event_fit, dropout_fit = NULL,
-            fixedFollowup, followupTime, pilevel, nreps,
+            event_fit = event_fit,
+            dropout_fit = NULL,
+            fixedFollowup, followupTime, pilevel, nyears, nreps,
             showplot = FALSE)
         } else {
           event_pred <- predictEvent(
-            target_d, df = observed$adtte, newSubjects = NULL,
-            event_fit = event_fit, dropout_fit = NULL,
-            fixedFollowup, followupTime, pilevel, nreps,
+            target_d, df = observed$adtte,
+            newSubjects = NULL,
+            event_fit = event_fit,
+            dropout_fit = NULL,
+            fixedFollowup, followupTime, pilevel, nyears, nreps,
             showplot = FALSE)
         }
       }
     } else { # event prediction at design stage
       if (!is.null(parameter_dropout_model)) {
         event_pred <- predictEvent(
-          target_d, df = NULL, newSubjects = enroll_pred$newSubjects,
+          target_d, df = NULL,
+          newSubjects = enroll_pred$newSubjects,
           event_fit = parameter_event_model,
           dropout_fit = parameter_dropout_model,
-          fixedFollowup, followupTime, pilevel, nreps,
+          fixedFollowup, followupTime, pilevel, nyears, nreps,
           showplot = FALSE)
       } else {
         event_pred <- predictEvent(
           target_d, df = NULL, newSubjects = enroll_pred$newSubjects,
           event_fit = parameter_event_model, dropout_fit = NULL,
-          fixedFollowup, followupTime, pilevel, nreps,
+          fixedFollowup, followupTime, pilevel, nyears, nreps,
           showplot = FALSE)
       }
     }
@@ -326,8 +338,8 @@ getPrediction <- function(
       dfs <- enroll_pred$plotdata
 
       # separate data into observed and predicted
-      dfa <- dfs %>% filter(is.na(.data$lower))
-      dfb <- dfs %>% filter(!is.na(.data$lower))
+      dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
+      dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
       n_months = lubridate::interval(min(dfs$date),
                                      max(dfs$date)) %/% months(1)
@@ -336,20 +348,23 @@ getPrediction <- function(
       g2 <- flabel(dfs, trialsdt)
 
       # plot the enrollment data with month as x-axis label
-      g1 <- ggplot() +
-        geom_ribbon(data=dfb,
-                    aes(x=.data$date, ymin=.data$lower, ymax=.data$upper),
-                    alpha=0.5, fill="lightblue") +
-        geom_step(data=dfa, aes(x=.data$date, y=.data$n), color="black") +
-        geom_line(data=dfb, aes(x=.data$date, y=.data$n), color="blue") +
-        geom_vline(xintercept = cutoffdt, linetype = 2) +
-        scale_x_date(name = NULL,
-                     labels = scales::date_format("%b"),
-                     breaks = scales::breaks_width(bw),
-                     minor_breaks = NULL,
-                     expand = c(0.01, 0.01)) +
-        labs(y = "Subjects", title = "Predicted subject enrollment") +
-        theme_bw()
+      g1 <- ggplot2::ggplot() +
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$date,
+                                                    ymin=.data$lower,
+                                                    ymax=.data$upper),
+                             alpha=0.5, fill="lightblue") +
+        ggplot2::geom_step(data=dfa, ggplot2::aes(x=.data$date, y=.data$n),
+                           color="black") +
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$date, y=.data$n),
+                           color="blue") +
+        ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
+        ggplot2::scale_x_date(name = NULL,
+                              labels = scales::date_format("%b"),
+                              breaks = scales::breaks_width(bw),
+                              minor_breaks = NULL,
+                              expand = c(0.01, 0.01)) +
+        ggplot2::labs(y = "Subjects", title = "Predicted subjects") +
+        ggplot2::theme_bw()
 
       # stack them together
       p1 <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
@@ -361,8 +376,8 @@ getPrediction <- function(
       dfs <- event_pred$plotdata
 
       # separate data into observed and predicted
-      dfa <- dfs %>% filter(is.na(.data$lower))
-      dfb <- dfs %>% filter(!is.na(.data$lower))
+      dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
+      dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
       n_months = lubridate::interval(min(dfs$date),
                                      max(dfs$date)) %/% months(1)
@@ -372,21 +387,24 @@ getPrediction <- function(
 
       # plot the enrollment and time to event data with month as x-axis label
       # generate the plot
-      g1 <- ggplot() +
-        geom_ribbon(data=dfb,
-                    aes(x=.data$date, ymin=.data$lower, ymax=.data$upper),
-                    alpha=0.5, fill="lightblue") +
-        geom_step(data=dfa, aes(x=.data$date, y=.data$n), color="black") +
-        geom_line(data=dfb, aes(x=.data$date, y=.data$n), color="blue") +
-        geom_vline(xintercept = cutoffdt, linetype = 2) +
-        geom_hline(yintercept = target_d, linetype = 2) +
-        scale_x_date(name = NULL,
-                     labels = scales::date_format("%b"),
-                     breaks = scales::breaks_width(bw),
-                     minor_breaks = NULL,
-                     expand = c(0.01, 0.01)) +
-        labs(y = "Events", title = "Predicted events") +
-        theme_bw()
+      g1 <- ggplot2::ggplot() +
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$date,
+                                                    ymin=.data$lower,
+                                                    ymax=.data$upper),
+                             alpha=0.5, fill="lightblue") +
+        ggplot2::geom_step(data=dfa, ggplot2::aes(x=.data$date, y=.data$n),
+                           color="black") +
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$date, y=.data$n),
+                           color="blue") +
+        ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
+        ggplot2::geom_hline(yintercept = target_d, linetype = 2) +
+        ggplot2::scale_x_date(name = NULL,
+                              labels = scales::date_format("%b"),
+                              breaks = scales::breaks_width(bw),
+                              minor_breaks = NULL,
+                              expand = c(0.01, 0.01)) +
+        ggplot2::labs(y = "Events", title = "Predicted events") +
+        ggplot2::theme_bw()
 
       # stack them together
       p1 <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
@@ -401,27 +419,27 @@ getPrediction <- function(
       }
     } else if (tolower(to_predict) == "enrollment and event") {
       df1 <- enroll_pred$plotdata %>%
-        mutate(parameter = "subjects")
-      df1last <- df1 %>% slice(n())
+        dplyr::mutate(parameter = "subjects")
+      df1last <- df1 %>% dplyr::slice(dplyr::n())
 
       df2 <- event_pred$plotdata %>%
-        mutate(parameter = "events")
-      df2last <- df2 %>% slice(n())
+        dplyr::mutate(parameter = "events")
+      df2last <- df2 %>% dplyr::slice(dplyr::n())
 
       # extend enrollment prediction time to event prediction time
       df3 <- df2last %>%
-        mutate(n = df1last$n,
-               lower = df1last$lower,
-               upper = df1last$upper,
-               parameter = df1last$parameter)
+        dplyr::mutate(n = df1last$n,
+                        lower = df1last$lower,
+                        upper = df1last$upper,
+                        parameter = df1last$parameter)
 
       dfs <- df1 %>%
-        bind_rows(df3) %>%
-        bind_rows(df2)
+        dplyr::bind_rows(df3) %>%
+        dplyr::bind_rows(df2)
 
       # separate data into observed and predicted
-      dfa <- dfs %>% filter(is.na(.data$lower))
-      dfb <- dfs %>% filter(!is.na(.data$lower))
+      dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
+      dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
       n_months = lubridate::interval(min(dfs$date),
                                      max(dfs$date)) %/% months(1)
@@ -431,25 +449,28 @@ getPrediction <- function(
 
       # plot the enrollment and time to event data with month as x-axis label
       # generate the plot
-      g1 <- ggplot() +
-        geom_ribbon(data=dfb,
-                    aes(x=.data$date, ymin=.data$lower, ymax=.data$upper,
-                        group=.data$parameter),
-                    alpha=0.5, fill="lightblue") +
-        geom_step(data=dfa, aes(x=.data$date, y=.data$n,
-                                group=.data$parameter), color="black") +
-        geom_line(data=dfb, aes(x=.data$date, y=.data$n,
-                                group=.data$parameter), color="blue") +
-        geom_vline(xintercept = cutoffdt, linetype = 2) +
-        geom_hline(yintercept = target_d, linetype = 2) +
-        scale_x_date(name = NULL,
-                     labels = scales::date_format("%b"),
-                     breaks = scales::breaks_width(bw),
-                     minor_breaks = NULL,
-                     expand = c(0.01, 0.01)) +
-        labs(y = "Subjects / Events",
-             title = "Predicted cumulative subjects and events over time") +
-        theme_bw()
+      g1 <- ggplot2::ggplot() +
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$date,
+                                                    ymin=.data$lower,
+                                                    ymax=.data$upper,
+                                                    group=.data$parameter),
+                             alpha=0.5, fill="lightblue") +
+        ggplot2::geom_step(data=dfa, ggplot2::aes(x=.data$date, y=.data$n,
+                                                  group=.data$parameter),
+                           color="black") +
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$date, y=.data$n,
+                                                  group=.data$parameter),
+                           color="blue") +
+        ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
+        ggplot2::geom_hline(yintercept = target_d, linetype = 2) +
+        ggplot2::scale_x_date(name = NULL,
+                              labels = scales::date_format("%b"),
+                              breaks = scales::breaks_width(bw),
+                              minor_breaks = NULL,
+                              expand = c(0.01, 0.01)) +
+        ggplot2::labs(y = "Subjects / Events",
+                      title = "Predicted subjects and events") +
+        ggplot2::theme_bw()
 
       # stack them together
       p1 <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
@@ -469,15 +490,18 @@ getPrediction <- function(
     if (tolower(to_predict) == "enrollment only") {
       dfb <- enroll_pred$plotdata
 
-      g1 <- ggplot() +
-        geom_ribbon(data=dfb,
-                    aes(x=.data$time, ymin=.data$lower, ymax=.data$upper),
-                    alpha=0.5, fill="lightblue") +
-        geom_line(data=dfb, aes(x=.data$time, y=.data$n), color="blue") +
-        scale_x_continuous(name = "Days since randomization",
-                           expand = c(0.01, 0.01)) +
-        labs(y = "Subjects", title = "Predicted subject enrollment") +
-        theme_bw()
+      g1 <- ggplot2::ggplot() +
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$time,
+                                                    ymin=.data$lower,
+                                                    ymax=.data$upper),
+                             alpha=0.5, fill="lightblue") +
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$time, y=.data$n),
+                           color="blue") +
+        ggplot2::scale_x_continuous(name = "Days since randomization",
+                                    expand = c(0.01, 0.01)) +
+        ggplot2::labs(y = "Subjects",
+                      title = "Predicted subjects") +
+        ggplot2::theme_bw()
 
       print(g1)
 
@@ -485,16 +509,18 @@ getPrediction <- function(
     } else if (tolower(to_predict) == "event only") {
       dfb <- event_pred$plotdata
 
-      g1 <- ggplot() +
-        geom_ribbon(data=dfb,
-                    aes(x=.data$time, ymin=.data$lower, ymax=.data$upper),
-                    alpha=0.5, fill="lightblue") +
-        geom_line(data=dfb, aes(x=.data$time, y=.data$n), color="blue") +
-        geom_hline(yintercept = target_d, linetype = 2) +
-        scale_x_continuous(name = "Days since randomization",
-                           expand = c(0.01, 0.01)) +
-        labs(y = "Events", title = "Predicted events") +
-        theme_bw()
+      g1 <- ggplot2::ggplot() +
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$time,
+                                                    ymin=.data$lower,
+                                                    ymax=.data$upper),
+                             alpha=0.5, fill="lightblue") +
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$time, y=.data$n),
+                           color="blue") +
+        ggplot2::geom_hline(yintercept = target_d, linetype = 2) +
+        ggplot2::scale_x_continuous(name = "Days since randomization",
+                                    expand = c(0.01, 0.01)) +
+        ggplot2::labs(y = "Events", title = "Predicted events") +
+        ggplot2::theme_bw()
 
       print(g1)
 
@@ -506,37 +532,39 @@ getPrediction <- function(
       }
     } else if (tolower(to_predict) == "enrollment and event") {
       df1 <- enroll_pred$plotdata %>%
-        mutate(parameter = "subjects")
-      df1last <- df1 %>% slice(n())
+        dplyr::mutate(parameter = "subjects")
+      df1last <- df1 %>% dplyr::slice(dplyr::n())
 
       df2 <- event_pred$plotdata %>%
-        mutate(parameter = "events")
-      df2last <- df2 %>% slice(n())
+        dplyr::mutate(parameter = "events")
+      df2last <- df2 %>% dplyr::slice(dplyr::n())
 
       # extend enrollment prediction time to event prediction time
       df3 <- df2last %>%
-        mutate(n = df1last$n,
-               lower = df1last$lower,
-               upper = df1last$upper,
-               parameter = df1last$parameter)
+        dplyr::mutate(n = df1last$n,
+                      lower = df1last$lower,
+                      upper = df1last$upper,
+                      parameter = df1last$parameter)
 
       dfb <- df1 %>%
-        bind_rows(df3) %>%
-        bind_rows(df2)
+        dplyr::bind_rows(df3) %>%
+        dplyr::bind_rows(df2)
 
-      g1 <- ggplot() +
-        geom_ribbon(data=dfb,
-                    aes(x=.data$time, ymin=.data$lower, ymax=.data$upper,
-                        group=.data$parameter),
-                    alpha=0.5, fill="lightblue") +
-        geom_line(data=dfb, aes(x=.data$time, y=.data$n,
-                                group=.data$parameter), color="blue") +
-        geom_hline(yintercept = target_d, linetype = 2) +
-        scale_x_continuous(name = "Days since randomization",
-                           expand = c(0.01, 0.01)) +
-        labs(y = "Subjects / Events",
-             title = "Predicted cumulative subject and events over time") +
-        theme_bw()
+      g1 <- ggplot2::ggplot() +
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$time,
+                                                    ymin=.data$lower,
+                                                    ymax=.data$upper,
+                                                    group=.data$parameter),
+                             alpha=0.5, fill="lightblue") +
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$time, y=.data$n,
+                                                  group=.data$parameter),
+                           color="blue") +
+        ggplot2::geom_hline(yintercept = target_d, linetype = 2) +
+        ggplot2::scale_x_continuous(name = "Days since randomization",
+                                    expand = c(0.01, 0.01)) +
+        ggplot2::labs(y = "Subjects / Events",
+                      title = "Predicted subjects and events") +
+        ggplot2::theme_bw()
 
       print(g1)
 

@@ -35,6 +35,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   erify::check_content(tolower(dropout_model),
                        c("none", "exponential", "weibull", "log-normal"))
 
+  df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
   trialsdt = min(df$randdt)
   cutoffdt = df$cutoffdt[1]
@@ -49,41 +50,42 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
 
   # enrollment data
   adsl <- df %>%
-    arrange(.data$randdt) %>%
-    mutate(n = row_number(),
-           parameter = "subjects",
-           date = .data$randdt) %>%
-    mutate(year = format(.data$date, format = "%Y"))
+    dplyr::arrange(.data$randdt) %>%
+    dplyr::mutate(adt = as.Date(.data$time - 1, origin = .data$randdt),
+                  n = dplyr::row_number(),
+                  parameter = "subjects",
+                  date = .data$randdt) %>%
+    dplyr::mutate(year = format(.data$date, format = "%Y"))
 
 
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     # time to event data
     adtte <- df %>%
-      mutate(adt = as.Date(.data$time - 1, origin = .data$randdt)) %>%
-      arrange(.data$adt) %>%
-      mutate(n = cumsum(.data$event),
-             parameter = "events",
-             date = .data$adt) %>%
-      mutate(year = format(.data$date, format = "%Y"))
+      dplyr::mutate(adt = as.Date(.data$time - 1, origin = .data$randdt)) %>%
+      dplyr::arrange(.data$adt) %>%
+      dplyr::mutate(n = cumsum(.data$event),
+                    parameter = "events",
+                    date = .data$adt) %>%
+      dplyr::mutate(year = format(.data$date, format = "%Y"))
 
     # dummy subject to initialize time to event axis at trial start
-    adtte0 <- df %>% slice(1) %>%
-      mutate(randdt = trialsdt, adt = trialsdt,
-             event = 0, dropout = 0,
-             n = 0, parameter = "events", date = trialsdt) %>%
-      mutate(year = format(.data$date, format = "%Y"))
+    adtte0 <- df %>% dplyr::slice(1) %>%
+      dplyr::mutate(randdt = trialsdt, adt = trialsdt, time = 1,
+                    event = 0, dropout = 0,
+                    n = 0, parameter = "events", date = trialsdt) %>%
+      dplyr::mutate(year = format(.data$date, format = "%Y"))
 
     # combine enrollment and time to event data
     ad <- adsl %>%
-      bind_rows(adtte0) %>%
-      bind_rows(adtte)
+      dplyr::bind_rows(adtte0) %>%
+      dplyr::bind_rows(adtte)
 
     ylab = "Subjects / Events"
-    title = "Observed cumulative subjects and events over time"
+    title = "Observed subjects and events"
   } else {
     ad <- adsl
     ylab = "Subjects"
-    title = "Observed cumulative subjects over time"
+    title = "Observed subjects"
   }
 
 
@@ -92,16 +94,16 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   bw = fbw(n_months)
 
   # plot cumulative enrollment and event data
-  g1 <- ggplot() +
-    geom_step(data = ad, aes(x = .data$date, y = .data$n,
-                             group = .data$parameter)) +
-    scale_x_date(name = NULL,
-                 labels = scales::date_format("%b"),
-                 breaks = scales::breaks_width(bw),
-                 minor_breaks = NULL,
-                 expand = c(0.01, 0.01)) +
-    labs(y = ylab, title = title) +
-    theme_bw()
+  g1 <- ggplot2::ggplot() +
+    ggplot2::geom_step(data = ad, ggplot2::aes(x = .data$date, y = .data$n,
+                                               group = .data$parameter)) +
+    ggplot2::scale_x_date(name = NULL,
+                          labels = scales::date_format("%b"),
+                          breaks = scales::breaks_width(bw),
+                          minor_breaks = NULL,
+                          expand = c(0.01, 0.01)) +
+    ggplot2::labs(y = ylab, title = title) +
+    ggplot2::theme_bw()
 
   # generate the year labels
   g2 <- flabel(ad, trialsdt)
@@ -114,71 +116,72 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
 
   # daily enrollment plot with loess smoothing
   if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
-    adsl <- adsl %>%
-      mutate(time = as.numeric(.data$randdt - trialsdt + 1))
-
+    time = as.numeric(adsl$randdt - trialsdt + 1)
     days = seq(1, t0)
-    n = sapply(days, function(i) sum(adsl$time == i))
-    enroll <- tibble(day = days, n = n)
+    n = as.numeric(table(factor(time, levels = days)))
+    enroll <- dplyr::tibble(day = days, n = n)
 
-    dailyAccrual <- ggplot(data = enroll, aes(x = .data$day, y = .data$n)) +
-      geom_point() +
-      geom_smooth(formula = y ~ x, method = loess, se = FALSE) +
-      labs(x = "Days since trial start",
-           y = "Subjects enrolled daily",
-           title = "Daily subject enrollment") +
-      theme_bw()
+    dailyAccrual <- ggplot2::ggplot(data = enroll,
+                                    ggplot2::aes(x = .data$day,
+                                                 y = .data$n)) +
+      ggplot2::geom_point() +
+      ggplot2::geom_smooth(formula = y ~ x, method = "loess", se = FALSE) +
+      ggplot2::labs(x = "Days since trial start",
+                    y = "Subjects enrolled daily",
+                    title = "Daily subjects") +
+      ggplot2::theme_bw()
     print(dailyAccrual)
   }
 
 
   # Kaplan-Meier plot
   if (grepl("event", to_predict, ignore.case = TRUE)) {
-    adtte <- adtte %>%
-      mutate(time = as.numeric(.data$adt - .data$randdt + 1))
+    kmfitEvent <- survival::survfit(survival::Surv(time, event) ~ 1,
+                                    data = adtte)
 
-    kmfitEvt <- survival::survfit(survival::Surv(time, event) ~ 1,
-                                  data = adtte)
-    kmdfEvt <- tibble(time = kmfitEvt$time, surv = kmfitEvt$surv)
-    kmdfEvt <- tibble(time = 0, surv = 1) %>%
-      bind_rows(kmdfEvt)
+    kmdfEvent <- dplyr:: tibble(time = 0, surv = 1) %>%
+      dplyr::bind_rows(dplyr::tibble(time = kmfitEvent$time,
+                                     surv = kmfitEvent$surv))
 
-    kmEvent <- ggplot() +
-      geom_step(data = kmdfEvt, aes(x = .data$time, y = .data$surv)) +
-      labs(x = "Days since randomization",
-           y = "Survival probability",
-           title = "Kaplan-Meier plot for time to event") +
-      theme_bw()
+    kmEvent <- ggplot2::ggplot() +
+      ggplot2::geom_step(data = kmdfEvent, ggplot2::aes(x = .data$time,
+                                                        y = .data$surv)) +
+      ggplot2::labs(x = "Days since randomization",
+                    y = "Survival probability",
+                    title = "Kaplan-Meier plot for time to event") +
+      ggplot2::theme_bw()
     print(kmEvent)
 
     # time to dropout
     if (tolower(dropout_model) != "none") {
-      kmfitDrp <- survival::survfit(survival::Surv(time, dropout) ~ 1,
-                                    data = adtte)
-      kmdfDrp <- tibble(time = kmfitDrp$time, surv = kmfitDrp$surv)
-      kmdfDrp <- tibble(time = 0, surv = 1) %>%
-        bind_rows(kmdfDrp)
+      kmfitDropout <- survival::survfit(survival::Surv(time, dropout) ~ 1,
+                                        data = adtte)
+      kmdfDropout <- dplyr::tibble(time = 0, surv = 1) %>%
+        dplyr::bind_rows(dplyr::tibble(time = kmfitDropout$time,
+                                       surv = kmfitDropout$surv))
 
-      kmDropout <- ggplot() +
-        geom_step(data = kmdfDrp, aes(x = .data$time, y = .data$surv)) +
-        labs(x = "Days since randomization",
-             y = "Survival probability",
-             title = "Kaplan-Meier plot for time to dropout") +
-        theme_bw()
+      kmDropout <- ggplot2::ggplot() +
+        ggplot2::geom_step(data = kmdfDropout, ggplot2::aes(x = .data$time,
+                                                            y = .data$surv)) +
+        ggplot2::labs(x = "Days since randomization",
+                      y = "Survival probability",
+                      title = "Kaplan-Meier plot for time to dropout") +
+        ggplot2::theme_bw()
       print(kmDropout)
     }
   }
 
 
+  # output
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     if (tolower(dropout_model) != "none") {
       list(trialsdt = trialsdt, cutoffdt = cutoffdt,
            n0 = n0, t0 = t0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
-           adtte = adtte, kmdfEvt = kmdfEvt, kmdfDrp = kmdfDrp)
+           adtte = adtte, kmdfEvent = kmdfEvent, kmdfDropout = kmdfDropout)
     } else {
       list(trialsdt = trialsdt, cutoffdt = cutoffdt,
            n0 = n0, t0 = t0, d0 = d0, r0 = r0, adsl = adsl,
-           adtte = adtte, kmdfEvt = kmdfEvt)
+           adtte = adtte, kmdfEvent = kmdfEvent)
     }
   } else {
     list(trialsdt = trialsdt, cutoffdt = cutoffdt,

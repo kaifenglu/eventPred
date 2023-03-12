@@ -4,10 +4,13 @@
 #' @param df The subject-level enrollment data, including
 #'   \code{randdt} and \code{cutoffdt}.
 #' @param enroll_model The enrollment model which can be specified as
-#'   "Poisson", "time-decay", or "B-spline". By default, it
-#'   is set to "B-spline".
+#'   "Poisson", "Time-decay", "B-spline", or "Piecewise Poisson".
+#'   By default, it is set to "B-spline".
 #' @param nknots The number of inner knots for the B-spline enrollment
 #'   model. By default, it is set to 1.
+#' @param accrualTime The accrual time intervals for the piecewise Poisson
+#'   model. Must start with 0, e.g., c(0, 3) breaks the time axis into
+#'   2 accrual intervals: [0, 3) and [3, Inf). By default, it is set to 0.
 #'
 #' @details
 #' For the time-decay model, the mean function is
@@ -32,14 +35,17 @@
 #'
 #' @export
 #'
-fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1) {
+fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1,
+                          accrualTime = 0) {
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(enroll_model),
-                       c("poisson", "time-decay", "b-spline"))
+                       c("poisson", "time-decay", "b-spline",
+                         "piecewise poisson"))
 
   erify::check_n(nknots)
 
+  df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
   trialsdt = min(df$randdt)
   cutoffdt = df$cutoffdt[1]
@@ -47,10 +53,11 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1) {
   t0 = as.numeric(cutoffdt - trialsdt + 1)
 
   df1 <- df %>%
-    arrange(.data$randdt) %>%
-    mutate(time = as.numeric(.data$randdt - trialsdt + 1),
-           n = row_number())
+    dplyr::arrange(.data$randdt) %>%
+    dplyr::mutate(time = as.numeric(.data$randdt - trialsdt + 1),
+                  n = dplyr::row_number())
 
+  # fit enrollment model
   if (tolower(enroll_model) == "poisson") {
     # a(t) = lambda
     # mu(t) = lambda*t
@@ -59,29 +66,9 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1) {
                  vtheta = 1/n0,
                  bic = -2*(-n0 + n0*log(n0/t0)) + log(n0))
 
-    dffit1 <- tibble(
+    dffit1 <- dplyr::tibble(
       time = seq(1, t0),
       n = exp(fit1$theta)*.data$time)
-
-    p1 <- ggplot() +
-      geom_step(data = df1, aes(x = .data$time, y = .data$n)) +
-      geom_line(data = dffit1, aes(x = .data$time, y = .data$n),
-                color="blue") +
-      labs(x = "Days since trial start",
-           y = "Subjects",
-           title = "Fitted enrollment curve") +
-      theme_bw()
-
-    grob1 <- grid::grobTree(grid::textGrob(
-      fit1$model, x=0.05, y=0.95, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    grob2 <- grid::grobTree(grid::textGrob(
-      paste("BIC:", round(fit1$bic, 2)), x=0.05, y=0.88, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    fittedEnroll <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
-    print(fittedEnroll)
   } else if (tolower(enroll_model) == "time-decay") {
     # a(t) = mu/delta*(1 - exp(-delta*t))
     # mu(t) = mu/delta*(t - 1/delta*(1 - exp(-delta*t)))
@@ -109,29 +96,9 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1) {
       mu/delta*(t - 1/delta*(1 - exp(-delta*t)))
     }
 
-    dffit1 <- tibble(
+    dffit1 <- dplyr::tibble(
       time = seq(1, t0),
       n = fmu_td(.data$time, fit1$theta))
-
-    p1 <- ggplot() +
-      geom_step(data = df1, aes(x = .data$time, y = .data$n)) +
-      geom_line(data = dffit1, aes(x = .data$time, y = .data$n),
-                color="blue") +
-      labs(x = "Days since trial start",
-           y = "Subjects",
-           title = "Fitted enrollment curve") +
-      theme_bw()
-
-    grob1 <- grid::grobTree(grid::textGrob(
-      fit1$model, x=0.05, y=0.95, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    grob2 <- grid::grobTree(grid::textGrob(
-      paste("BIC:", round(fit1$bic, 2)), x=0.05, y=0.88, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    fittedEnroll <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
-    print(fittedEnroll)
   } else if (tolower(enroll_model) == "b-spline") {
     # a(t) = exp(theta' bs(t))
     # mu(t) = sum(a(u), {u,1,t})
@@ -140,7 +107,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1) {
     K = nknots
 
     days = seq(1, t0)
-    n = sapply(days, function(i) sum(df1$time == i))
+    n = as.numeric(table(factor(df1$time, levels = days)))
 
     # design matrix for cubic B-spline
     x = splines::bs(days, df=K+4, intercept=1)
@@ -162,7 +129,6 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1) {
                  bic = -2*opt1$value + (K+4)*log(n0),
                  x = x)
 
-
     # mean function of the NHPP, assuming t <= t0
     fmu_bs <- function(t, theta, x) {
       lambda = exp(as.vector(x %*% theta))
@@ -170,30 +136,63 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1) {
       lambdasum[t]
     }
 
-    dffit1 <- tibble(
+    dffit1 <- dplyr::tibble(
       time = seq(1, t0),
       n = fmu_bs(.data$time, fit1$theta, x))
+  } else if (tolower(enroll_model) == "piecewise poisson") {
+    # truncate the time intervals by data cut
+    u = accrualTime[accrualTime < t0]
+    u2 = c(u, t0)
 
-    p1 <- ggplot() +
-      geom_step(data = df1, aes(x = .data$time, y = .data$n)) +
-      geom_line(data = dffit1, aes(x = .data$time, y = .data$n),
-                color="blue") +
-      labs(x = "Days since trial start",
-           y = "Subjects",
-           title = "Fitted enrollment curve") +
-      theme_bw()
+    # number of enrolled subjects in each interval
+    factors <- cut(df1$time, breaks = u2)
+    n = table(factors)
 
-    grob1 <- grid::grobTree(grid::textGrob(
-      fit1$model, x=0.05, y=0.95, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
+    # length of each interval
+    t = diff(u2)
 
-    grob2 <- grid::grobTree(grid::textGrob(
-      paste("BIC:", round(fit1$bic, 2)), x=0.05, y=0.88, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
+    # constant enrollment rate in each interval
+    fit1 <- list(model = 'Piecewise Poisson',
+                 theta = log(n/t),
+                 vtheta = diag(1/n),
+                 accrualTime = u,
+                 bic = -2*sum(-n + n*log(n/t)) + length(u)*log(n0))
 
-    fittedEnroll <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
-    print(fittedEnroll)
+    lambda = n/t
+    psum = c(0, cumsum(n))  # cumulative enrollment by end of interval
+    time = seq(1, t0) # find the time interval for each day
+    j = findInterval(time, u, left.open = TRUE)
+    m = psum[j] + lambda[j]*(time - u[j]) # cumulative enrollment by day
+
+    dffit1 <- dplyr::tibble(
+      time = time,
+      n = m)
   }
+
+  # plot the enrollment curve
+  p1 <- ggplot2::ggplot() +
+    ggplot2::geom_step(data = df1, ggplot2::aes(x = .data$time,
+                                                y = .data$n)) +
+    ggplot2::geom_line(data = dffit1, ggplot2::aes(x = .data$time,
+                                                   y = .data$n),
+                       color = "blue") +
+    ggplot2::labs(x = "Days since trial start",
+                  y = "Subjects",
+                  title = "Fitted enrollment curve") +
+    ggplot2::theme_bw()
+
+  grob1 <- grid::grobTree(grid::textGrob(
+    label = fit1$model, x=0.05, y=0.95, hjust=0,
+    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+
+  grob2 <- grid::grobTree(grid::textGrob(
+    label = paste("BIC:", round(fit1$bic,2)), x=0.05, y=0.88, hjust=0,
+    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+
+  fittedEnroll <- p1 + ggplot2::annotation_custom(grob1) +
+    ggplot2::annotation_custom(grob2)
+  print(fittedEnroll)
+
 
   fit1
 }

@@ -24,10 +24,10 @@
 #' considers several models, including the homogeneous Poisson
 #' model, the time-decay model with an enrollment
 #' rate function \code{lambda(t) = mu/delta*(1 - exp(-delta*t))},
-#' and the B-spline model with the daily enrollment rate
-#' \code{lambda(t) = exp(B(t)*theta)}. If prior information exists
-#' on the model parameters, it can be combined with the likelihood
-#' to yield the posterior distribution.
+#' the B-spline model with the daily enrollment rate
+#' \code{lambda(t) = exp(B(t)*theta)}, and the piecewise Poisson model.
+#' If prior information exists on the model parameters, it can
+#' be combined with the likelihood to yield the posterior distribution.
 #'
 #' The \code{eventPred} package also offers several time-to-event
 #' models, including exponential, Weibull, log-normal, piecewise
@@ -67,6 +67,11 @@
 #'     \item Poisson: \code{theta = log(rate)}
 #'     \item Time-decay: \code{theta = (log(mu), log(delta))}
 #'     \item B-spline: no reparametrization is needed
+#'     \item Piecewise Poisson: \code{theta = (log(rate_i), i=1,...K)}.
+#'     The left endpoint of time intervals, denoted as
+#'     \code{accrualTime}, is considered fixed.
+#'
+#'
 #'   }
 #'
 #'   \item Event or dropout models
@@ -106,7 +111,7 @@
 #' accrual in clinical trials. Stat in Med. 2010;29:649-658.
 #'
 #'
-#' @importFrom dplyr %>% arrange bind_rows filter group_by
+#' @importFrom dplyr %>% arrange as_tibble bind_rows filter group_by
 #'   mutate n rename rename_all row_number select slice summarize tibble
 #' @importFrom grid gpar grobTree textGrob
 #' @importFrom ggplot2 aes annotation_custom geom_hline geom_line

@@ -41,15 +41,16 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
                          "piecewise exponential", "model averaging"))
   erify::check_n(npieces)
 
+  df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
   n0 = nrow(df)
   d0 = sum(df$event)
   ex0 = sum(df$time)
 
   kmfit <- survival::survfit(survival::Surv(time, event) ~ 1, data = df)
-  kmdf <- tibble(time = kmfit$time, surv = kmfit$surv)
-  kmdf <- tibble(time = 0, surv = 1) %>%
-    bind_rows(kmdf)
+  kmdf <- dplyr::tibble(time = kmfit$time, surv = kmfit$surv)
+  kmdf <- dplyr::tibble(time = 0, surv = 1) %>%
+    dplyr::bind_rows(kmdf)
 
   if (tolower(event_model) == "exponential") {
     # lambda(t) = lambda
@@ -61,29 +62,9 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
                  bic = -2*(-d0 + d0*log(d0/ex0)) + log(n0))
 
     # fitted survival curve
-    dffit2 <- tibble(
+    dffit2 <- dplyr::tibble(
       time = seq(0, max(df$time)),
       surv = pexp(.data$time, rate = exp(fit2$theta), lower.tail = FALSE))
-
-    p1 <- ggplot() +
-      geom_step(data = kmdf, aes(x = .data$time, y = .data$surv)) +
-      geom_line(data = dffit2, aes(x = .data$time, y = .data$surv),
-                color="blue") +
-      labs(x = "Days since randomization",
-           y = "Survival probability",
-           title = "Fitted time to event curve") +
-      theme_bw()
-
-    grob1 <- grid::grobTree(grid::textGrob(
-      fit2$model, x=0.75, y=0.95, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    grob2 <- grid::grobTree(grid::textGrob(
-      paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    fittedEvent <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
-    print(fittedEvent)
   } else if (tolower(event_model) == "weibull") {
     # lambda(t) = kappa/lambda*(t/lambda)^(kappa-1)
     # S(t) = exp(-(t/lambda)^kappa)
@@ -101,30 +82,10 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
                  bic = -2*reg$loglik[1] + 2*log(n0))
 
     # fitted survival curve
-    dffit2 <- tibble(
+    dffit2 <- dplyr::tibble(
       time = seq(0, max(df$time)),
       surv = pweibull(.data$time, shape = exp(fit2$theta[1]),
                       scale = exp(fit2$theta[2]), lower.tail = FALSE))
-
-    p1 <- ggplot() +
-      geom_step(data = kmdf, aes(x = .data$time, y = .data$surv)) +
-      geom_line(data = dffit2, aes(x = .data$time, y = .data$surv),
-                color="blue") +
-      labs(x = "Days since randomization",
-           y = "Survival probability",
-           title = "Fitted time to event curve") +
-      theme_bw()
-
-    grob1 <- grid::grobTree(grid::textGrob(
-      fit2$model, x=0.75, y=0.95, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    grob2 <- grid::grobTree(grid::textGrob(
-      paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    fittedEvent <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
-    print(fittedEvent)
   } else if (tolower(event_model) == "log-normal") {
     # S(t) = 1 - Phi((log(t) - meanlog)/sdlog)
     reg <- survival::survreg(survival::Surv(time, event) ~ 1,
@@ -138,30 +99,10 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
                  bic = -2*reg$loglik[1] + 2*log(n0))
 
     # fitted survival curve
-    dffit2 <- tibble(
+    dffit2 <- dplyr::tibble(
       time = seq(0, max(df$time)),
       surv = plnorm(.data$time, meanlog = fit2$theta[1],
                     sdlog = exp(fit2$theta[2]), lower.tail = FALSE))
-
-    p1 <- ggplot() +
-      geom_step(data = kmdf, aes(x = .data$time, y = .data$surv)) +
-      geom_line(data = dffit2, aes(x = .data$time, y = .data$surv),
-                color="blue") +
-      labs(x = "Days since randomization",
-           y = "Survival probability",
-           title = "Fitted time to event curve") +
-      theme_bw()
-
-    grob1 <- grid::grobTree(grid::textGrob(
-      fit2$model, x=0.75, y=0.95, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    grob2 <- grid::grobTree(grid::textGrob(
-      paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    fittedEvent <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
-    print(fittedEvent)
   } else if (tolower(event_model) == "piecewise exponential") {
     # lambda(t) = lambda[j] for tau[j-1] < t <= tau[j], j = 1,...,J
     # where tau[0] = 0 < tau[1] < ... < tau[J-1] < tau[J] = Inf are the knots
@@ -201,29 +142,9 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
                  knots = ucut[2:J])
 
     # fitted survival curve
-    dffit2 <- tibble(
+    dffit2 <- dplyr::tibble(
       time = seq(0, max(df$time)),
-      surv = exp(-colSums(exp(fit2$theta) * sapply(.data$time, fex, J, ucut))))
-
-    p1 <- ggplot() +
-      geom_step(data = kmdf, aes(x = .data$time, y = .data$surv)) +
-      geom_line(data = dffit2, aes(x = .data$time, y = .data$surv),
-                color="blue") +
-      labs(x = "Days since randomization",
-           y = "Survival probability",
-           title = "Fitted time to event curve") +
-      theme_bw()
-
-    grob1 <- grid::grobTree(grid::textGrob(
-      fit2$model, x=0.75, y=0.95, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    grob2 <- grid::grobTree(grid::textGrob(
-      paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    fittedEvent <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
-    print(fittedEvent)
+      surv = exp(-colSums(exp(fit2$theta)*sapply(.data$time, fex, J, ucut))))
   } else if (tolower(event_model) == "model averaging") {
     reg1 <- survival::survreg(survival::Surv(time, event) ~ 1,
                               data = df, dist = "weibull")
@@ -285,32 +206,34 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
       p
     }
 
-
-    dffit2 <- tibble(
+    dffit2 <- dplyr::tibble(
       time = seq(0, max(df$time)),
       surv = pmodavg(.data$time, theta, w1, lower.tail = FALSE))
-
-    p1 <- ggplot() +
-      geom_step(data = kmdf, aes(x = .data$time, y = .data$surv)) +
-      geom_line(data = dffit2, aes(x = .data$time, y = .data$surv),
-                color="blue") +
-      labs(x = "Days since randomization",
-           y = "Survival probability",
-           title = "Fitted time to event curve") +
-      theme_bw()
-
-
-    grob1 <- grid::grobTree(grid::textGrob(
-      fit2$model, x=0.75, y=0.95, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    grob2 <- grid::grobTree(grid::textGrob(
-      paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
-      gp=grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-    fittedEvent <- p1 + annotation_custom(grob1) + annotation_custom(grob2)
-    print(fittedEvent)
   }
+
+  # plot the survival curve
+  p1 <- ggplot2::ggplot() +
+    ggplot2::geom_step(data = kmdf, ggplot2::aes(x = .data$time,
+                                                 y = .data$surv)) +
+    ggplot2::geom_line(data = dffit2, ggplot2::aes(x = .data$time,
+                                                   y = .data$surv),
+                       color="blue") +
+    ggplot2::labs(x = "Days since randomization",
+                  y = "Survival probability",
+                  title = "Fitted time to event survival curve") +
+    ggplot2::theme_bw()
+
+  grob1 <- grid::grobTree(grid::textGrob(
+    label = fit2$model, x=0.75, y=0.95, hjust=0,
+    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+
+  grob2 <- grid::grobTree(grid::textGrob(
+    label = paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
+    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+
+  fittedEvent <- p1 + ggplot2::annotation_custom(grob1) +
+    ggplot2::annotation_custom(grob2)
+  print(fittedEvent)
 
   fit2
 
