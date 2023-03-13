@@ -12,10 +12,14 @@
 #' @param target_n The target number of subjects to enroll in the study.
 #' @param target_d The target number of events to reach in the study.
 #' @param enroll_model The enrollment model which can be specified as
-#'   "Poisson", "time-decay", or "B-spline". By default, it
-#'   is set to "B-spline".
+#'   "Poisson", "Time-decay", "B-spline", or
+#'   "Piecewise Poisson". By default, it is set to "B-spline".
 #' @param nknots The number of inner knots for the B-spline enrollment
 #'   model. By default, it is set to 1.
+#' @param accrualTime The accrual time intervals for the piecewise
+#'   Poisson model. Must start with 0, e.g., c(0, 3) breaks the
+#'   time axis into 2 accrual intervals: [0, 3) and [3, Inf).
+#'   By default, it is set to 0.
 #' @param parameter_enroll_model The enrollment model parameters for
 #'   design-stage enrollment prediction.
 #' @param lags The day lags to compute the average enrollment rate to
@@ -61,10 +65,12 @@
 #' The \code{parameter_enroll_model} variable can be used for
 #' enrollment prediction at the design stage. A piecewise Poisson
 #' can be parameterized through the time
-#' intervals, \code{accrualTime}, and the enrollment rates in
-#' the intervals, \code{accrualIntensity}. These are treated as
-#' fixed for design-stage enrollment prediction.
-#' For the homogeneous Poisson and time-decay models,
+#' intervals, \code{accrualTime}, which is treated
+#' as fixed, and the enrollment rates in the intervals,
+#' \code{accrualIntensity}, the log of which is used as the
+#' model parameter.
+#' For the homogeneous Poisson, time-decay,
+#' and piecewise Poisson models,
 #' \code{parameter_enroll_model} is used to specify the prior
 #' distribution of model parameters, with a very small variance
 #' being used to fix the parameter values. It should be noted
@@ -122,7 +128,7 @@
 getPrediction <- function(
     df = NULL, to_predict = "enrollment and event",
     target_n = NA, target_d = NA,
-    enroll_model = "b-spline", nknots = 1,
+    enroll_model = "b-spline", nknots = 1, accrualTime = 0,
     parameter_enroll_model = NULL, lags = 30,
     event_model = "model averaging", npieces = 3,
     parameter_event_model = NULL,

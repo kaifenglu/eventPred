@@ -31,8 +31,8 @@
 #'
 #' The \code{eventPred} package also offers several time-to-event
 #' models, including exponential, Weibull, log-normal, piecewise
-#' exponential, and model-averaging of Weibull and log-normal,
-#' for event prediction. For time to dropout, exponential, Weibull,
+#' exponential, and model-averaging of Weibull and log-normal.
+#' For time to dropout, exponential, Weibull,
 #' and log-normal distributions are considered. If enrollment
 #' is complete, ongoing subjects who have not had the event of interest
 #' or dropped out of the study before the data cut contribute
@@ -67,7 +67,7 @@
 #'     \item Poisson: \code{theta = log(rate)}
 #'     \item Time-decay: \code{theta = (log(mu), log(delta))}
 #'     \item B-spline: no reparametrization is needed
-#'     \item Piecewise Poisson: \code{theta = (log(rate_i), i=1,...K)}.
+#'     \item Piecewise Poisson: \code{theta = log(rates)}.
 #'     The left endpoint of time intervals, denoted as
 #'     \code{accrualTime}, is considered fixed.
 #'
@@ -127,9 +127,9 @@
 #' @importFrom mvtnorm rmvnorm
 #' @importFrom rstpm2 vuniroot
 #' @importFrom tmvtnsim rtnorm
-#' @importFrom stats dlnorm dweibull loess optim optimHess pexp plnorm
-#'   plogis pweibull qlogis quantile rbinom rexp rlnorm rmultinom rnorm
-#'   runif rweibull uniroot
+#' @importFrom stats dlnorm dnorm dweibull loess optim optimHess pexp
+#'   plnorm plogis pnorm pweibull qlogis qnorm quantile rbinom rexp
+#'   rlnorm rmultinom rnorm runif rweibull uniroot
 #' @importFrom erify check_bool check_class check_content check_n
 #'   check_positive
 #' @importFrom rlang .data

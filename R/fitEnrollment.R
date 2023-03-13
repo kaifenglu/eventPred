@@ -4,8 +4,8 @@
 #' @param df The subject-level enrollment data, including
 #'   \code{randdt} and \code{cutoffdt}.
 #' @param enroll_model The enrollment model which can be specified as
-#'   "Poisson", "Time-decay", "B-spline", or "Piecewise Poisson".
-#'   By default, it is set to "B-spline".
+#'   "Poisson", "Time-decay", "B-spline", or
+#'   "Piecewise Poisson". By default, it is set to "B-spline".
 #' @param nknots The number of inner knots for the B-spline enrollment
 #'   model. By default, it is set to 1.
 #' @param accrualTime The accrual time intervals for the piecewise Poisson
@@ -26,7 +26,8 @@
 #' such as the enrollment model, \code{model}, the estimated model
 #' parameters, \code{theta}, the covariance matrix, \code{vtheta}, and
 #' the Bayesian information criterion, \code{bic}, as well as
-#' the design matrix \code{x} for the B-spline enrollment model.
+#' the design matrix \code{x} for the B-spline enrollment model, and
+#' \code{accrualTime} for the piecewise Poisson enrollment model.
 #'
 #' @examples
 #'
@@ -40,8 +41,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1,
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(enroll_model),
-                       c("poisson", "time-decay", "b-spline",
-                         "piecewise poisson"))
+                       c("poisson", "time-decay",
+                         "b-spline", "piecewise poisson"))
 
   erify::check_n(nknots)
 
@@ -59,7 +60,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1,
 
   # fit enrollment model
   if (tolower(enroll_model) == "poisson") {
-    # a(t) = lambda
+    # lambda(t) = lambda
     # mu(t) = lambda*t
     fit1 <- list(model = 'Poisson',
                  theta = log(n0/t0),
@@ -70,8 +71,15 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1,
       time = seq(1, t0),
       n = exp(fit1$theta)*.data$time)
   } else if (tolower(enroll_model) == "time-decay") {
-    # a(t) = mu/delta*(1 - exp(-delta*t))
+    # lambda(t) = mu/delta*(1 - exp(-delta*t))
     # mu(t) = mu/delta*(t - 1/delta*(1 - exp(-delta*t)))
+    # mean function of the NHPP
+    fmu_td <- function(t, theta) {
+      mu = exp(theta[1])
+      delta = exp(theta[2])
+      mu/delta*(t - 1/delta*(1 - exp(-delta*t)))
+    }
+
     llik_td <- function(theta, t, df) {
       mu = exp(theta[1])
       delta = exp(theta[2])
@@ -80,7 +88,11 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1,
       a1 + a2
     }
 
-    theta <- c(log(n0/t0), 0)
+    # slope in the last 1/4 enrollment time interval
+    beta = (n0 - df1$n[df1$time >= 3/4*t0][1])/(1/4*t0)
+    mu0 = 2*n0/t0^2
+    delta0 = mu0/beta
+    theta <- c(log(mu0), log(delta0))
     opt1 <- optim(theta, llik_td, gr = NULL, t = t0, df = df1,
                   control = c(fnscale = -1))  # maximization
     fit1 <- list(model = "Time-decay",
@@ -89,19 +101,12 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 1,
                                            t = t0, df = df1)),
                  bic = -2*llik_td(opt1$par, t = t0, df = df1) + 2*log(n0))
 
-    # mean function of the NHPP
-    fmu_td <- function(t, theta) {
-      mu = exp(theta[1])
-      delta = exp(theta[2])
-      mu/delta*(t - 1/delta*(1 - exp(-delta*t)))
-    }
-
     dffit1 <- dplyr::tibble(
       time = seq(1, t0),
       n = fmu_td(.data$time, fit1$theta))
   } else if (tolower(enroll_model) == "b-spline") {
-    # a(t) = exp(theta' bs(t))
-    # mu(t) = sum(a(u), {u,1,t})
+    # lambda(t) = exp(theta' bs(t))
+    # mu(t) = sum(lambda(u), {u,1,t})
 
     # number of inner knots
     K = nknots
