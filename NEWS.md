@@ -2,7 +2,9 @@
 
 - replaced first and last with slice of dplyr in summarizeObserved
 
-- added piecewise Poisson model to fitEnrollment and predictEnrollment at analysis stage
+- added the piecewise Poisson model to fitEnrollment and predictEnrollment at the analysis stage
+
+- improved the initial value for the time-decay enrollment model parameters
 
 - sped up the calculations of quantiles
 
