@@ -16,28 +16,28 @@
 #'   it is set to 0.90.
 #' @param nreps The number of replications for simulation. By default,
 #'   it is set to 500.
-#' @param showplot A Boolean variable to control whether or not
-#'   the prediction plot is displayed. By default, it is set to
-#'   \code{TRUE}.
+#' @param showplot A Boolean variable to control whether or not to
+#'   show the prediction plot. By default, it is set to \code{TRUE}.
 #'
 #' @details
-#' For design stage enrollment prediction, \code{enroll_fit} is used
-#' to specify the prior distribution of model parameters, with a
-#' very small variance being used to fix the parameter values.
-#' For analysis stage enrollment prediction, \code{enroll_fit}
-#' contains the posterior distribution of model parameters.
-#' A piecewise Poisson enrollment model can be represented
-#' through the time intervals, \code{accrualTime}, which is treated
-#' as fixed, and the enrollment rates in the intervals,
+#'
+#' The \code{enroll_fit} variable can be used for enrollment prediction
+#' at the design stage. A piecewise Poisson can be parameterized
+#' through the time intervals, \code{accrualTime}, which is
+#' treated as fixed, and the enrollment rates in the intervals,
 #' \code{accrualIntensity}, the log of which is used as the
-#' model parameter. It should be noted that the B-spline model
-#' is not appropriate for use during the design stage.
+#' model parameter. For the homogeneous Poisson, time-decay,
+#' and piecewise Poisson models, \code{enroll_fit} is used to
+#' specify the prior distribution of model parameters, with
+#' a very small variance being used to fix the parameter values.
+#' It should be noted that the B-spline model is not appropriate
+#' for use during the design stage.
 #'
 #' @return
 #' A list of prediction results, which includes important information
 #' such as the median, lower and upper percentiles for the estimated
 #' time to reach the target number of subjects, as well as simulated
-#' enrollment data for new subjects. Additionally, the data for the
+#' enrollment data for new subjects. The data for the
 #' prediction plot is also included within the list.
 #'
 #' @examples
@@ -45,7 +45,7 @@
 #' # Enrollment prediction at the design stage
 #'
 #' enroll_pred <- predictEnrollment(
-#'   target_n = 400,
+#'   target_n = 300,
 #'   enroll_fit = list(model = "piecewise poisson",
 #'                     theta = log(26/9*seq(1, 9)/30.4375),
 #'                     vtheta = diag(9)*1e-8,
@@ -60,7 +60,11 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                               showplot = TRUE) {
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_n)
+
   erify::check_class(enroll_fit, "list")
+  erify::check_content(tolower(enroll_fit$model), c(
+    "poisson", "time-decay", "b-spline", "piecewise poisson"))
+
   erify::check_n(lags, zero = TRUE)
   erify::check_positive(pilevel)
   erify::check_positive(1-pilevel)
@@ -76,7 +80,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     t0 = as.numeric(cutoffdt - trialsdt + 1)
     df <- df %>%
       dplyr::arrange(.data$randdt) %>%
-      dplyr::mutate(time = as.numeric(.data$randdt - trialsdt + 1),
+      dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
                     n = dplyr::row_number())
   } else {
     n0 = 0
@@ -233,14 +237,14 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   t = sort(unique(c(seq(t0, t1, 30), t1, pred1dy)))
 
   # predicted number of subjects enrolled after data cut
-  dfb <- dplyr::tibble(time = t) %>%
+  dfb <- dplyr::tibble(t = t) %>%
     dplyr::cross_join(newSubjects) %>%
-    dplyr::group_by(.data$time, .data$draw) %>%
-    dplyr::summarise(m = sum(.data$arrivalTime <= .data$time) + n0,
+    dplyr::group_by(.data$t, .data$draw) %>%
+    dplyr::summarise(nenrolled = sum(.data$arrivalTime <= .data$t) + n0,
                      .groups = "drop_last") %>%
-    dplyr::summarise(n = quantile(.data$m, probs = 0.5),
-                     lower = quantile(.data$m, probs = plower),
-                     upper = quantile(.data$m, probs = pupper))
+    dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
+                     lower = quantile(.data$nenrolled, probs = plower),
+                     upper = quantile(.data$nenrolled, probs = pupper))
 
 
   if (!is.null(df)) {
@@ -249,12 +253,12 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     # arrival time for subjects already enrolled before data cut
     dfa <- df %>%
       dplyr::mutate(lower = NA, upper = NA) %>%
-      dplyr::select(.data$time, .data$n, .data$lower, .data$upper)
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
 
     # concatenate subjects enrolled before and after data cut
     dfs <- dfa %>%
       dplyr::bind_rows(dfb) %>%
-      dplyr::mutate(date = as.Date(.data$time - 1, origin = trialsdt)) %>%
+      dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
       dplyr::mutate(year = format(.data$date, format = "%Y"))
 
     if (showplot) {
@@ -294,16 +298,16 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     }
 
     list(predEnrollDay = pred1dy, predEnrollDate = pred1dt, pilevel = pilevel,
-         newSubjects = newSubjects, plotdata = dfs)
+         newSubjects = newSubjects, plotEnrollment = dfs)
   } else {
     if (showplot) {
       # plot the enrollment data
       g1 <- ggplot2::ggplot() +
-        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$time,
+        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$t,
                                                     ymin=.data$lower,
                                                     ymax=.data$upper),
                              alpha=0.5, fill="lightblue") +
-        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$time, y=.data$n),
+        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$t, y=.data$n),
                            color="blue") +
         ggplot2::scale_x_continuous(name = "Days since randomization",
                                     expand = c(0.01, 0.01)) +
@@ -315,7 +319,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     }
 
     list(predEnrollDay = pred1dy, pilevel = pilevel,
-         newSubjects = newSubjects, plotdata = dfb)
+         newSubjects = newSubjects, plotEnrollment = dfb)
   }
 
 
