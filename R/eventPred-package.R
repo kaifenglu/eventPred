@@ -68,8 +68,8 @@
 #'     \item Time-decay: \code{theta = (log(mu), log(delta))}
 #'     \item B-spline: no reparametrization is needed
 #'     \item Piecewise Poisson: \code{theta = log(rates)}.
-#'     The left endpoint of time intervals, denoted as
-#'     \code{accrualTime}, is considered fixed.
+#'     The left endpoints of time intervals, denoted as
+#'     \code{accrualTime}, are considered fixed.
 #'
 #'
 #'   }
@@ -111,8 +111,9 @@
 #' accrual in clinical trials. Stat in Med. 2010;29:649-658.
 #'
 #'
-#' @importFrom dplyr %>% arrange as_tibble bind_rows filter group_by
-#'   mutate n rename rename_all row_number select slice summarize tibble
+#' @importFrom dplyr %>% arrange as_tibble bind_rows cross_join filter
+#'   group_by mutate n rename rename_all row_number select slice
+#'   summarize tibble
 #' @importFrom grid gpar grobTree textGrob
 #' @importFrom ggplot2 aes annotation_custom geom_hline geom_line
 #'   geom_point geom_rect geom_ribbon geom_smooth geom_step geom_text
@@ -126,6 +127,7 @@
 #' @importFrom Matrix bdiag
 #' @importFrom mvtnorm rmvnorm
 #' @importFrom rstpm2 vuniroot
+#' @importFrom rootSolve multiroot
 #' @importFrom tmvtnsim rtnorm
 #' @importFrom stats dlnorm dnorm dweibull loess optim optimHess pexp
 #'   plnorm plogis pnorm pweibull qlogis qnorm quantile rbinom rexp
