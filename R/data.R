@@ -1,15 +1,43 @@
-#' Observed enrollment and event data
+#' Interim enrollment and event data before enrollment completion
 #'
-#' Simulated enrollment and event data used in the examples.
+#' A data frame with 225 rows and 5 columns:
+#' \describe{
+#'   \item{\code{randdt}}{The randomization date}
+#'   \item{\code{cutoffdt}}{The cutoff date}
+#'   \item{\code{time}}{The day of event or censoring since randomization}
+#'   \item{\code{event}}{The event indicator: 1 for event, 0 for non-event}
+#'   \item{\code{dropout}}{The dropout indicator: 1 for dropout,
+#'   0 for non-dropout}
+#' }
+#' For ongoing subjects, both \code{event} and \code{dropout} are equal to 0.
+"interimData1"
+
+
+#' Interim enrollment and event data after enrollment completion
 #'
-#' @format ## `observedData`
 #' A data frame with 300 rows and 5 columns:
 #' \describe{
 #'   \item{\code{randdt}}{The randomization date}
 #'   \item{\code{cutoffdt}}{The cutoff date}
 #'   \item{\code{time}}{The day of event or censoring since randomization}
 #'   \item{\code{event}}{The event indicator: 1 for event, 0 for non-event}
-#'   \item{\code{dropout}}{The dropout indicator: 1 for dropout, 0 for non-dropout}
+#'   \item{\code{dropout}}{The dropout indicator: 1 for dropout,
+#'   0 for non-dropout}
 #' }
 #' For ongoing subjects, both \code{event} and \code{dropout} are equal to 0.
-"observedData"
+"interimData2"
+
+
+#' Final enrollment and event data after achieving the target number of events
+#'
+#' A data frame with 300 rows and 5 columns:
+#' \describe{
+#'   \item{\code{randdt}}{The randomization date}
+#'   \item{\code{cutoffdt}}{The cutoff date}
+#'   \item{\code{time}}{The day of event or censoring since randomization}
+#'   \item{\code{event}}{The event indicator: 1 for event, 0 for non-event}
+#'   \item{\code{dropout}}{The dropout indicator: 1 for dropout,
+#'   0 for non-dropout}
+#' }
+#' For ongoing subjects, both \code{event} and \code{dropout} are equal to 0.
+"finalData"
