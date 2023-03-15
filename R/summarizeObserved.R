@@ -3,7 +3,7 @@
 #' the trial start date, data cutoff date, number of subjects
 #' enrolled, enrollment duration, number of events and dropouts,
 #' number of subjects at risk, cumulative enrollment and event data,
-#' daily enrollment rate, and Kaplan-Meier plots for time to event
+#' daily enrollment rates, and Kaplan-Meier plots for time to event
 #' and time to dropout.
 #'
 #' @param df The subject-level data, including \code{randdt} and
@@ -21,8 +21,11 @@
 #'
 #' @examples
 #'
-#' observed <- summarizeObserved(df = observedData,
-#'                               to_predict = "enrollment and event")
+#' observed1 <- summarizeObserved(df = interimData1,
+#'                                to_predict = "enrollment and event")
+#'
+#' observed2 <- summarizeObserved(df = interimData2,
+#'                                to_predict = "event only")
 #'
 #' @export
 #'
@@ -81,11 +84,11 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       dplyr::bind_rows(adtte)
 
     ylab = "Subjects / Events"
-    title = "Observed subjects and events"
+    title = "Cumulative subjects and events"
   } else {
     ad <- adsl
     ylab = "Subjects"
-    title = "Observed subjects"
+    title = "Cumulative subjects"
   }
 
 
@@ -112,13 +115,11 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   cumAccrual <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
   print(cumAccrual)
 
-
-
   # daily enrollment plot with loess smoothing
   if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
-    time = as.numeric(adsl$randdt - trialsdt + 1)
+    t = as.numeric(adsl$randdt - trialsdt + 1)
     days = seq(1, t0)
-    n = as.numeric(table(factor(time, levels = days)))
+    n = as.numeric(table(factor(t, levels = days)))
     enroll <- dplyr::tibble(day = days, n = n)
 
     dailyAccrual <- ggplot2::ggplot(data = enroll,
@@ -127,7 +128,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       ggplot2::geom_point() +
       ggplot2::geom_smooth(formula = y ~ x, method = "loess", se = FALSE) +
       ggplot2::labs(x = "Days since trial start",
-                    y = "Subjects enrolled daily",
+                    y = "Subjects",
                     title = "Daily subjects") +
       ggplot2::theme_bw()
     print(dailyAccrual)
