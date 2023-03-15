@@ -4,8 +4,8 @@
 #' @param df The subject-level dropout data, including \code{time} and
 #'   \code{dropout}.
 #' @param dropout_model The dropout model used to analyze the dropout data
-#'   which can be set to one of three options: "exponential", "Weibull", or
-#'   "log-normal". By default, it is set to "Weibull".
+#'   which can be set to one of the following options: "exponential",
+#'   "Weibull", or "log-normal". By default, it is set to "Weibull".
 #'
 #' @return A list of results from the model fit including key information
 #'   such as the dropout model, \code{model}, the estimated model parameters,
@@ -14,12 +14,13 @@
 #'
 #' @examples
 #'
-#' dropout_fit <- fitDropout(df = observedData, dropout_model = "exponential")
+#' dropout_fit <- fitDropout(df = interimData2, dropout_model = "exponential")
 #'
 #' @export
 #'
 fitDropout <- function(df, dropout_model = "weibull") {
   erify::check_class(df, "data.frame")
+
   erify::check_content(tolower(dropout_model),
                        c("exponential", "weibull", "log-normal"))
 
@@ -28,6 +29,9 @@ fitDropout <- function(df, dropout_model = "weibull") {
   n0 = nrow(df)
   d0 = sum(df$dropout)
   ex0 = sum(df$time)
+
+  erify::check_positive(d0, supplement = paste(
+    "The number of dropouts must be positive to fit a dropout model."))
 
   kmfit <- survival::survfit(survival::Surv(time, dropout) ~ 1, data = df)
   kmdf <- dplyr::tibble(time = kmfit$time, surv = kmfit$surv)
