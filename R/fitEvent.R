@@ -3,15 +3,17 @@
 #'
 #' @param df The subject-level event data, including \code{time}
 #'   and \code{event}.
-#' @param event_model The event model which specifies the type of event
-#'   model to be used in the analysis and can be set to one of the
+#' @param event_model The event model used to analyze the event data
+#'   which can be set to one of the
 #'   following options: "exponential", "Weibull", "log-normal",
-#'   "piecewise exponential", or "model averaging", which uses the
-#'   \code{exp(-bic)} weighting and combines Weibull and
+#'   "piecewise exponential", or "model averaging". The model averaging
+#'   uses the \code{exp(-bic)} weighting and combines Weibull and
 #'   log-normal models. By default, it is set to "model
 #'   averaging".
-#' @param npieces The number of pieces for the piecewise exponential
-#'   event model. By default, it is set to 3.
+#' @param piecewiseSurvivalTime A vector that specifies the time
+#'   intervals for the piecewise exponential survival distribution.
+#'   Must start with 0, e.g., c(0, 6) breaks the time axis into 2
+#'   event intervals: [0, 6) and [6, Inf). By default, it is set to 0.
 #'
 #' @return
 #' A list of results from the model fit including key information
@@ -19,33 +21,46 @@
 #' \code{theta}, the covariance matrix, \code{vtheta}, as well as the
 #' Bayesian Information Criterion, \code{bic}.
 #'
-#' If the piecewise exponential model is used, additional
-#' variables will be included in the list of results, such as the
-#' number of pieces, \code{npieces}, and the location
-#' of knots used in the model, \code{knots}.
+#' If the piecewise exponential model is used, the location
+#' of knots used in the model, \code{piecewiseSurvivalTime}, will also
+#' be included in the list of results.
 #'
 #' If the model averaging option is chosen, the weight assigned
 #' to the Weibull component is indicated by the \code{w1} variable.
 #'
 #' @examples
 #'
-#' event_fit <- fitEvent(df = observedData,
-#'                       event_model = "piecewise exponential", npieces = 3)
+#' event_fit <- fitEvent(df = interimData2,
+#'                       event_model = "piecewise exponential",
+#'                       piecewiseSurvivalTime = c(0, 180))
 #'
 #' @export
 #'
-fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
+fitEvent <- function(df, event_model = "model averaging",
+                     piecewiseSurvivalTime = 0) {
   erify::check_class(df, "data.frame")
+
   erify::check_content(tolower(event_model),
                        c("exponential", "weibull", "log-normal",
                          "piecewise exponential", "model averaging"))
-  erify::check_n(npieces)
+
+  if (piecewiseSurvivalTime[1] != 0) {
+    stop("piecewiseSurvivalTime must start with 0");
+  }
+  if (length(piecewiseSurvivalTime) > 1 &
+      any(diff(piecewiseSurvivalTime) <= 0)) {
+    stop("piecewiseSurvivalTime should be increasing")
+  }
+
 
   df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
   n0 = nrow(df)
   d0 = sum(df$event)
   ex0 = sum(df$time)
+
+  erify::check_positive(d0, supplement = paste(
+    "The number of events must be positive to fit an event model."))
 
   kmfit <- survival::survfit(survival::Surv(time, event) ~ 1, data = df)
   kmdf <- dplyr::tibble(time = kmfit$time, surv = kmfit$surv)
@@ -104,47 +119,46 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
       surv = plnorm(.data$time, meanlog = fit2$theta[1],
                     sdlog = exp(fit2$theta[2]), lower.tail = FALSE))
   } else if (tolower(event_model) == "piecewise exponential") {
-    # lambda(t) = lambda[j] for tau[j-1] < t <= tau[j], j = 1,...,J
-    # where tau[0] = 0 < tau[1] < ... < tau[J-1] < tau[J] = Inf are the knots
+    # lambda(t) = lambda[j] for ucut[j] < t <= ucut[j+1], j = 1,...,J
+    # where ucut[1]=0 < ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
+    u = piecewiseSurvivalTime[piecewiseSurvivalTime < max(df$time)]
+    ucut = c(u, max(df$time))
+    J = length(u)
 
-    # number of inner knots
-    J = npieces
-
-    # number of events in each interval
-    d = diff(c(0, round(d0/J*(1:J))))
-
-    # cumulative number of events at the end of the first J-1 intervals
-    dcut = cumsum(d[1:(J-1)])
-
-    # ordered event times
-    u = sort(df$time[df$event==1])
-
-    # end points of the time intervals
-    ucut = c(0, (u[dcut] + u[dcut+1])/2, max(df$time))
-
-    # total exposure within each interval
-    fex <- function(t, J, ucut) {
-      ex = rep(NA, J)
-      for (j in 1:J) {
-        ex[j] = pmax(0, pmin(t, ucut[j+1]) - ucut[j])
-      }
-      ex
+    d = rep(NA, J)  # number of events in each interval
+    ex = rep(NA, J) # total exposure in each interval
+    for (j in 1:J) {
+      d[j] = sum((df$time > ucut[j]) * (df$time <= ucut[j+1]) *
+                   (df$event == 1))
+      ex[j] = sum(pmax(0, pmin(df$time, ucut[j+1]) - ucut[j]))
     }
 
-    ex = rowSums(sapply(df$time, fex, J, ucut))
-
     # maximum likelihood estimates and covariance matrix
-    fit2 <- list(model = "Piecewise exponential",
-                 theta = log(d/ex),
-                 vtheta = diag(1/d),
-                 bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
-                 npieces = J,
-                 knots = ucut[2:J])
+    if (J > 1) {
+      fit2 <- list(model = "Piecewise exponential",
+                   theta = log(d/ex),
+                   vtheta = diag(1/d),
+                   bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
+                   piecewiseSurvivalTime = u)
+    } else {
+      fit2 <- list(model = "Piecewise exponential",
+                   theta = log(d/ex),
+                   vtheta = 1/d*diag(1),
+                   bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
+                   piecewiseSurvivalTime = u)
+    }
 
     # fitted survival curve
-    dffit2 <- dplyr::tibble(
-      time = seq(0, max(df$time)),
-      surv = exp(-colSums(exp(fit2$theta)*sapply(.data$time, fex, J, ucut))))
+    time = seq(0, max(df$time))
+
+    surv = 0
+    for (j in 1:J) {
+      exj = pmax(0, pmin(time, ucut[j+1]) - ucut[j])
+      surv = surv + exp(fit2$theta[j]) * exj
+    }
+    surv = exp(-surv)
+
+    dffit2 <- dplyr::tibble(time, surv)
   } else if (tolower(event_model) == "model averaging") {
     reg1 <- survival::survreg(survival::Surv(time, event) ~ 1,
                               data = df, dist = "weibull")
@@ -153,7 +167,7 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
     bic1 <- -2*reg1$loglik[1] + 2*log(n0)
     bic2 <- -2*reg2$loglik[1] + 2*log(n0)
 
-    w1 = exp(-0.5*bic1)/(exp(-0.5*bic1) + exp(-0.5*bic2))
+    w1 = 1/(1 + exp(-0.5*(bic2 - bic1)))
 
     # log-likelihood for model averaging of Weibull and log-normal
     llmodavg <- function(theta, w1, df) {
@@ -188,7 +202,7 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
     fit2 <- list(model = "Model averaging",
                  theta = theta,
                  vtheta = vtheta,
-                 bic = -2*llmodavg(theta, w1, df) + 4*log(n0),
+                 bic = w1*bic1 + (1-w1)*bic2,
                  w1 = w1)
 
     # distribution function for model averaging of Weibull and log-normal
@@ -227,9 +241,16 @@ fitEvent <- function(df, event_model = "model averaging", npieces = 3) {
     label = fit2$model, x=0.75, y=0.95, hjust=0,
     gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
 
-  grob2 <- grid::grobTree(grid::textGrob(
-    label = paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
-    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+  if (tolower(event_model) == "model averaging") {
+    grob2 <- grid::grobTree(grid::textGrob(
+      label = paste("Weighted BIC:", round(fit2$bic, 2)),
+      x=0.75, y=0.88, hjust=0,
+      gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+  } else {
+    grob2 <- grid::grobTree(grid::textGrob(
+      label = paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
+      gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+  }
 
   fittedEvent <- p1 + ggplot2::annotation_custom(grob1) +
     ggplot2::annotation_custom(grob2)
