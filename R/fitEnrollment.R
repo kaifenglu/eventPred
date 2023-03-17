@@ -11,6 +11,8 @@
 #' @param accrualTime The accrual time intervals for the piecewise Poisson
 #'   model. Must start with 0, e.g., c(0, 3) breaks the time axis into
 #'   2 accrual intervals: [0, 3) and [3, Inf). By default, it is set to 0.
+#' @param showplot A Boolean variable to control whether or not to
+#'   show the fitted enrollment curve. By default, it is set to \code{TRUE}.
 #'
 #' @details
 #' For the time-decay model, the mean function is
@@ -28,6 +30,7 @@
 #' the Bayesian Information Criterion, \code{bic}, as well as
 #' the design matrix \code{x} for the B-spline enrollment model, and
 #' \code{accrualTime} for the piecewise Poisson enrollment model.
+#' The fitted enrollment curve is also returned.
 #'
 #' @examples
 #'
@@ -37,7 +40,7 @@
 #' @export
 #'
 fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
-                          accrualTime = 0) {
+                          accrualTime = 0, showplot = TRUE) {
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(enroll_model),
@@ -214,8 +217,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   fittedEnroll <- p1 + ggplot2::annotation_custom(grob1) +
     ggplot2::annotation_custom(grob2)
-  print(fittedEnroll)
+  if (showplot) print(fittedEnroll)
 
-
-  fit1
+  list(enroll_fit = fit1, enroll_fit_plot = fittedEnroll)
 }
