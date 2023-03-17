@@ -14,6 +14,10 @@
 #'   intervals for the piecewise exponential survival distribution.
 #'   Must start with 0, e.g., c(0, 6) breaks the time axis into 2
 #'   event intervals: [0, 6) and [6, Inf). By default, it is set to 0.
+#' @param showplot A Boolean variable to control whether or not to
+#'   show the fitted time-to-event survival curve. By default, it is
+#'   set to \code{TRUE}.
+#'
 #'
 #' @return
 #' A list of results from the model fit including key information
@@ -28,6 +32,8 @@
 #' If the model averaging option is chosen, the weight assigned
 #' to the Weibull component is indicated by the \code{w1} variable.
 #'
+#' The fitted time-to-event survival curve is also returned.
+#'
 #' @examples
 #'
 #' event_fit <- fitEvent(df = interimData2,
@@ -37,7 +43,7 @@
 #' @export
 #'
 fitEvent <- function(df, event_model = "model averaging",
-                     piecewiseSurvivalTime = 0) {
+                     piecewiseSurvivalTime = 0, showplot = TRUE) {
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(event_model),
@@ -254,8 +260,7 @@ fitEvent <- function(df, event_model = "model averaging",
 
   fittedEvent <- p1 + ggplot2::annotation_custom(grob1) +
     ggplot2::annotation_custom(grob2)
-  print(fittedEvent)
+  if (showplot) print(fittedEvent)
 
-  fit2
-
+  list(event_fit = fit2, event_fit_plot = fittedEvent)
 }
