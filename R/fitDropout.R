@@ -6,11 +6,15 @@
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
 #'   "Weibull", or "log-normal". By default, it is set to "Weibull".
+#' @param showplot A Boolean variable to control whether or not to
+#'   show the fitted time-to-dropout survival curve. By default, it is
+#'   set to \code{TRUE}.
 #'
 #' @return A list of results from the model fit including key information
 #'   such as the dropout model, \code{model}, the estimated model parameters,
 #'   \code{theta}, the covariance matrix, \code{vtheta}, as well as the
 #'   Bayesian Information Criterion, \code{bic}.
+#'   The fitted time-to-dropout curve is also returned.
 #'
 #' @examples
 #'
@@ -18,7 +22,7 @@
 #'
 #' @export
 #'
-fitDropout <- function(df, dropout_model = "weibull") {
+fitDropout <- function(df, dropout_model = "weibull", showplot = TRUE) {
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(dropout_model),
@@ -114,8 +118,8 @@ fitDropout <- function(df, dropout_model = "weibull") {
 
   fittedDropout <- p1 + ggplot2::annotation_custom(grob1) +
     ggplot2::annotation_custom(grob2)
-  print(fittedDropout)
+  if (showplot) print(fittedDropout)
 
-  fit3
+  list(dropout_fit = fit3, dropout_fit_plot = fittedDropout)
 
 }
