@@ -16,8 +16,12 @@
 #' @param dropout_model The dropout model with options including "none",
 #'   "exponential", "Weibull", and "log-normal". By default, it is
 #'   set to "Weibull".
-#' @return A list that includes a range of summary statistics and
-#' data sets depending on the value of \code{to_predict}.
+#' @param showplot A Boolean variable to control whether or not to
+#'   show the observed data plots. By default, it is set to \code{TRUE}.
+#'
+#'
+#' @return A list that includes a range of summary statistics,
+#' data sets, and plots depending on the value of \code{to_predict}.
 #'
 #' @examples
 #'
@@ -30,7 +34,7 @@
 #' @export
 #'
 summarizeObserved <- function(df, to_predict = "enrollment and event",
-                              dropout_model = "weibull") {
+                              dropout_model = "weibull", showplot = TRUE) {
   erify::check_class(df, "data.frame")
   erify::check_content(tolower(to_predict),
                        c("enrollment only", "event only",
@@ -113,7 +117,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
 
   # stack them together
   cumAccrual <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
-  print(cumAccrual)
+  if (showplot) print(cumAccrual)
 
   # daily enrollment plot with loess smoothing
   if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
@@ -131,7 +135,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                     y = "Subjects",
                     title = "Daily subjects") +
       ggplot2::theme_bw()
-    print(dailyAccrual)
+    if (showplot) print(dailyAccrual)
   }
 
 
@@ -151,7 +155,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                     y = "Survival probability",
                     title = "Kaplan-Meier plot for time to event") +
       ggplot2::theme_bw()
-    print(kmEvent)
+    if (showplot) print(kmEvent)
 
     # time to dropout
     if (tolower(dropout_model) != "none") {
@@ -168,7 +172,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                       y = "Survival probability",
                       title = "Kaplan-Meier plot for time to dropout") +
         ggplot2::theme_bw()
-      print(kmDropout)
+      if (showplot) print(kmDropout)
     }
   }
 
@@ -176,16 +180,52 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   # output
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     if (tolower(dropout_model) != "none") {
-      list(trialsdt = trialsdt, cutoffdt = cutoffdt,
-           n0 = n0, t0 = t0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
-           adtte = adtte, kmdfEvent = kmdfEvent, kmdfDropout = kmdfDropout)
+      if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
+        ret <- list(trialsdt = trialsdt, cutoffdt = cutoffdt,
+                    n0 = n0, t0 = t0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
+                    adtte = adtte, event_km_df = kmdfEvent,
+                    dropout_km_df = kmdfDropout,
+                    cum_accrual_plot = cumAccrual,
+                    daily_accrual_plot = dailyAccrual,
+                    event_km_plot = kmEvent,
+                    dropout_km_plot = kmDropout)
+      } else {
+        ret <- list(trialsdt = trialsdt, cutoffdt = cutoffdt,
+                    n0 = n0, t0 = t0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
+                    adtte = adtte, event_km_df = kmdfEvent,
+                    dropout_km_df = kmdfDropout,
+                    cum_accrual_plot = cumAccrual,
+                    event_km_plot = kmEvent,
+                    dropout_km_plot = kmDropout)
+      }
     } else {
-      list(trialsdt = trialsdt, cutoffdt = cutoffdt,
-           n0 = n0, t0 = t0, d0 = d0, r0 = r0, adsl = adsl,
-           adtte = adtte, kmdfEvent = kmdfEvent)
+      if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
+        ret <- list(trialsdt = trialsdt, cutoffdt = cutoffdt,
+                    n0 = n0, t0 = t0, d0 = d0, r0 = r0, adsl = adsl,
+                    adtte = adtte, event_km_df = kmdfEvent,
+                    cum_accrual_plot = cumAccrual,
+                    daily_accrual_plot = dailyAccrual,
+                    event_km_plot = kmEvent)
+      } else {
+        ret <- list(trialsdt = trialsdt, cutoffdt = cutoffdt,
+                    n0 = n0, t0 = t0, d0 = d0, r0 = r0, adsl = adsl,
+                    adtte = adtte, event_km_df = kmdfEvent,
+                    cum_accrual_plot = cumAccrual,
+                    event_km_plot = kmEvent)
+      }
     }
   } else {
-    list(trialsdt = trialsdt, cutoffdt = cutoffdt,
-         n0 = n0, t0 = t0, adsl = adsl)
+    if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
+      ret <- list(trialsdt = trialsdt, cutoffdt = cutoffdt,
+                  n0 = n0, t0 = t0, adsl = adsl,
+                  cum_accrual_plot = cumAccrual,
+                  daily_accrual_plot = dailyAccrual)
+    } else {
+      ret <- list(trialsdt = trialsdt, cutoffdt = cutoffdt,
+                  n0 = n0, t0 = t0, adsl = adsl,
+                  cum_accrual_plot = cumAccrual)
+    }
   }
+
+  ret
 }
