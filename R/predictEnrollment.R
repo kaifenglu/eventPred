@@ -261,65 +261,67 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
       dplyr::mutate(year = format(.data$date, format = "%Y"))
 
-    if (showplot) {
-      # separate data into observed and predicted
-      dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
-      dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
-      n_months = lubridate::interval(min(dfs$date),
-                                     max(dfs$date)) %/% months(1)
-      bw = fbw(n_months)
+    # separate data into observed and predicted
+    dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
+    dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
-      g2 <- flabel(dfs, trialsdt)
+    n_months = lubridate::interval(min(dfs$date),
+                                   max(dfs$date)) %/% months(1)
+    bw = fbw(n_months)
 
-      # plot the enrollment data with month as x-axis label
-      g1 <- ggplot2::ggplot() +
-        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$date,
-                                                    ymin=.data$lower,
-                                                    ymax=.data$upper),
-                             alpha=0.5, fill="lightblue") +
-        ggplot2::geom_step(data=dfa, ggplot2::aes(x=.data$date, y=.data$n),
-                           color="black") +
-        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$date, y=.data$n),
-                           color="blue") +
-        ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
-        ggplot2::scale_x_date(name = NULL,
-                              labels = scales::date_format("%b"),
-                              breaks = scales::breaks_width(bw),
-                              minor_breaks = NULL,
-                              expand = c(0.01, 0.01)) +
-        ggplot2::labs(y = "Subjects",
-                      title = "Predicted subjects") +
-        ggplot2::theme_bw()
+    g2 <- flabel(dfs, trialsdt)
 
-      # stack them together
-      p1 <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
-      print(p1)
-    }
+    # plot the enrollment data with month as x-axis label
+    g1 <- ggplot2::ggplot() +
+      ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$date,
+                                                  ymin=.data$lower,
+                                                  ymax=.data$upper),
+                           alpha=0.5, fill="lightblue") +
+      ggplot2::geom_step(data=dfa, ggplot2::aes(x=.data$date, y=.data$n),
+                         color="black") +
+      ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$date, y=.data$n),
+                         color="blue") +
+      ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
+      ggplot2::scale_x_date(name = NULL,
+                            labels = scales::date_format("%b"),
+                            breaks = scales::breaks_width(bw),
+                            minor_breaks = NULL,
+                            expand = c(0.01, 0.01)) +
+      ggplot2::labs(y = "Subjects",
+                    title = "Predicted subjects") +
+      ggplot2::theme_bw()
 
-    list(predEnrollDay = pred1dy, predEnrollDate = pred1dt, pilevel = pilevel,
-         newSubjects = newSubjects, plotEnrollment = dfs)
+    # stack them together
+    p1 <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
+    if (showplot) print(p1)
+
+
+    list(enroll_pred_day = pred1dy, enroll_pred_date = pred1dt,
+         pilevel = pilevel, newSubjects = newSubjects,
+         enroll_pred_df = dfs, enroll_pred_plot = p1)
   } else {
-    if (showplot) {
-      # plot the enrollment data
-      g1 <- ggplot2::ggplot() +
-        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$t,
-                                                    ymin=.data$lower,
-                                                    ymax=.data$upper),
-                             alpha=0.5, fill="lightblue") +
-        ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$t, y=.data$n),
-                           color="blue") +
-        ggplot2::scale_x_continuous(name = "Days since randomization",
-                                    expand = c(0.01, 0.01)) +
-        ggplot2::labs(y = "Subjects",
-                      title = "Predicted subjects") +
-        ggplot2::theme_bw()
 
-      print(g1)
-    }
+    # plot the enrollment data
+    g1 <- ggplot2::ggplot() +
+      ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$t,
+                                                  ymin=.data$lower,
+                                                  ymax=.data$upper),
+                           alpha=0.5, fill="lightblue") +
+      ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$t, y=.data$n),
+                         color="blue") +
+      ggplot2::scale_x_continuous(name = "Days since randomization",
+                                  expand = c(0.01, 0.01)) +
+      ggplot2::labs(y = "Subjects",
+                    title = "Predicted subjects") +
+      ggplot2::theme_bw()
 
-    list(predEnrollDay = pred1dy, pilevel = pilevel,
-         newSubjects = newSubjects, plotEnrollment = dfb)
+    if (showplot) print(g1)
+
+
+    list(enroll_pred_day = pred1dy, pilevel = pilevel,
+         newSubjects = newSubjects, enroll_pred_df = dfb,
+         enroll_pred_plot = g1)
   }
 
 
