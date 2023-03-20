@@ -30,6 +30,9 @@ fitDropout <- function(df, dropout_model = "weibull", showplot = TRUE) {
 
   df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
+  df$randdt <- as.Date(df$randdt)
+  df$cutoffdt <- as.Date(df$cutoffdt)
+
   n0 = nrow(df)
   d0 = sum(df$dropout)
   ex0 = sum(df$time)
