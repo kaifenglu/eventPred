@@ -58,6 +58,9 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
+  df$randdt <- as.Date(df$randdt)
+  df$cutoffdt <- as.Date(df$cutoffdt)
+
   trialsdt = min(df$randdt)
   cutoffdt = df$cutoffdt[1]
   n0 = nrow(df)
@@ -165,7 +168,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
     # number of enrolled subjects in each interval
     factors <- cut(df1$t, breaks = u2)
-    n = table(factors)
+    n = as.numeric(table(factors))
 
     # length of each interval
     t = diff(u2)
