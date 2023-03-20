@@ -14,6 +14,8 @@
 #'   it is set to 30.
 #' @param pilevel The prediction interval level. By default,
 #'   it is set to 0.90.
+#' @param nyears The number of years after the data cut for prediction.
+#'   By default, it is set to 4.
 #' @param nreps The number of replications for simulation. By default,
 #'   it is set to 500.
 #' @param showplot A Boolean variable to control whether or not to
@@ -50,13 +52,13 @@
 #'                     theta = log(26/9*seq(1, 9)/30.4375),
 #'                     vtheta = diag(9)*1e-8,
 #'                     accrualTime = seq(0, 8)*30.4375),
-#'   pilevel = 0.90, nreps = 200)
+#'   pilevel = 0.90, nreps = 100)
 #'
 #'
 #' @export
 #'
 predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
-                              pilevel = 0.90, nreps = 500,
+                              pilevel = 0.90, nyears = 4, nreps = 500,
                               showplot = TRUE) {
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_n)
@@ -74,6 +76,9 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   if (!is.null(df)) {
     df <- dplyr::as_tibble(df)
     names(df) <- tolower(names(df))
+    df$randdt <- as.Date(df$randdt)
+    df$cutoffdt <- as.Date(df$cutoffdt)
+
     trialsdt = min(df$randdt)
     cutoffdt = df$cutoffdt[1]
     n0 = nrow(df)
@@ -192,8 +197,13 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                                     lags, nreps)
   } else if (tolower(enroll_fit$model) == "piecewise poisson") {
     # draw parameter from posterior distribution
-    theta = mvtnorm::rmvnorm(nreps, mean = enroll_fit$theta,
-                             sigma = enroll_fit$vtheta)
+    if (length(enroll_fit$theta) == 1) {
+      theta = matrix(rnorm(nreps, mean = enroll_fit$theta,
+                           sd = sqrt(enroll_fit$vtheta)), ncol=1)
+    } else {
+      theta = mvtnorm::rmvnorm(nreps, mean = enroll_fit$theta,
+                               sigma = enroll_fit$vtheta)
+    }
     u = enroll_fit$accrualTime
 
     # mu(t[j]) = mu(t0) + sum of the first j random variables
@@ -231,7 +241,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
   pred1dy <- ceiling(quantile(new1$arrivalTime, c(0.5, plower, pupper)))
 
-  t1 = pred1dy[3] + 30 # extend time to 30 days after
+  t1 = pred1dy[3] + nyears*365 # extend time to 30 days after
 
   # future time points at which to predict number of subjects
   t = sort(unique(c(seq(t0, t1, 30), t1, pred1dy)))
@@ -289,7 +299,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                             minor_breaks = NULL,
                             expand = c(0.01, 0.01)) +
       ggplot2::labs(y = "Subjects",
-                    title = "Predicted subjects") +
+                    title = "Enrollment") +
       ggplot2::theme_bw()
 
     # stack them together
@@ -310,10 +320,10 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                            alpha=0.5, fill="lightblue") +
       ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$t, y=.data$n),
                          color="blue") +
-      ggplot2::scale_x_continuous(name = "Days since randomization",
+      ggplot2::scale_x_continuous(name = "Days since trial start",
                                   expand = c(0.01, 0.01)) +
       ggplot2::labs(y = "Subjects",
-                    title = "Predicted subjects") +
+                    title = "Enrollment") +
       ggplot2::theme_bw()
 
     if (showplot) print(g1)
