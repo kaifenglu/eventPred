@@ -188,6 +188,14 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                     n = dplyr::row_number()) %>%
       dplyr::mutate(lower = NA, upper = NA) %>%
       dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
+
+    # extend observed to cutoff date
+    dfa1 <- dfa %>%
+      dplyr::slice(dplyr::n()) %>%
+      dplyr::mutate(t = t0)
+
+    dfa <- dfa %>%
+      dplyr::bind_rows(dfa1)
   }
 
   if (!is.null(newSubjects)) {
@@ -208,6 +216,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # future time points at which to predict number of subjects
     t = sort(unique(c(seq(t0, t1, 30), t1, pred1dy)))
+    t = t[t <= t1]
 
     # predicted number of subjects enrolled after data cut
     dfb <- dplyr::tibble(t = t) %>%
@@ -236,22 +245,16 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     # existing subjects only
     n1 = 0
 
-    # extend observed to data cut
-    dfb1 <- dfa %>%
-      dplyr::slice(dplyr::n()) %>%
-      dplyr::mutate(t = t0)
-
     # add predicted from data cut to specified years after data cut
-    dfb2 <- dfb1 %>%
+    dfb1 <- dfa %>%
       dplyr::mutate(t = t0, lower = .data$n, upper = .data$n)
 
-    dfb3 <- dfb2 %>%
+    dfb2 <- dfb1 %>%
       dplyr::mutate(t = t0 + 365*nyears)
 
     enroll_pred_df <- dfa %>%
       dplyr::bind_rows(dfb1) %>%
       dplyr::bind_rows(dfb2) %>%
-      dplyr::bind_rows(dfb3) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
       dplyr::mutate(year = format(.data$date, format = "%Y")) %>%
       dplyr::mutate(parameter = "Enrollment")
@@ -691,11 +694,12 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   # obtain the quantiles
   q = 1 - c(0.5, plower, pupper)
   pred2dy = rep(NA, length(q))
+  tmax = max(newEvents$totalTime[newEvents$event==1])
   for (j in 1:length(q)) {
     # check if the quantile can be estimated from observed data
-    if (sdf(t1, target_d, d0, newEvents) <= q[j]) {
+    if (sdf(tmax, target_d, d0, newEvents) <= q[j]) {
       pred2dy[j] = uniroot(function(x) sdf(x, target_d, d0, newEvents) - q[j],
-                           c(t0, t1), tol = 1)$root
+                           c(t0, tmax), tol = 1)$root
       pred2dy[j] = ceiling(pred2dy[j])
     }
   }
@@ -754,8 +758,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                     upper = NA) %>%
       dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
 
-    # observed number of subjects at risk before data cut
-    t2 = sort(unique(c(df$arrivalTime, df$totalTime)))
+    # observed number of subjects at risk before (not including) data cutoff
+    t2 = setdiff(sort(unique(round(c(df$arrivalTime, df$totalTime)))), t0)
 
     dfe <- dplyr::tibble(t = t2) %>%
       dplyr::cross_join(df) %>%
@@ -814,8 +818,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   df2 <- dplyr::tibble(
     parameter = c("Enrollment", "Event", "Dropout", "Ongoing"),
-    colorvalues = c("#0072B2", "#000000", "#D55E00", "#009E73"),
-    fillvalues = c("#CC79A7", "#E69F00", "#56B4E9", "#F0E442"))
+    colorvalues = c("blue", "red", "#D55E00", "#009E73"),
+    fillvalues = c("lightblue", "#E69F00", "#56B4E9", "#F0E442"))
 
   if (nrow(dfs) > 0) {
     dfs$parameter <- factor(
@@ -891,10 +895,12 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     if (showplot) print(p1)
   }
 
-
+  # maximum number of subjects
+  n = max(enroll_pred_df$n)
 
   if (!is.null(df)) {
-    list(event_pred_day = pred2dy, event_pred_date = pred2dt,
+    list(n = n, target_d = target_d,
+         event_pred_day = pred2dy, event_pred_date = pred2dt,
          pilevel = pilevel, newEvents = newEvents,
          enroll_pred_df = enroll_pred_df,
          event_pred_df = event_pred_df,
@@ -902,7 +908,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
          ongoing_pred_df = ongoing_pred_df,
          event_pred_plot = p1)
   } else {
-    list(event_pred_day = pred2dy,
+    list(n = n, target_d = target_d,
+         event_pred_day = pred2dy,
          pilevel = pilevel, newEvents = newEvents,
          enroll_pred_df = enroll_pred_df,
          event_pred_df = event_pred_df,
