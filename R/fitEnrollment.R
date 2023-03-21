@@ -64,8 +64,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   trialsdt = min(df$randdt)
   cutoffdt = df$cutoffdt[1]
   n0 = nrow(df)
-  t0 = as.numeric(cutoffdt - trialsdt + 1)
-  t0x = as.numeric(max(df$randdt) - trialsdt + 1)
+  t0 = as.numeric(max(df$randdt) - trialsdt + 1)
 
   erify::check_positive(n0, supplement = paste(
     "The number of subjects must be positive to fit an enrollment model."))
@@ -80,12 +79,12 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     # lambda(t) = lambda
     # mu(t) = lambda*t
     fit1 <- list(model = 'Poisson',
-                 theta = log(n0/t0x),
+                 theta = log(n0/t0),
                  vtheta = 1/n0,
-                 bic = -2*(-n0 + n0*log(n0/t0x)) + log(n0))
+                 bic = -2*(-n0 + n0*log(n0/t0)) + log(n0))
 
     dffit1 <- dplyr::tibble(
-      t = seq(1, t0x),
+      t = seq(1, t0),
       n = exp(fit1$theta)*.data$t)
   } else if (tolower(enroll_model) == "time-decay") {
     # lambda(t) = mu/delta*(1 - exp(-delta*t))
@@ -105,23 +104,24 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
       a1 + a2
     }
 
-    # slope in the last 1/4 enrollment time interval
-    beta = (n0 - df1$n[df1$t >= 3/4*t0x][1])/(1/4*t0x)
-    mu0 = 2*n0/t0x^2
+    # slope in the last 1/4 "active" enrollment time interval
+    beta = (n0 - df1$n[df1$t >= 3/4*t0][1])/(1/4*t0)
+    mu0 = 2*n0/t0^2
     delta0 = mu0/beta
     theta <- c(log(mu0), log(delta0))
-    opt1 <- optim(theta, llik_td, gr = NULL, t = t0x, df = df1,
+    opt1 <- optim(theta, llik_td, gr = NULL, t = t0, df = df1,
                   control = c(fnscale = -1))  # maximization
     fit1 <- list(model = "Time-decay",
                  theta = opt1$par,
                  vtheta = solve(-optimHess(opt1$par, llik_td, gr = NULL,
-                                           t = t0x, df = df1)),
-                 bic = -2*llik_td(opt1$par, t = t0x, df = df1) + 2*log(n0))
+                                           t = t0, df = df1)),
+                 bic = -2*llik_td(opt1$par, t = t0, df = df1) + 2*log(n0))
 
     dffit1 <- dplyr::tibble(
-      t = seq(1, t0x),
+      t = seq(1, t0),
       n = fmu_td(.data$t, fit1$theta))
   } else if (tolower(enroll_model) == "b-spline") {
+    t0 = as.numeric(cutoffdt - trialsdt + 1)
     # lambda(t) = exp(theta' bs(t))
     # mu(t) = sum(lambda(u), {u,1,t})
 
