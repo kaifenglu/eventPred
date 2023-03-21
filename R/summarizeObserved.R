@@ -96,7 +96,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
 
   df2 <- dplyr::tibble(
     parameter = c("Enrollment", "Event", "Dropout", "Ongoing"),
-    colorvalues = c("#0072B2", "#000000", "#D55E00", "#009E73"))
+    colorvalues = c("blue", "red", "#D55E00", "#009E73"))
 
   # only show legends for parameters appearing in data set
   df3 <- df2 %>%
