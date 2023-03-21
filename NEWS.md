@@ -12,7 +12,11 @@
 - changed the default number of knots of the b-spline enrollment model to zero
 - replaced first and last with slice of dplyr in summarizeObserved
 - improved the initial value for the time-decay enrollment model parameters
+- added showplot to fitEnrollment, fitEvent and fitDropout
 - sped up the calculations of quantiles
+- added target_n to predictEnrollment output and target_d to predictEvent output
+- removed the cutoff date from ongoing_pred_df before data cutoff
+- restricted enrollment model fitting to the last randomization date except for b-spline, which requires the model to cover all days up to cutoff for prediction
 
 # eventPred 0.0.1
 
