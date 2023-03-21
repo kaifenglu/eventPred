@@ -241,10 +241,11 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
   pred1dy <- ceiling(quantile(new1$arrivalTime, c(0.5, plower, pupper)))
 
-  t1 = pred1dy[3] + nyears*365 # extend time to 30 days after
+  t1 = t0 + nyears*365 # extend time to nyears after cutoff
 
   # future time points at which to predict number of subjects
   t = sort(unique(c(seq(t0, t1, 30), t1, pred1dy)))
+  t = t[t <= t1] # restrict range of x-axis
 
   # predicted number of subjects enrolled after data cut
   dfb <- dplyr::tibble(t = t) %>%
@@ -264,6 +265,14 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     dfa <- df %>%
       dplyr::mutate(lower = NA, upper = NA) %>%
       dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
+
+    # extend observed to cutoff date
+    dfa1 <- dfa %>%
+      dplyr::slice(dplyr::n()) %>%
+      dplyr::mutate(t = t0)
+
+    dfa <- dfa %>%
+      dplyr::bind_rows(dfa1)
 
     # concatenate subjects enrolled before and after data cut
     dfs <- dfa %>%
@@ -289,7 +298,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                                                   ymax=.data$upper),
                            alpha=0.5, fill="lightblue") +
       ggplot2::geom_step(data=dfa, ggplot2::aes(x=.data$date, y=.data$n),
-                         color="black") +
+                         color="blue") +
       ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$date, y=.data$n),
                          color="blue") +
       ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
@@ -307,7 +316,8 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     if (showplot) print(p1)
 
 
-    list(enroll_pred_day = pred1dy, enroll_pred_date = pred1dt,
+    list(target_n = target_n, enroll_pred_day = pred1dy,
+         enroll_pred_date = pred1dt,
          pilevel = pilevel, newSubjects = newSubjects,
          enroll_pred_df = dfs, enroll_pred_plot = p1)
   } else {
@@ -329,9 +339,9 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     if (showplot) print(g1)
 
 
-    list(enroll_pred_day = pred1dy, pilevel = pilevel,
-         newSubjects = newSubjects, enroll_pred_df = dfb,
-         enroll_pred_plot = g1)
+    list(target_n = target_n, enroll_pred_day = pred1dy,
+         pilevel = pilevel, newSubjects = newSubjects,
+         enroll_pred_df = dfb, enroll_pred_plot = g1)
   }
 
 
