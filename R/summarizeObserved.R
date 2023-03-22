@@ -94,53 +94,36 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       dplyr::bind_rows(adsl1)
   }
 
-  df2 <- dplyr::tibble(
-    parameter = c("Enrollment", "Event", "Dropout", "Ongoing"),
-    colorvalues = c("blue", "red", "#D55E00", "#009E73"))
-
-  # only show legends for parameters appearing in data set
-  df3 <- df2 %>%
-    dplyr::filter(.data$parameter %in% unique(ad$parameter))
 
   # use number of months between first and last dates to determine ticks
   n_months = lubridate::interval(min(ad$date), max(ad$date)) %/% months(1)
   bw = fbw(n_months)
 
+
   # plot cumulative enrollment and event data
   if (length(unique(ad$parameter)) > 1) {
-    g1 <- ggplot2::ggplot() +
-      ggplot2::geom_step(data = ad, ggplot2::aes(
-        x = .data$date, y = .data$n,
-        group = .data$parameter, color = .data$parameter)) +
-      ggplot2::scale_x_date(name = NULL,
-                            labels = scales::date_format("%b"),
-                            breaks = scales::breaks_width(bw),
-                            minor_breaks = NULL,
-                            expand = c(0.01, 0.01)) +
-      ggplot2::scale_color_manual(name = NULL,
-                                  values = df3$colorvalues) +
-      ggplot2::theme_bw() +
-      ggplot2::theme(legend.position = "top")
+    cumAccrual <- plotly::plot_ly(
+      ad, x=~date, y=~n, color=~parameter, colors=c("blue", "red")) %>%
+      plotly::add_lines(line = list(shape = "hv")) %>%
+      plotly::layout(
+        xaxis = list(title = "", tickformat = "%b<br>%Y",
+                     tickmode = "linear", dtick = bw,
+                     range = range(ad$date) +
+                       c(-0.02, 0.02)*diff(range(ad$date))),
+        yaxis = list(zeroline = FALSE),
+        legend = list(x = 0, y = 1.2, orientation = 'h'))
   } else {
-    g1 <- ggplot2::ggplot() +
-      ggplot2::geom_step(data = ad, ggplot2::aes(
-        x = .data$date, y = .data$n,
-        group = .data$parameter)) +
-      ggplot2::scale_x_date(name = NULL,
-                            labels = scales::date_format("%b"),
-                            breaks = scales::breaks_width(bw),
-                            minor_breaks = NULL,
-                            expand = c(0.01, 0.01)) +
-      ggplot2::labs(y = "Subjects", title = "Cumulative enrollment") +
-      ggplot2::theme_bw()
+    cumAccrual <- plotly::plot_ly(ad, x=~date, y=~n) %>%
+      plotly::add_lines(line = list(shape = "hv")) %>%
+      plotly::layout(
+        xaxis = list(title = "", tickformat = "%b<br>%Y",
+                     tickmode = "linear", dtick = bw,
+                     range = range(ad$date) +
+                       c(-0.02, 0.02)*diff(range(ad$date))),
+        yaxis = list(zeroline = FALSE),
+        title = list(text = "Cumulative enrollment"))
   }
 
-  # generate the year labels
-  g2 <- flabel(ad, trialsdt)
-
-  # stack them together
-  cumAccrual <- g1 + g2 + patchwork::plot_layout(nrow = 2,
-                                                 heights = c(15, 1))
   if (showplot) print(cumAccrual)
 
   # daily enrollment plot with loess smoothing
@@ -157,22 +140,19 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                                    max(enroll$date)) %/% months(1)
     bw = fbw(n_months)
 
-    g1 <- ggplot2::ggplot(data = enroll,
-                          ggplot2::aes(x = .data$date, y = .data$n)) +
-      ggplot2::geom_point() +
-      ggplot2::geom_smooth(formula = y ~ x, method = "loess", se = FALSE) +
-      ggplot2::scale_x_date(name = NULL,
-                            labels = scales::date_format("%b"),
-                            breaks = scales::breaks_width(bw),
-                            minor_breaks = NULL,
-                            expand = c(0.01, 0.01)) +
-      ggplot2::labs(y = "Subjects", title = "Daily enrollment") +
-      ggplot2::theme_bw()
+    fit <- loess.smooth(enroll$date, enroll$n,
+                        span = 1/3, degree = 1,
+                        family = "gaussian")
 
-    g2 <- flabel(enroll, trialsdt)
-
-    dailyAccrual <- g1 + g2 +
-      patchwork::plot_layout(nrow = 2, heights = c(15, 1))
+    dailyAccrual <- plotly::plot_ly(enroll, x=~date, y=~n, name="observed",
+                                    type='scatter', mode='markers') %>%
+      plotly::add_lines(x = fit$x, y = fit$y, name="loess") %>%
+      plotly::layout(xaxis = list(title = "", tickformat = "%b<br>%Y",
+                                  tickmode = "linear", dtick = bw,
+                                  range = range(enroll$date) +
+                                    c(-0.02, 0.02)*diff(range(enroll$date))),
+                     title = list(text = "Daily enrollment")) %>%
+      plotly::hide_legend()
     if (showplot) print(dailyAccrual)
   }
 
@@ -186,14 +166,15 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       dplyr::bind_rows(dplyr::tibble(time = kmfitEvent$time,
                                      surv = kmfitEvent$surv))
 
-    kmEvent <- ggplot2::ggplot() +
-      ggplot2::geom_step(data = kmdfEvent, ggplot2::aes(x = .data$time,
-                                                        y = .data$surv)) +
-      ggplot2::labs(x = "Days since randomization",
-                    y = "Survival probability",
-                    title = "Kaplan-Meier plot for time to event") +
-      ggplot2::theme_bw()
+    kmEvent <- plotly::plot_ly(kmdfEvent, x=~time, y=~surv) %>%
+      plotly::add_lines(line = list(shape = "hv")) %>%
+      plotly::layout(xaxis = list(title = "Days since randomization",
+                                  zeroline = FALSE),
+                     yaxis = list(title = "Survival probability"),
+                     title = list(
+                       text = "Kaplan-Meier plot for time to event"))
     if (showplot) print(kmEvent)
+
 
     # time to dropout
     kmfitDropout <- survival::survfit(survival::Surv(time, dropout) ~ 1,
@@ -202,14 +183,15 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       dplyr::bind_rows(dplyr::tibble(time = kmfitDropout$time,
                                      surv = kmfitDropout$surv))
 
-    kmDropout <- ggplot2::ggplot() +
-      ggplot2::geom_step(data = kmdfDropout, ggplot2::aes(x = .data$time,
-                                                          y = .data$surv)) +
-      ggplot2::labs(x = "Days since randomization",
-                    y = "Survival probability",
-                    title = "Kaplan-Meier plot for time to dropout") +
-      ggplot2::theme_bw()
+    kmDropout <- plotly::plot_ly(kmdfDropout, x=~time, y=~surv) %>%
+      plotly::add_lines(line = list(shape = "hv")) %>%
+      plotly::layout(xaxis = list(title = "Days since randomization",
+                                  zeroline = FALSE),
+                     yaxis = list(title = "Survival probability"),
+                     title = list(
+                       text = "Kaplan-Meier plot for time to dropout"))
     if (showplot) print(kmDropout)
+
   }
 
 
