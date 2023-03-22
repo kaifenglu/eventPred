@@ -198,28 +198,28 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
       n = m)
   }
 
+
+  bictext = paste("BIC:", round(fit1$bic,2))
+
   # plot the enrollment curve
-  p1 <- ggplot2::ggplot() +
-    ggplot2::geom_step(data = df1, ggplot2::aes(x = .data$t,
-                                                y = .data$n)) +
-    ggplot2::geom_line(data = dffit1, ggplot2::aes(x = .data$t,
-                                                   y = .data$n),
-                       color = "blue") +
-    ggplot2::labs(x = "Days since trial start",
-                  y = "Subjects",
-                  title = "Fitted enrollment curve") +
-    ggplot2::theme_bw()
+  fittedEnroll <- plotly::plot_ly() %>%
+    plotly::add_lines(data=df1, x=~t, y=~n, name="observed",
+                      line=list(shape="hv")) %>%
+    plotly::add_lines(data=dffit1, x=~t, y=~n, name="fitted") %>%
+    plotly::layout(
+      xaxis = list(title = "Days since trial start", zeroline = FALSE),
+      yaxis = list(title = "Subjects", zeroline = FALSE),
+      title = list(text = "Fitted enrollment curve"),
+      annotations = list(
+        x = c(0.05, 0.05), y = c(0.95, 0.88),
+        xref = "paper", yref = "paper",
+        text = paste('<i>', c(fit1$model, bictext), '</i>'),
+        xanchor = "left",
+        font = list(size = 14, color = "red"),
+        showarrow = FALSE
+      )) %>%
+    plotly::hide_legend()
 
-  grob1 <- grid::grobTree(grid::textGrob(
-    label = fit1$model, x=0.05, y=0.95, hjust=0,
-    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-  grob2 <- grid::grobTree(grid::textGrob(
-    label = paste("BIC:", round(fit1$bic,2)), x=0.05, y=0.88, hjust=0,
-    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-  fittedEnroll <- p1 + ggplot2::annotation_custom(grob1) +
-    ggplot2::annotation_custom(grob2)
   if (showplot) print(fittedEnroll)
 
   list(enroll_fit = fit1, enroll_fit_plot = fittedEnroll)
