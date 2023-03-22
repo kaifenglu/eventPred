@@ -99,28 +99,28 @@ fitDropout <- function(df, dropout_model = "weibull", showplot = TRUE) {
                     sdlog = exp(fit3$theta[2]), lower.tail = FALSE))
   }
 
+
+  bictext = paste("BIC:", round(fit3$bic,2))
+
   # plot the survival curve
-  p1 <- ggplot2::ggplot() +
-    ggplot2::geom_step(data = kmdf, ggplot2::aes(x = .data$time,
-                                                 y = .data$surv)) +
-    ggplot2::geom_line(data = dffit3, ggplot2::aes(x = .data$time,
-                                                   y = .data$surv),
-                       color="blue") +
-    ggplot2::labs(x = "Days since randomization",
-                  y = "Survival probability",
-                  title = "Fitted time to dropout survival curve") +
-    ggplot2::theme_bw()
+  fittedDropout <- plotly::plot_ly() %>%
+    plotly::add_lines(data=kmdf, x=~time, y=~surv, name="Kaplan-Meier",
+                      line=list(shape="hv")) %>%
+    plotly::add_lines(data=dffit3, x=~time, y=~surv, name="fitted") %>%
+    plotly::layout(
+      xaxis = list(title = "Days since randomization", zeroline = FALSE),
+      yaxis = list(title = "Survival probability"),
+      title = list(text = "Fitted time to dropout survival curve"),
+      annotations = list(
+        x = c(0.75, 0.75), y = c(0.95, 0.88),
+        xref = "paper", yref = "paper",
+        text = paste('<i>', c(fit3$model, bictext), '</i>'),
+        xanchor = "left",
+        font = list(size = 14, color = "red"),
+        showarrow = FALSE
+      )) %>%
+    plotly::hide_legend()
 
-  grob1 <- grid::grobTree(grid::textGrob(
-    label = fit3$model, x=0.75, y=0.95, hjust=0,
-    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-  grob2 <- grid::grobTree(grid::textGrob(
-    label = paste("BIC:", round(fit3$bic, 2)), x=0.75, y=0.88, hjust=0,
-    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
-
-  fittedDropout <- p1 + ggplot2::annotation_custom(grob1) +
-    ggplot2::annotation_custom(grob2)
   if (showplot) print(fittedDropout)
 
   list(dropout_fit = fit3, dropout_fit_plot = fittedDropout)
