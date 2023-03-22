@@ -1,6 +1,6 @@
 Package: eventPred
 Title: Event Prediction
-Version: 0.0.2
+Version: 0.1.0
 Date: 2023-03-20
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
@@ -13,11 +13,8 @@ RoxygenNote: 7.2.3
 Imports: 
     dplyr (>= 1.1.0),
     rlang (>= 1.0.6),
-    grid (>= 3.5.0),
-    ggplot2 (>= 3.3.5),
+    plotly (>= 4.10.1),
     survival (>= 2.41-3),
-    patchwork (>= 1.1.2),
-    scales (>= 1.1.1),
     lubridate (>= 1.8.0),
     splines (>= 3.5.0),
     Matrix (>= 1.2-14),

@@ -816,19 +816,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   if (showDropout) dfs <- dfs %>% dplyr::bind_rows(dropout_pred_df)
   if (showOngoing) dfs <- dfs %>% dplyr::bind_rows(ongoing_pred_df)
 
-  df2 <- dplyr::tibble(
-    parameter = c("Enrollment", "Event", "Dropout", "Ongoing"),
-    colorvalues = c("blue", "red", "#D55E00", "#009E73"),
-    fillvalues = c("lightblue", "#E69F00", "#56B4E9", "#F0E442"))
-
   if (nrow(dfs) > 0) {
     dfs$parameter <- factor(
       dfs$parameter, levels = c("Enrollment", "Event",
                                 "Dropout", "Ongoing"))
-
-    # only show legends for parameters appearing in data set
-    df3 <- df2 %>%
-      dplyr::filter(.data$parameter %in% unique(dfs$parameter))
 
     if (!is.null(df)) {
       dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
@@ -838,58 +829,56 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                                      max(dfs$date)) %/% months(1)
       bw = fbw(n_months)
 
-      g1 <- ggplot2::ggplot() +
-        ggplot2::geom_ribbon(data=dfb, ggplot2::aes(
-          x=.data$date, ymin=.data$lower, ymax=.data$upper,
-          group=.data$parameter, fill=.data$parameter), alpha=0.5) +
-        ggplot2::geom_step(data=dfa, ggplot2::aes(
-          x=.data$date, y=.data$n,
-          group=.data$parameter, color=.data$parameter)) +
-        ggplot2::geom_line(data=dfb, ggplot2::aes(
-          x=.data$date, y=.data$n,
-          group=.data$parameter, color=.data$parameter)) +
-        ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
-        ggplot2::scale_x_date(name = NULL,
-                              labels = scales::date_format("%b"),
-                              breaks = scales::breaks_width(bw),
-                              minor_breaks = NULL,
-                              expand = c(0.01, 0.01)) +
-        ggplot2::ylim(0, max(enroll_pred_df$n)) +
-        ggplot2::scale_color_manual(name = NULL,
-                                    values = df3$colorvalues) +
-        ggplot2::scale_fill_manual(name = NULL,
-                                   values = df3$fillvalues) +
-        ggplot2::theme_bw() +
-        ggplot2::theme(legend.position = "top")
+      p1 <- plotly::plot_ly() %>%
+        plotly::add_ribbons(
+          data=dfb, x=~date, ymin=~lower, ymax=~upper,
+          fill = "tonexty", fillcolor = ~parameter,
+          line = list(width=0)) %>%
+        plotly::add_lines(
+          data=dfa, x=~date, y=~n, color=~parameter,
+          line=list(shape="hv", width=2)) %>%
+        plotly::add_lines(
+          data=dfb, x=~date, y=~n, color=~parameter) %>%
+        plotly::add_lines(
+          x=rep(cutoffdt, 2), y=range(dfs$n),
+          name="cutoff",
+          line=list(dash="dash")) %>%
+        plotly::layout(
+          xaxis = list(title = "", tickformat = "%b<br>%Y",
+                       zeroline = FALSE,
+                       tickmode = "linear", dtick = bw,
+                       range = range(dfs$date) +
+                         c(-0.02, 0.02)*diff(range(dfs$date))),
+          yaxis = list(zeroline = FALSE),
+          legend = list(x = 0, y = 1.1, orientation = 'h'))
 
-      if (showEvent) g1 <- g1 +
-        ggplot2::geom_hline(yintercept = target_d, linetype = 2)
+      if (showEvent) p1 <- p1 %>%
+        plotly::add_lines(
+          x = range(dfs$date), y = rep(target_d, 2),
+          name = "target events",
+          line = list(dash = "dash", color="rgba(176, 32, 240, 0.5)"))
 
-      g2 <- flabel(dfs, trialsdt)
 
-      # stack them together
-      p1 <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
     } else {
-      p1 <- ggplot2::ggplot() +
-        ggplot2::geom_ribbon(data=dfs, ggplot2::aes(
-          x=.data$t, ymin=.data$lower, ymax=.data$upper,
-          group=.data$parameter, fill=.data$parameter), alpha=0.5) +
-        ggplot2::geom_line(data=dfs, ggplot2::aes(
-          x=.data$t, y=.data$n,
-          group=.data$parameter, color=.data$parameter)) +
-        ggplot2::scale_x_continuous(name = "Days since trial start",
-                                    expand = c(0.01, 0.01)) +
-        ggplot2::ylim(0, max(enroll_pred_df$n)) +
-        ggplot2::scale_color_manual(name = NULL,
-                                    values = df3$colorvalues) +
-        ggplot2::scale_fill_manual(name = NULL,
-                                   values = df3$fillvalues) +
-        ggplot2::theme_bw() +
-        ggplot2::theme(legend.position = "top")
+      p1 <- plotly::plot_ly() %>%
+        plotly::add_ribbons(
+          data=dfs, x=~t, ymin=~lower, ymax=~upper,
+          fill = "tonexty", fillcolor = ~parameter,
+          line = list(width=0)) %>%
+        plotly::add_lines(
+          data=dfs, x=~t, y=~n, color=~parameter) %>%
+        plotly::layout(
+          xaxis = list(title = "Days since trial start",
+                       zeroline = FALSE),
+          yaxis = list(range = range(enroll_pred_df$n),
+                       zeroline = FALSE),
+          legend = list(x = 0, y = 1.1, orientation = 'h'))
 
-      if (showEvent) p1 <- p1 +
-          ggplot2::geom_hline(yintercept = target_d, linetype = 2)
-
+      if (showEvent) p1 <- p1 %>%
+          plotly::add_lines(
+            x = range(~t), y = rep(target_d, 2),
+            name = "target events",
+            line = list(dash = "dash", color="rgba(176, 32, 240, 0.5)"))
     }
 
     if (showplot) print(p1)
