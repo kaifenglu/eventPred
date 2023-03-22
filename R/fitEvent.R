@@ -234,35 +234,32 @@ fitEvent <- function(df, event_model = "model averaging",
       surv = pmodavg(.data$time, theta, w1, lower.tail = FALSE))
   }
 
-  # plot the survival curve
-  p1 <- ggplot2::ggplot() +
-    ggplot2::geom_step(data = kmdf, ggplot2::aes(x = .data$time,
-                                                 y = .data$surv)) +
-    ggplot2::geom_line(data = dffit2, ggplot2::aes(x = .data$time,
-                                                   y = .data$surv),
-                       color="blue") +
-    ggplot2::labs(x = "Days since randomization",
-                  y = "Survival probability",
-                  title = "Fitted time to event survival curve") +
-    ggplot2::theme_bw()
-
-  grob1 <- grid::grobTree(grid::textGrob(
-    label = fit2$model, x=0.75, y=0.95, hjust=0,
-    gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
 
   if (tolower(event_model) == "model averaging") {
-    grob2 <- grid::grobTree(grid::textGrob(
-      label = paste("Weighted BIC:", round(fit2$bic, 2)),
-      x=0.75, y=0.88, hjust=0,
-      gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+    bictext = paste("Weighted BIC:", round(fit2$bic,2))
   } else {
-    grob2 <- grid::grobTree(grid::textGrob(
-      label = paste("BIC:", round(fit2$bic, 2)), x=0.75, y=0.88, hjust=0,
-      gp = grid::gpar(col="red", fontsize=11, fontface="italic")))
+    bictext = paste("BIC:", round(fit2$bic,2))
   }
 
-  fittedEvent <- p1 + ggplot2::annotation_custom(grob1) +
-    ggplot2::annotation_custom(grob2)
+  # plot the survival curve
+  fittedEvent <- plotly::plot_ly() %>%
+    plotly::add_lines(data=kmdf, x=~time, y=~surv, name="Kaplan-Meier",
+                      line=list(shape="hv")) %>%
+    plotly::add_lines(data=dffit2, x=~time, y=~surv, name="fitted") %>%
+    plotly::layout(
+      xaxis = list(title = "Days since randomization", zeroline = FALSE),
+      yaxis = list(title = "Survival probability"),
+      title = list(text = "Fitted time to event survival curve"),
+      annotations = list(
+        x = c(0.75, 0.75), y = c(0.95, 0.88),
+        xref = "paper", yref = "paper",
+        text = paste('<i>', c(fit2$model, bictext), '</i>'),
+        xanchor = "left",
+        font = list(size = 14, color = "red"),
+        showarrow = FALSE
+      )) %>%
+    plotly::hide_legend()
+
   if (showplot) print(fittedEvent)
 
   list(event_fit = fit2, event_fit_plot = fittedEvent)
