@@ -114,14 +114,8 @@
 #' @importFrom dplyr %>% arrange as_tibble bind_rows cross_join filter
 #'   group_by mutate n rename rename_all row_number select slice
 #'   summarize tibble
-#' @importFrom grid gpar grobTree textGrob
-#' @importFrom ggplot2 aes annotation_custom geom_hline geom_line
-#'   geom_point geom_rect geom_ribbon geom_smooth geom_step geom_text
-#'   geom_vline ggplot labs scale_x_continuous scale_x_date theme_bw
-#'   theme_void
+#' @importFrom plotly plot_ly add_lines add_ribbons hide_legend layout
 #' @importFrom survival Surv survfit survreg
-#' @importFrom patchwork plot_layout
-#' @importFrom scales breaks_width date_format
 #' @importFrom lubridate interval
 #' @importFrom splines bs
 #' @importFrom Matrix bdiag
@@ -129,9 +123,9 @@
 #' @importFrom rstpm2 vuniroot
 #' @importFrom rootSolve multiroot
 #' @importFrom tmvtnsim rtnorm
-#' @importFrom stats dlnorm dnorm dweibull loess optim optimHess pexp
-#'   plnorm plogis pnorm pweibull qlogis qnorm quantile rbinom rexp
-#'   rlnorm rmultinom rnorm runif rweibull uniroot
+#' @importFrom stats dlnorm dnorm dweibull loess.smooth optim
+#'   optimHess pexp plnorm plogis pnorm pweibull qlogis qnorm quantile
+#'   rbinom rexp rlnorm rmultinom rnorm runif rweibull uniroot
 #' @importFrom erify check_bool check_class check_content check_n
 #'   check_positive
 #' @importFrom rlang .data
