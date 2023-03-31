@@ -9,8 +9,8 @@
 #' @param nknots The number of inner knots for the B-spline enrollment
 #'   model. By default, it is set to 0.
 #' @param accrualTime The accrual time intervals for the piecewise Poisson
-#'   model. Must start with 0, e.g., c(0, 3) breaks the time axis into
-#'   2 accrual intervals: [0, 3) and [3, Inf). By default, it is set to 0.
+#'   model. Must start with 0, e.g., c(0, 30) breaks the time axis into
+#'   2 accrual intervals: [0, 30) and [30, Inf). By default, it is set to 0.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the fitted enrollment curve. By default, it is set to \code{TRUE}.
 #'
@@ -52,9 +52,12 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   if (accrualTime[1] != 0) {
     stop("accrualTime must start with 0");
   }
-  if (length(accrualTime) > 1 & any(diff(accrualTime) <= 0)) {
+  if (length(accrualTime) > 1 && any(diff(accrualTime) <= 0)) {
     stop("accrualTime should be increasing")
   }
+
+  erify::check_bool(showplot)
+
 
   df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
@@ -64,6 +67,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   trialsdt = min(df$randdt)
   cutoffdt = df$cutoffdt[1]
   n0 = nrow(df)
+  # up to the last randomization date to account for enrollment completion
   t0 = as.numeric(max(df$randdt) - trialsdt + 1)
 
   erify::check_positive(n0, supplement = paste(
@@ -121,7 +125,6 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
       t = seq(1, t0),
       n = fmu_td(.data$t, fit1$theta))
   } else if (tolower(enroll_model) == "b-spline") {
-    t0 = as.numeric(cutoffdt - trialsdt + 1)
     # lambda(t) = exp(theta' bs(t))
     # mu(t) = sum(lambda(u), {u,1,t})
 
@@ -184,8 +187,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     fit1 <- list(model = 'Piecewise Poisson',
                  theta = log(n/t),
                  vtheta = vtheta,
-                 accrualTime = u,
-                 bic = -2*sum(-n + n*log(n/t)) + length(u)*log(n0))
+                 bic = -2*sum(-n + n*log(n/t)) + length(u)*log(n0),
+                 accrualTime = u)
 
     lambda = n/t
     psum = c(0, cumsum(n))  # cumulative enrollment by end of interval
