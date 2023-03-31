@@ -12,8 +12,8 @@
 #'   averaging".
 #' @param piecewiseSurvivalTime A vector that specifies the time
 #'   intervals for the piecewise exponential survival distribution.
-#'   Must start with 0, e.g., c(0, 6) breaks the time axis into 2
-#'   event intervals: [0, 6) and [6, Inf). By default, it is set to 0.
+#'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
+#'   event intervals: [0, 60) and [60, Inf). By default, it is set to 0.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the fitted time-to-event survival curve. By default, it is
 #'   set to \code{TRUE}.
@@ -26,7 +26,7 @@
 #' Bayesian Information Criterion, \code{bic}.
 #'
 #' If the piecewise exponential model is used, the location
-#' of knots used in the model, \code{piecewiseSurvivalTime}, will also
+#' of knots used in the model, \code{piecewiseSurvivalTime}, will
 #' be included in the list of results.
 #'
 #' If the model averaging option is chosen, the weight assigned
@@ -58,11 +58,11 @@ fitEvent <- function(df, event_model = "model averaging",
     stop("piecewiseSurvivalTime should be increasing")
   }
 
+  erify::check_bool(showplot)
+
 
   df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
-  df$randdt <- as.Date(df$randdt)
-  df$cutoffdt <- as.Date(df$cutoffdt)
 
   n0 = nrow(df)
   d0 = sum(df$event)
@@ -98,7 +98,7 @@ fitEvent <- function(df, event_model = "model averaging",
 
     # Note: weibull$shape = 1/reg$scale, weibull$scale = exp(reg$coefficients)
     # we use parameterization theta = (log(weibull$shape), log(weibull$scale))
-    # reg$var is for c(reg$coefficients, log(reg$scale)) = lmat %*% theta
+    # reg$var is for c(reg$coefficients, log(reg$scale))
     lmat <- matrix(c(0, -1, 1, 0), nrow=2, ncol=2, byrow=TRUE)
     fit2 <- list(model = "Weibull",
                  theta = c(log(1/reg$scale), as.numeric(reg$coefficients)),
@@ -178,24 +178,6 @@ fitEvent <- function(df, event_model = "model averaging",
 
     w1 = 1/(1 + exp(-0.5*(bic2 - bic1)))
 
-    # log-likelihood for model averaging of Weibull and log-normal
-    llmodavg <- function(theta, w1, df) {
-      shape = exp(theta[1])
-      scale = exp(theta[2])
-      meanlog = theta[3]
-      sdlog = exp(theta[4])
-
-      f1 = dweibull(df$time, shape, scale)
-      f2 = dlnorm(df$time, meanlog, sdlog)
-      f = w1*f1 + (1-w1)*f2
-
-      s1 = pweibull(df$time, shape, scale, lower.tail = FALSE)
-      s2 = plnorm(df$time, meanlog, sdlog, lower.tail = FALSE)
-      s = w1*s1 + (1-w1)*s2
-
-      l = df$event*log(f) + (1-df$event)*log(s)
-      sum(l)
-    }
 
     # model parameters from weibull and log-normal
     theta = c(log(1/reg1$scale), as.numeric(reg1$coefficients),
@@ -215,7 +197,7 @@ fitEvent <- function(df, event_model = "model averaging",
                  w1 = w1)
 
     # distribution function for model averaging of Weibull and log-normal
-    pmodavg <- function(t, theta, w1, lower.tail = TRUE) {
+    pmodavg <- function(t, theta, w1, lower.tail = TRUE, log.p = FALSE) {
       shape = exp(theta[1])
       scale = exp(theta[2])
       meanlog = theta[3]
@@ -226,6 +208,7 @@ fitEvent <- function(df, event_model = "model averaging",
       p = w1*p1 + (1-w1)*p2
 
       if (!lower.tail) p = 1 - p
+      if (log.p) p = log(p)
       p
     }
 
@@ -235,20 +218,20 @@ fitEvent <- function(df, event_model = "model averaging",
   }
 
 
+  # plot the survival curve
   if (tolower(event_model) == "model averaging") {
     bictext = paste("Weighted BIC:", round(fit2$bic,2))
   } else {
     bictext = paste("BIC:", round(fit2$bic,2))
   }
 
-  # plot the survival curve
   fittedEvent <- plotly::plot_ly() %>%
     plotly::add_lines(data=kmdf, x=~time, y=~surv, name="Kaplan-Meier",
                       line=list(shape="hv")) %>%
     plotly::add_lines(data=dffit2, x=~time, y=~surv, name="fitted") %>%
     plotly::layout(
       xaxis = list(title = "Days since randomization", zeroline = FALSE),
-      yaxis = list(title = "Survival probability"),
+      yaxis = list(title = "Survival probability", zeroline = FALSE),
       title = list(text = "Fitted time to event survival curve"),
       annotations = list(
         x = c(0.75, 0.75), y = c(0.95, 0.88),
