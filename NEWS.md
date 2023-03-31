@@ -1,4 +1,4 @@
-# eventPred 0.0.2
+# eventPred 0.1.0
 
 - added the piecewise Poisson model to fitEnrollment and predictEnrollment at the analysis stage
 - added number of dropouts
@@ -16,7 +16,8 @@
 - sped up the calculations of quantiles
 - added target_n to predictEnrollment output and target_d to predictEvent output
 - removed the cutoff date from ongoing_pred_df before data cutoff
-- restricted enrollment model fitting to the last randomization date except for b-spline, which requires the model to cover all days up to cutoff for prediction
+- restricted enrollment model fitting to the last randomization date
+- added piecewise exponential dropout model
 
 # eventPred 0.0.1
 
