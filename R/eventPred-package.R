@@ -121,7 +121,7 @@
 #' @importFrom Matrix bdiag
 #' @importFrom mvtnorm rmvnorm
 #' @importFrom rstpm2 vuniroot
-#' @importFrom rootSolve multiroot
+#' @importFrom numDeriv grad
 #' @importFrom tmvtnsim rtnorm
 #' @importFrom stats dlnorm dnorm dweibull loess.smooth optim
 #'   optimHess pexp plnorm plogis pnorm pweibull qlogis qnorm quantile
