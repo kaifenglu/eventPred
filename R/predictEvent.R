@@ -29,7 +29,8 @@
 #' @param nyears The number of years after the data cut for prediction.
 #'   By default, it is set to 4.
 #' @param nreps The number of replications for simulation. By default,
-#'   it is set to 500.
+#'   it is set to 500. If \code{newSubjects} is not \code{NULL},
+#'   the number of draws in \code{newSubjects} should be \code{nreps}.
 #' @param showEnrollment A Boolean variable to control whether or not to
 #'   show the number of enrolled subjects. By default, it is set to
 #'   \code{TRUE}.
@@ -42,6 +43,8 @@
 #' @param showOngoing A Boolean variable to control whether or not to
 #'   show the number of ongoing subjects. By default, it is set to
 #'   \code{FALSE}.
+#' @param showsummary A Boolean variable to control whether or not to
+#'   show the prediction summary. By default, it is set to \code{TRUE}.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the prediction plot. By default, it is set to \code{TRUE}.
 #'
@@ -71,11 +74,13 @@
 #' the covariance matrix ,\code{vtheta}, both of which have
 #' \code{ngroups} blocks with the \code{j}-th block specifying
 #' the prior distribution of model parameters for the
-#' \code{j}-th treatment group.
+#' \code{j}-th treatment group. For the piecewise exponential
+#' dropout model, \code{piecewiseDropoutTime}
+#' should also be included to indicate the location of knots.
 #'
 #' @return A list of prediction results which includes important
 #' information such as the median, lower and upper percentiles for
-#' the estimated time and date to reach the target number of events,
+#' the estimated day and date to reach the target number of events,
 #' as well as simulated event data for both ongoing and new subjects.
 #' The data for the prediction plot is also included
 #' within this list.
@@ -104,12 +109,12 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                          pilevel = 0.90, nyears = 4, nreps = 500,
                          showEnrollment = TRUE, showEvent = TRUE,
                          showDropout = FALSE, showOngoing = FALSE,
-                         showplot = TRUE) {
+                         showsummary = TRUE, showplot = TRUE) {
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_d)
   if (!is.null(newSubjects)) erify::check_class(newSubjects, "data.frame")
-  if (is.null(df) & is.null(newSubjects)) {
+  if (is.null(df) && is.null(newSubjects)) {
     stop("At least one of df and newSubjects must be specified.")
   }
 
@@ -121,7 +126,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   if (!is.null(dropout_fit)) {
     erify::check_class(dropout_fit, "list")
     erify::check_content(tolower(dropout_fit$model),
-                         c("exponential", "weibull", "log-normal"))
+                         c("exponential", "weibull", "log-normal",
+                           "piecewise exponential"))
   }
 
   erify::check_bool(fixedFollowup)
@@ -130,8 +136,11 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   erify::check_positive(1-pilevel)
   erify::check_positive(nyears)
   erify::check_n(nreps)
+  erify::check_bool(showEnrollment)
+  erify::check_bool(showEvent)
   erify::check_bool(showDropout)
   erify::check_bool(showOngoing)
+  erify::check_bool(showsummary)
   erify::check_bool(showplot)
 
   if (!(showEnrollment | showEvent | showDropout | showOngoing)) {
@@ -208,7 +217,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     new1 <- newSubjects %>%
       dplyr::group_by(.data$draw) %>%
-      dplyr::filter(dplyr::row_number() == dplyr::n())
+      dplyr::slice(dplyr::n())
 
     pred1dy <- ceiling(quantile(new1$arrivalTime, c(0.5, plower, pupper)))
 
@@ -246,8 +255,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     n1 = 0
 
     # add predicted from data cut to specified years after data cut
-    dfb1 <- dfa %>%
-      dplyr::mutate(t = t0, lower = .data$n, upper = .data$n)
+    dfb1 <- dfa1 %>%
+      dplyr::mutate(lower = .data$n, upper = .data$n)
 
     dfb2 <- dfb1 %>%
       dplyr::mutate(t = t0 + 365*nyears)
@@ -455,8 +464,13 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
           # draw from the corresponding component distribution
           survivalTimeNew = rep(NA, n1)
-          survivalTimeNew[w==1] = rweibull(sum(w), shape, scale)
-          survivalTimeNew[w==0] = rlnorm(sum(1-w), meanlog, sdlog)
+          if (sum(w) > 0) {
+            survivalTimeNew[w==1] = rweibull(sum(w), shape, scale)
+          }
+
+          if (sum(1-w) > 0) {
+            survivalTimeNew[w==0] = rlnorm(sum(1-w), meanlog, sdlog)
+          }
 
           survivalTime = c(survivalTimeOngoing, survivalTimeNew)
         } else {
@@ -501,6 +515,34 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           } else {
             dropoutTime = dropoutTimeOngoing
           }
+        } else if (tolower(dropout_fit$model) == "piecewise exponential") {
+          lambda = exp(theta3[i,]) # hazard rates in the intervals
+          J = length(lambda) # number of intervals
+          u = dropout_fit$piecewiseDropoutTime # left end points
+
+          # partial sums of lambda*interval_width
+          if (J > 1) {
+            psum = c(0, cumsum(lambda[1:(J-1)] * diff(u)))
+          } else {
+            psum = 0
+          }
+
+          # find the interval containing time0
+          j0 = findInterval(time0, u)
+          rhs = psum[j0] + lambda[j0]*(time0 - u[j0]) + rexp(r0)
+
+          # find the interval containing time
+          j1 = findInterval(rhs, psum)
+          dropoutTimeOngoing = u[j1] + (rhs - psum[j1])/lambda[j1]
+
+          if (n1 > 0) {
+            rhs = rexp(n1)
+            j1 = findInterval(rhs, psum)
+            dropoutTimeNew = u[j1] + (rhs - psum[j1])/lambda[j1]
+            dropoutTime = c(dropoutTimeOngoing, dropoutTimeNew)
+          } else {
+            dropoutTime = dropoutTimeOngoing
+          }
         }
       }
 
@@ -537,7 +579,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     }
   } else { # design stage event prediction
     # output data frame
-    m = r0 + n1 # number of ongoing and new subjects
+    m = n1 # number of subjects
     newEvents = dplyr::as_tibble(matrix(
       nrow = nreps*m, ncol = 6,
       dimnames = list(NULL, c("draw", "arrivalTime", "treatment", "time",
@@ -631,6 +673,24 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
               dropoutTime[cols] = rlnorm(length(cols), meanlog, sdlog)
             }
           }
+        } else if (tolower(dropout_fit$model) == "piecewise exponential") {
+          u = c(0, dropout_fit$knots) # left end points of the intervals
+          J = length(u) # number of intervals
+          for (j in 1:k) {
+            cols = which(w[j,] == 1)
+            if (length(cols) > 0) {
+              lambda = exp(theta3[[j]][i,]) # hazard rates in the intervals
+              # partial sums of lambda*interval_width
+              if (J > 1) {
+                psum = c(0, cumsum(lambda[1:(J-1)] * diff(u)))
+              } else {
+                psum = 0
+              }
+              rhs = rexp(length(cols)) # cumulative hazard
+              j1 = findInterval(rhs, psum)
+              dropoutTime[cols] = u[j1] + (rhs - psum[j1])/lambda[j1]
+            }
+          }
         }
       }
 
@@ -693,21 +753,22 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   # obtain the quantiles
   q = 1 - c(0.5, plower, pupper)
-  pred2dy = rep(NA, length(q))
+  pred_day = rep(NA, length(q))
   tmax = max(newEvents$totalTime[newEvents$event==1])
   for (j in 1:length(q)) {
     # check if the quantile can be estimated from observed data
     if (sdf(tmax, target_d, d0, newEvents) <= q[j]) {
-      pred2dy[j] = uniroot(function(x) sdf(x, target_d, d0, newEvents) - q[j],
-                           c(t0, tmax), tol = 1)$root
-      pred2dy[j] = ceiling(pred2dy[j])
+      pred_day[j] = uniroot(function(x)
+        sdf(x, target_d, d0, newEvents) - q[j],
+        c(t0, tmax), tol = 1)$root
+      pred_day[j] = ceiling(pred_day[j])
     }
   }
 
   # set up time points for plotting
   t = unique(c(seq(t0, t1, 30), t1))
 
-  # number of events, dropouts, subjects at risk after data cut
+  # number of events, dropouts, and subjects at-risk after data cut
   df1 = dplyr::tibble(t = t) %>%
     dplyr::cross_join(newEvents) %>%
     dplyr::group_by(.data$t, .data$draw) %>%
@@ -738,7 +799,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                      upper = quantile(.data$natrisk, probs = pupper))
 
   if (!is.null(df)) {
-    pred2dt <- as.Date(pred2dy - 1, origin = trialsdt)
+    pred_date <- as.Date(pred_day - 1, origin = trialsdt)
 
     # observed number of events before data cut
     dfa <- df %>%
@@ -809,101 +870,124 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   }
 
 
-
   dfs <- dplyr::tibble()
   if (showEnrollment) dfs <- dfs %>% dplyr::bind_rows(enroll_pred_df)
   if (showEvent) dfs <- dfs %>% dplyr::bind_rows(event_pred_df)
   if (showDropout) dfs <- dfs %>% dplyr::bind_rows(dropout_pred_df)
   if (showOngoing) dfs <- dfs %>% dplyr::bind_rows(ongoing_pred_df)
 
-  if (nrow(dfs) > 0) {
-    dfs$parameter <- factor(
-      dfs$parameter, levels = c("Enrollment", "Event",
-                                "Dropout", "Ongoing"))
-
-    if (!is.null(df)) {
-      dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
-      dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
-
-      n_months = lubridate::interval(min(dfs$date),
-                                     max(dfs$date)) %/% months(1)
-      bw = fbw(n_months)
-
-      p1 <- plotly::plot_ly() %>%
-        plotly::add_ribbons(
-          data=dfb, x=~date, ymin=~lower, ymax=~upper,
-          fill = "tonexty", fillcolor = ~parameter,
-          line = list(width=0)) %>%
-        plotly::add_lines(
-          data=dfa, x=~date, y=~n, color=~parameter,
-          line=list(shape="hv", width=2)) %>%
-        plotly::add_lines(
-          data=dfb, x=~date, y=~n, color=~parameter) %>%
-        plotly::add_lines(
-          x=rep(cutoffdt, 2), y=range(dfs$n),
-          name="cutoff",
-          line=list(dash="dash")) %>%
-        plotly::layout(
-          xaxis = list(title = "", tickformat = "%b<br>%Y",
-                       zeroline = FALSE,
-                       tickmode = "linear", dtick = bw,
-                       range = range(dfs$date) +
-                         c(-0.02, 0.02)*diff(range(dfs$date))),
-          yaxis = list(zeroline = FALSE),
-          legend = list(x = 0, y = 1.1, orientation = 'h'))
-
-      if (showEvent) p1 <- p1 %>%
-        plotly::add_lines(
-          x = range(dfs$date), y = rep(target_d, 2),
-          name = "target events",
-          line = list(dash = "dash", color="rgba(176, 32, 240, 0.5)"))
-
-
-    } else {
-      p1 <- plotly::plot_ly() %>%
-        plotly::add_ribbons(
-          data=dfs, x=~t, ymin=~lower, ymax=~upper,
-          fill = "tonexty", fillcolor = ~parameter,
-          line = list(width=0)) %>%
-        plotly::add_lines(
-          data=dfs, x=~t, y=~n, color=~parameter) %>%
-        plotly::layout(
-          xaxis = list(title = "Days since trial start",
-                       zeroline = FALSE),
-          yaxis = list(range = range(enroll_pred_df$n),
-                       zeroline = FALSE),
-          legend = list(x = 0, y = 1.1, orientation = 'h'))
-
-      if (showEvent) p1 <- p1 %>%
-          plotly::add_lines(
-            x = range(~t), y = rep(target_d, 2),
-            name = "target events",
-            line = list(dash = "dash", color="rgba(176, 32, 240, 0.5)"))
-    }
-
-    if (showplot) print(p1)
-  }
-
-  # maximum number of subjects
-  n = max(enroll_pred_df$n)
+  dfs$parameter <- factor(dfs$parameter, levels = c(
+    "Enrollment", "Event", "Dropout", "Ongoing"))
 
   if (!is.null(df)) {
-    list(n = n, target_d = target_d,
-         event_pred_day = pred2dy, event_pred_date = pred2dt,
-         pilevel = pilevel, newEvents = newEvents,
-         enroll_pred_df = enroll_pred_df,
-         event_pred_df = event_pred_df,
-         dropout_pred_df = dropout_pred_df,
-         ongoing_pred_df = ongoing_pred_df,
-         event_pred_plot = p1)
+    str1 <- paste0("Time from cutoff until ", target_d, " events: ",
+                   pred_date[1] - cutoffdt + 1, " days")
+    str2 <- paste0("Median prediction date: ", pred_date[1])
+    str3 <- paste0("Prediction interval: ", pred_date[2], ", ", pred_date[3])
+    s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
+
+    dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
+    dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
+
+    n_months = lubridate::interval(min(dfs$date),
+                                   max(dfs$date)) %/% months(1)
+    bw = fbw(n_months)
+
+    p1 <- plotly::plot_ly() %>%
+      plotly::add_ribbons(
+        data = dfb, x = ~date, ymin = ~lower, ymax = ~upper,
+        fill = "tonexty", fillcolor = ~parameter,
+        line = list(width=0)) %>%
+      plotly::add_lines(
+        data = dfb, x = ~date, y = ~n, color = ~parameter) %>%
+      plotly::add_lines(
+        data = dfa, x = ~date, y = ~n, color = ~parameter,
+        line = list(shape="hv", width=2)) %>%
+      plotly::add_lines(
+        x = rep(cutoffdt, 2), y = range(dfs$n),
+        name = "cutoff",
+        line = list(dash="dash"),
+        showlegend = FALSE) %>%
+      plotly::layout(
+        annotations = list(x = cutoffdt, y = 0.1, yref = "paper",
+                           text = 'cutoff', xanchor = "left",
+                           font = list(size=12),
+                           showarrow = FALSE),
+        xaxis = list(title = "",
+                     zeroline = FALSE,
+                     tickmode = "linear", dtick = bw),
+        yaxis = list(zeroline = FALSE),
+        legend = list(x = 0, y = 1.2, orientation = 'h'))
+
+    if (showEvent) {
+      p1 <- p1 %>%
+        plotly::add_lines(
+          x = range(dfs$date), y = rep(target_d, 2),
+          name = 'target events', showlegend = FALSE,
+          line = list(dash="dot", color="rgba(128, 128, 128, 0.5")) %>%
+        plotly::layout(
+          annotations = list(x = 0.95, xref = "paper", y = target_d,
+                             text = 'target events',
+                             xanchor = "right", yanchor = "bottom",
+                             font = list(size=12),
+                             showarrow = FALSE))
+    }
+
   } else {
-    list(n = n, target_d = target_d,
-         event_pred_day = pred2dy,
+    str1 <- paste0("Time from trial start until ", target_d, " events")
+    str2 <- paste0("Median prediction day: ", pred_day[1])
+    str3 <- paste0("Prediction interval: ", pred_day[2], ", ", pred_day[3])
+    s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
+
+    p1 <- plotly::plot_ly() %>%
+      plotly::add_ribbons(
+        data = dfs, x = ~t, ymin = ~lower, ymax = ~upper,
+        fill = "tonexty", fillcolor = ~parameter,
+        line = list(width=0)) %>%
+      plotly::add_lines(
+        data = dfs, x = ~t, y = ~n, color = ~parameter) %>%
+      plotly::layout(
+        xaxis = list(title = "Days since trial start",
+                     zeroline = FALSE),
+        yaxis = list(zeroline = FALSE),
+        legend = list(x = 0, y = 1.2, orientation = 'h'))
+
+    if (showEvent) {
+      p1 <- p1 %>%
+        plotly::add_lines(
+          x = range(dfs$t), y = rep(target_d, 2),
+          name = 'target events', showlegend = FALSE,
+          line = list(dash="dot", color="rgba(128, 128, 128, 0.5")) %>%
+        plotly::layout(
+          annotations = list(x = 0.95, xref = "paper", y = target_d,
+                             text = 'target events',
+                             xanchor = "right", yanchor = "bottom",
+                             font = list(size=12),
+                             showarrow = FALSE))
+    }
+  }
+
+
+  if (showsummary) cat(s1)
+  if (showplot) print(p1)
+
+  if (!is.null(df)) {
+    list(target_d = target_d,
+         event_pred_day = pred_day, event_pred_date = pred_date,
          pilevel = pilevel, newEvents = newEvents,
          enroll_pred_df = enroll_pred_df,
          event_pred_df = event_pred_df,
          dropout_pred_df = dropout_pred_df,
          ongoing_pred_df = ongoing_pred_df,
-         event_pred_plot = p1)
+         event_pred_summary = s1, event_pred_plot = p1)
+  } else {
+    list(target_d = target_d,
+         event_pred_day = pred_day,
+         pilevel = pilevel, newEvents = newEvents,
+         enroll_pred_df = enroll_pred_df,
+         event_pred_df = event_pred_df,
+         dropout_pred_df = dropout_pred_df,
+         ongoing_pred_df = ongoing_pred_df,
+         event_pred_summary = s1, event_pred_plot = p1)
   }
 }
