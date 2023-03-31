@@ -62,6 +62,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                   date = .data$randdt) %>%
     dplyr::mutate(year = format(.data$date, format = "%Y"))
 
+  # extend enrollment information to cutoff date
   adsl1 <- adsl %>%
     dplyr::slice(dplyr::n()) %>%
     dplyr::mutate(date = cutoffdt,
@@ -106,20 +107,16 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       ad, x=~date, y=~n, color=~parameter, colors=c("blue", "red")) %>%
       plotly::add_lines(line = list(shape = "hv")) %>%
       plotly::layout(
-        xaxis = list(title = "", tickformat = "%b<br>%Y",
-                     tickmode = "linear", dtick = bw,
-                     range = range(ad$date) +
-                       c(-0.02, 0.02)*diff(range(ad$date))),
+        xaxis = list(title = "",
+                     tickmode = "linear", dtick = bw),
         yaxis = list(zeroline = FALSE),
         legend = list(x = 0, y = 1.2, orientation = 'h'))
   } else {
     cumAccrual <- plotly::plot_ly(ad, x=~date, y=~n) %>%
       plotly::add_lines(line = list(shape = "hv")) %>%
       plotly::layout(
-        xaxis = list(title = "", tickformat = "%b<br>%Y",
-                     tickmode = "linear", dtick = bw,
-                     range = range(ad$date) +
-                       c(-0.02, 0.02)*diff(range(ad$date))),
+        xaxis = list(title = "",
+                     tickmode = "linear", dtick = bw),
         yaxis = list(zeroline = FALSE),
         title = list(text = "Cumulative enrollment"))
   }
@@ -147,10 +144,9 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
     dailyAccrual <- plotly::plot_ly(enroll, x=~date, y=~n, name="observed",
                                     type='scatter', mode='markers') %>%
       plotly::add_lines(x = fit$x, y = fit$y, name="loess") %>%
-      plotly::layout(xaxis = list(title = "", tickformat = "%b<br>%Y",
-                                  tickmode = "linear", dtick = bw,
-                                  range = range(enroll$date) +
-                                    c(-0.02, 0.02)*diff(range(enroll$date))),
+      plotly::layout(xaxis = list(title = "",
+                                  tickmode = "linear", dtick = bw),
+                     yaxis = list(zeroline = FALSE),
                      title = list(text = "Daily enrollment")) %>%
       plotly::hide_legend()
     if (showplot) print(dailyAccrual)
@@ -170,7 +166,8 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       plotly::add_lines(line = list(shape = "hv")) %>%
       plotly::layout(xaxis = list(title = "Days since randomization",
                                   zeroline = FALSE),
-                     yaxis = list(title = "Survival probability"),
+                     yaxis = list(title = "Survival probability",
+                                  zeroline = FALSE),
                      title = list(
                        text = "Kaplan-Meier plot for time to event"))
     if (showplot) print(kmEvent)
@@ -187,7 +184,8 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       plotly::add_lines(line = list(shape = "hv")) %>%
       plotly::layout(xaxis = list(title = "Days since randomization",
                                   zeroline = FALSE),
-                     yaxis = list(title = "Survival probability"),
+                     yaxis = list(title = "Survival probability",
+                                  zeroline = FALSE),
                      title = list(
                        text = "Kaplan-Meier plot for time to dropout"))
     if (showplot) print(kmDropout)
@@ -198,6 +196,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   # output
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
+      # enrollment and event
       list(trialsdt = trialsdt, cutoffdt = cutoffdt,
            n0 = n0, t0 = t0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
            adtte = adtte, event_km_df = kmdfEvent,
@@ -206,7 +205,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
            daily_accrual_plot = dailyAccrual,
            event_km_plot = kmEvent,
            dropout_km_plot = kmDropout)
-    } else {
+    } else { # event only
       list(trialsdt = trialsdt, cutoffdt = cutoffdt,
            n0 = n0, t0 = t0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
            adtte = adtte, event_km_df = kmdfEvent,
@@ -215,16 +214,10 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
            event_km_plot = kmEvent,
            dropout_km_plot = kmDropout)
     }
-  } else {
-    if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
-      list(trialsdt = trialsdt, cutoffdt = cutoffdt,
-           n0 = n0, t0 = t0, adsl = adsl,
-           cum_accrual_plot = cumAccrual,
-           daily_accrual_plot = dailyAccrual)
-    } else {
-      list(trialsdt = trialsdt, cutoffdt = cutoffdt,
-           n0 = n0, t0 = t0, adsl = adsl,
-           cum_accrual_plot = cumAccrual)
-    }
+  } else { # enrollment only
+    list(trialsdt = trialsdt, cutoffdt = cutoffdt,
+         n0 = n0, t0 = t0, adsl = adsl,
+         cum_accrual_plot = cumAccrual,
+         daily_accrual_plot = dailyAccrual)
   }
 }
