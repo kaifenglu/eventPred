@@ -20,7 +20,7 @@ Imports:
     Matrix (>= 1.2-14),
     mvtnorm (>= 1.1-3),
     rstpm2 (>= 1.6.1),
-    rootSolve (>= 1.8.2.3),
+    numDeriv (>= 2016.8-1.1),
     tmvtnsim (>= 0.1.3),
     erify (>= 0.4.0),
     stats (>= 3.5.0)
