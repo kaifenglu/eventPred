@@ -1,6 +1,6 @@
 #' @title Predict enrollment
 #' @description Utilizes a pre-fitted enrollment model to generate
-#'   enrollment times for new subjects and also provide a prediction
+#'   enrollment times for new subjects and provide a prediction
 #'   interval for the expected time to reach the enrollment target.
 #'
 #' @param df The subject-level enrollment data, including
@@ -18,6 +18,8 @@
 #'   By default, it is set to 4.
 #' @param nreps The number of replications for simulation. By default,
 #'   it is set to 500.
+#' @param showsummary A Boolean variable to control whether or not to
+#'   show the prediction summary. By default, it is set to \code{TRUE}.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the prediction plot. By default, it is set to \code{TRUE}.
 #'
@@ -59,7 +61,7 @@
 #'
 predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                               pilevel = 0.90, nyears = 4, nreps = 500,
-                              showplot = TRUE) {
+                              showsummary = TRUE, showplot = TRUE) {
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_n)
 
@@ -71,6 +73,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   erify::check_positive(pilevel)
   erify::check_positive(1-pilevel)
   erify::check_n(nreps)
+  erify::check_bool(showsummary)
   erify::check_bool(showplot)
 
   if (!is.null(df)) {
@@ -151,7 +154,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
         delta = exp(theta[i,2])
         # find the tangent line with half of maximum slope:
         #   v(t) = mu(ti) + mu/(2*delta)*(t-ti)
-        # which lies between mu(t), and then find tmax such that
+        # which lies beneath mu(t), and then find tmax such that
         #   v(tmax) = muTime, which implies mu(tmax) > muTime
         ti = log(2)/delta
         tmax = (muTime - fmu_td(ti, theta[i,]))*2*delta/mu + ti
@@ -178,7 +181,8 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     newEnrollment_bs <- function(t0, n1, theta, x, lags, nreps) {
       lambda = exp(x %*% t(theta))
       # moving average for enrollment rate after t0
-      lambdaT = colMeans(lambda[(t0 - lags):t0,])
+      t0x = nrow(lambda)  # to account for enrollment pause
+      lambdaT = colMeans(lambda[(t0x - lags):t0x,])
 
       df = dplyr::as_tibble(matrix(
         nrow = nreps*n1, ncol = 2,
@@ -206,8 +210,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     }
     u = enroll_fit$accrualTime
 
-    # mu(t[j]) = mu(t0) + sum of the first j random variables
-    # from the standard exponential distribution, for j=1 to n1
+    # mu(t[j]) - mu(t[j-1]) is standard exponential distribution, j=1,...,n1
     newEnrollment_pw <- function(t0, n1, theta, u, nreps) {
       df = dplyr::as_tibble(matrix(
         nrow = nreps*n1, ncol = 2,
@@ -218,7 +221,11 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
         index = (i-1)*n1 + (1:n1)
         df[index, "draw"] = i
         a = exp(theta[i,]) # enrollment rate in each interval
-        psum = c(0, cumsum(a[1:(J-1)] * diff(u)))
+        if (J>1) {
+          psum = c(0, cumsum(a[1:(J-1)] * diff(u)))
+        } else {
+          psum = 0
+        }
         rhs =  psum[j0] + a[j0]*(t0 - u[j0]) + cumsum(rexp(n1))
         j1 = findInterval(rhs, psum)
         df[index, "arrivalTime"] = u[j1] + (rhs - psum[j1])/a[j1]
@@ -235,16 +242,17 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   plower = (1 - pilevel)/2
   pupper = 1 - plower
 
+  # find the arrivalTime of the last subject for each simulated data set
   new1 <- newSubjects %>%
     dplyr::group_by(.data$draw) %>%
-    dplyr::filter(dplyr::row_number() == dplyr::n())
+    dplyr::slice(dplyr::n())
 
-  pred1dy <- ceiling(quantile(new1$arrivalTime, c(0.5, plower, pupper)))
+  pred_day <- ceiling(quantile(new1$arrivalTime, c(0.5, plower, pupper)))
 
   t1 = t0 + nyears*365 # extend time to nyears after cutoff
 
   # future time points at which to predict number of subjects
-  t = sort(unique(c(seq(t0, t1, 30), t1, pred1dy)))
+  t = sort(unique(c(seq(t0, t1, 30), t1, pred_day)))
   t = t[t <= t1] # restrict range of x-axis
 
   # predicted number of subjects enrolled after data cut
@@ -259,7 +267,13 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
 
   if (!is.null(df)) {
-    pred1dt <- as.Date(pred1dy - 1, origin = trialsdt)
+    pred_date <- as.Date(pred_day - 1, origin = trialsdt)
+
+    str1 <- paste0("Time from cutoff until ", target_n, " subjects: ",
+                   pred_date[1] - cutoffdt + 1, " days")
+    str2 <- paste0("Median prediction date: ", pred_date[1])
+    str3 <- paste0("Prediction interval: ", pred_date[2], ", ", pred_date[3])
+    s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
 
     # arrival time for subjects already enrolled before data cut
     dfa <- df %>%
@@ -289,60 +303,67 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                                    max(dfs$date)) %/% months(1)
     bw = fbw(n_months)
 
-    g2 <- flabel(dfs, trialsdt)
-
     # plot the enrollment data with month as x-axis label
-    g1 <- ggplot2::ggplot() +
-      ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$date,
-                                                  ymin=.data$lower,
-                                                  ymax=.data$upper),
-                           alpha=0.5, fill="lightblue") +
-      ggplot2::geom_step(data=dfa, ggplot2::aes(x=.data$date, y=.data$n),
-                         color="blue") +
-      ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$date, y=.data$n),
-                         color="blue") +
-      ggplot2::geom_vline(xintercept = cutoffdt, linetype = 2) +
-      ggplot2::scale_x_date(name = NULL,
-                            labels = scales::date_format("%b"),
-                            breaks = scales::breaks_width(bw),
-                            minor_breaks = NULL,
-                            expand = c(0.01, 0.01)) +
-      ggplot2::labs(y = "Subjects",
-                    title = "Enrollment") +
-      ggplot2::theme_bw()
-
-    # stack them together
-    p1 <- g1 + g2 + patchwork::plot_layout(nrow = 2, heights = c(15, 1))
-    if (showplot) print(p1)
-
-
-    list(target_n = target_n, enroll_pred_day = pred1dy,
-         enroll_pred_date = pred1dt,
-         pilevel = pilevel, newSubjects = newSubjects,
-         enroll_pred_df = dfs, enroll_pred_plot = p1)
+    g1 <- plotly::plot_ly() %>%
+      plotly::add_ribbons(data = dfb, x = ~date,
+                          ymin = ~lower, ymax = ~upper,
+                          name = "prediction interval",
+                          fill = "tonexty",
+                          line = list(width=0)) %>%
+      plotly::add_lines(data = dfb, x = ~date, y = ~n,
+                        name = "median prediction",
+                        line = list(width=1)) %>%
+      plotly::add_lines(data = dfa, x = ~date, y = ~n,
+                        name = "observed",
+                        line = list(shape="hv", width=1)) %>%
+      plotly::add_lines(x = rep(cutoffdt, 2), y = range(dfs$n),
+                        name = "cutoff",
+                        line = list(dash="dash"),
+                        showlegend = FALSE) %>%
+      plotly::layout(
+        annotations = list(x = cutoffdt, y = 0.1, yref = "paper",
+                           text = 'cutoff', xanchor = "left",
+                           font = list(size=12),
+                           showarrow = FALSE),
+        xaxis = list(title = "",
+                     zeroline = FALSE,
+                     tickmode = "linear", dtick = bw),
+        yaxis = list(title = "Subjects", zeroline = FALSE),
+        legend = list(x = 0, y = 1.2, orientation = "h"))
   } else {
+    str1 <- paste0("Time from trial start until ", target_n, " subjects")
+    str2 <- paste0("Median prediction day: ", pred_day[1])
+    str3 <- paste0("Prediction interval: ", pred_day[2], ", ", pred_day[3])
+    s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
 
-    # plot the enrollment data
-    g1 <- ggplot2::ggplot() +
-      ggplot2::geom_ribbon(data=dfb, ggplot2::aes(x=.data$t,
-                                                  ymin=.data$lower,
-                                                  ymax=.data$upper),
-                           alpha=0.5, fill="lightblue") +
-      ggplot2::geom_line(data=dfb, ggplot2::aes(x=.data$t, y=.data$n),
-                         color="blue") +
-      ggplot2::scale_x_continuous(name = "Days since trial start",
-                                  expand = c(0.01, 0.01)) +
-      ggplot2::labs(y = "Subjects",
-                    title = "Enrollment") +
-      ggplot2::theme_bw()
-
-    if (showplot) print(g1)
-
-
-    list(target_n = target_n, enroll_pred_day = pred1dy,
-         pilevel = pilevel, newSubjects = newSubjects,
-         enroll_pred_df = dfb, enroll_pred_plot = g1)
+    g1 <- plotly::plot_ly(dfb, x = ~t) %>%
+      plotly::add_ribbons(ymin = ~lower, ymax = ~upper,
+                          name = "prediction interval",
+                          fill = "tonexty",
+                          line = list(width=0)) %>%
+      plotly::add_lines(y = ~n, name = "median prediction",
+                        line = list(width=1)) %>%
+      plotly::layout(xaxis = list(title = "Days since trial start",
+                                  zeroline = FALSE),
+                     yaxis = list(title = "Subjects", zeroline = FALSE),
+                     legend = list(x = 0, y = 1.2, orientation = "h"))
   }
 
+
+  if (showsummary) cat(s1)
+  if (showplot) print(g1)
+
+  if (!is.null(df)) {
+    list(target_n = target_n, enroll_pred_day = pred_day,
+         enroll_pred_date = pred_date,
+         pilevel = pilevel, newSubjects = newSubjects,
+         enroll_pred_df = dfs,
+         enroll_pred_summary = s1, enroll_pred_plot = g1)
+  } else {
+    list(target_n = target_n, enroll_pred_day = pred_day,
+         pilevel = pilevel, newSubjects = newSubjects,
+         enroll_pred_df = dfb,
+         enroll_pred_summary = s1, enroll_pred_plot = g1)
+  }
 
 }
