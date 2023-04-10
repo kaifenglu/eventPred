@@ -101,8 +101,8 @@
 #' The \code{event_model_parameter} variable should be a list that
 #' includes \code{model} to specify the event process,
 #' \code{ngroups} to indicate the number of treatment groups,
-#' \code{prob} to indicate the randomization probabilities
-#' for each group, \code{theta} and \code{vtheta} to indicate
+#' \code{alloc} to indicate the treatment allocation within a
+#' randomization block, \code{theta} and \code{vtheta} to indicate
 #' the parameter values and the covariance matrix, both of which
 #' have \code{ngroups} blocks with the \code{j}-th block specifying
 #' the prior distribution of model parameters for the \code{j}-th
@@ -114,8 +114,8 @@
 #' The \code{dropout_model_parameter} should be a list that
 #' includes \code{model} to specify the dropout process,
 #' \code{ngroups} to indicate the number of treatment groups,
-#' \code{prob} to indicate the randomization probabilities
-#' for each group, \code{theta} and \code{vtheta} to indicate
+#' \code{alloc} to indicate the treatment allocation within a
+#' randomization block, \code{theta} and \code{vtheta} to indicate
 #' the parameter values and the covariance matrix, both of which
 #' have \code{ngroups} blocks with the \code{j}-th block specifying
 #' the prior distribution of model parameters for the \code{j}-th
@@ -354,9 +354,17 @@ getPrediction <- function(
 
       # convert prior by treatment to prior overall
       if (!is.null(event_model_parameter)) {
+        k = event_model_parameter$ngroups
+        alloc = event_model_parameter$alloc
+        if (length(alloc) == k-1) {
+          alloc = c(alloc, 1)
+        } else if (length(alloc) != k) {
+          stop("Incorrect length of alloc in event_model_parameter")
+        }
+        w = alloc/sum(alloc)
+
         if (tolower(event_model_parameter$model) == "exponential") {
           # match the overall mean
-          w = event_model_parameter$prob
           lambda = exp(event_model_parameter$theta)
           lambda1 = 1/sum(w/lambda)  # hazard rate for pooled
           theta1 = log(lambda1)
@@ -375,8 +383,6 @@ getPrediction <- function(
             vtheta = vtheta1)
         } else if (tolower(event_model_parameter$model) == "weibull") {
           # match the overall mean and variance
-          k = event_model_parameter$ngroups
-          w = event_model_parameter$prob
 
           # mean and variance of weibull as a function of theta
           fmweibull <- function(theta) {
@@ -433,8 +439,6 @@ getPrediction <- function(
             vtheta = vtheta1)
         } else if (tolower(event_model_parameter$model) == "log-normal") {
           # match the overall mean and variance
-          k = event_model_parameter$ngroups
-          w = event_model_parameter$prob
 
           # mean and variance of log-normal as a function of theta
           fmlnorm <- function(theta) {
@@ -486,8 +490,6 @@ getPrediction <- function(
         } else if (tolower(event_model_parameter$model) ==
                    "piecewise exponential") {
           # match the mean within each interval
-          k = event_model_parameter$ngroups
-          w = event_model_parameter$prob
           lambda = exp(event_model_parameter$theta)
           npieces = length(event_model_parameter$piecewiseSurvivalTime)
           if (length(lambda) != k*npieces) {
@@ -557,9 +559,17 @@ getPrediction <- function(
 
         # convert prior by treatment to prior overall
         if (!is.null(dropout_model_parameter)) {
+          k = dropout_model_parameter$ngroups
+          alloc = dropout_model_parameter$alloc
+          if (length(alloc) == k-1) {
+            alloc = c(alloc, 1)
+          } else if (length(alloc) != k) {
+            stop("Incorrect length of alloc in dropout_model_parameter")
+          }
+          w = alloc/sum(alloc)
+
           if (tolower(dropout_model_parameter$model) == "exponential") {
             # match the overall mean
-            w = dropout_model_parameter$prob
             lambda = exp(dropout_model_parameter$theta)
             lambda1 = 1/sum(w/lambda)  # hazard rate for pooled
             theta1 = log(lambda1)
@@ -578,8 +588,6 @@ getPrediction <- function(
               vtheta = vtheta1)
             } else if (tolower(dropout_model_parameter$model) == "weibull") {
             # match the overall mean and variance
-            k = dropout_model_parameter$ngroups
-            w = dropout_model_parameter$prob
 
             # mean and variance of weibull as a function of theta
             fmweibull <- function(theta) {
@@ -636,8 +644,6 @@ getPrediction <- function(
               vtheta = vtheta1)
           } else if (tolower(dropout_model_parameter$model) == "log-normal") {
             # match the overall mean and variance
-            k = dropout_model_parameter$ngroups
-            w = dropout_model_parameter$prob
 
             # mean and variance of log-normal as a function of theta
             fmlnorm <- function(theta) {
@@ -689,8 +695,6 @@ getPrediction <- function(
           } else if (tolower(dropout_model_parameter$model) ==
                      "piecewise exponential") {
             # match the mean within each interval
-            k = dropout_model_parameter$ngroups
-            w = dropout_model_parameter$prob
             lambda = exp(dropout_model_parameter$theta)
             npieces = length(dropout_model_parameter$piecewiseDropoutTime)
             if (length(lambda) != k*npieces) {
