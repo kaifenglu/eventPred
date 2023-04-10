@@ -55,8 +55,8 @@
 #' To specify the event model used during the design-stage event
 #' prediction, the \code{event_fit} list should include the event model,
 #' \code{model}, the number of treatment groups,
-#' \code{ngroups}, the randomization probabilities for each group,
-#' \code{prob}, the model parameters, \code{theta},
+#' \code{ngroups}, the treatment allocation within a randomization
+#' block, \code{alloc}, the model parameters, \code{theta},
 #' and the covariance matrix, \code{vtheta}, both of which
 #' have \code{ngroups} blocks with the \code{j}-th block
 #' specifying the prior distribution of model
@@ -69,8 +69,8 @@
 #' To specify the dropout model used during the design stage
 #' event prediction, the \code{dropout_fit} list should include
 #' the dropout model, \code{model}, the number of treatment groups,
-#' \code{ngroups}, the randomization probabilities for each
-#' group, \code{prob}, the model parameters, \code{theta}, and
+#' \code{ngroups}, the treatment allocation within a randomization
+#' block, \code{alloc}, the model parameters, \code{theta}, and
 #' the covariance matrix ,\code{vtheta}, both of which have
 #' \code{ngroups} blocks with the \code{j}-th block specifying
 #' the prior distribution of model parameters for the
@@ -586,20 +586,35 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                               "event", "dropout"))))
 
     k = event_fit$ngroups # number of treatment groups
-    prob = event_fit$prob # randomization probabilities
+    if (k > 1) {
+      alloc = event_fit$alloc # treatment allocation within a block
+      if (length(alloc) == k-1) {
+        alloc = c(alloc, 1)
+      } else if (length(alloc) != k) {
+        stop("Incorrect length of alloc in event_fit")
+      }
+
+      blocksize = sum(alloc)
+      nblocks = ceiling(n1/blocksize)
+      treats = rep(1:k, alloc)
+    }
+
 
     for (i in 1:nreps) {
       arrivalTime = newSubjects$arrivalTime[newSubjects$draw == i]
 
       # draw treatment for each subject
-      w = rmultinom(n1, size = 1, prob = prob)  # k x n1 matrix
-      treatment = as.numeric((1:k) %*% w)
+      if (k>1) {
+        treatment = c(replicate(nblocks, sample(treats)))[1:n1]
+      } else {
+        treatment = rep(1, n1)
+      }
 
       # draw event time for new subjects
       survivalTime = rep(NA, n1)
       if (tolower(event_fit$model) == "exponential") {
         for (j in 1:k) {
-          cols = which(w[j,] == 1)
+          cols = which(treatment == j)
           if (length(cols) > 0) {
             rate = exp(theta2[[j]][i,])
             survivalTime[cols] = rexp(length(cols), rate)
@@ -607,7 +622,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         }
       } else if (tolower(event_fit$model) == "weibull") {
         for (j in 1:k) {
-          cols = which(w[j,] == 1)
+          cols = which(treatment == j)
           if (length(cols) > 0) {
             shape = exp(theta2[[j]][i,1])
             scale = exp(theta2[[j]][i,2])
@@ -616,7 +631,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         }
       } else if (tolower(event_fit$model) == "log-normal") {
         for (j in 1:k) {
-          cols = which(w[j,] == 1)
+          cols = which(treatment == j)
           if (length(cols) > 0) {
             meanlog = theta2[[j]][i,1]
             sdlog = exp(theta2[[j]][i,2])
@@ -627,7 +642,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         u = c(0, event_fit$knots) # left end points of the intervals
         J = length(u) # number of intervals
         for (j in 1:k) {
-          cols = which(w[j,] == 1)
+          cols = which(treatment == j)
           if (length(cols) > 0) {
             lambda = exp(theta2[[j]][i,]) # hazard rates in the intervals
             # partial sums of lambda*interval_width
@@ -649,7 +664,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
         if (tolower(dropout_fit$model) == "exponential") {
           for (j in 1:k) {
-            cols = which(w[j,] == 1)
+            cols = which(treatment == j)
             if (length(cols) > 0) {
               rate = exp(theta3[[j]][i,])
               dropoutTime[cols] = rexp(length(cols), rate)
@@ -657,7 +672,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           }
         } else if (tolower(dropout_fit$model) == "weibull") {
           for (j in 1:k) {
-            cols = which(w[j,] == 1)
+            cols = which(treatment == j)
             if (length(cols) > 0) {
               shape = exp(theta3[[j]][i,1])
               scale = exp(theta3[[j]][i,2])
@@ -666,7 +681,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           }
         } else if (tolower(dropout_fit$model) == "log-normal") {
           for (j in 1:k) {
-            cols = which(w[j,] == 1)
+            cols = which(treatment == j)
             if (length(cols) > 0) {
               meanlog = theta3[[j]][i,1]
               sdlog = exp(theta3[[j]][i,2])
@@ -677,7 +692,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           u = c(0, dropout_fit$knots) # left end points of the intervals
           J = length(u) # number of intervals
           for (j in 1:k) {
-            cols = which(w[j,] == 1)
+            cols = which(treatment == j)
             if (length(cols) > 0) {
               lambda = exp(theta3[[j]][i,]) # hazard rates in the intervals
               # partial sums of lambda*interval_width
