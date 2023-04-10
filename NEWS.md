@@ -18,6 +18,8 @@
 - removed the cutoff date from ongoing_pred_df before data cutoff
 - restricted enrollment model fitting to the last randomization date
 - added piecewise exponential dropout model
+- use delta method to obtain the variance of model parameters for pooled population
+- replace randomization probabilities with treatment allocation within a randomization block
 
 # eventPred 0.0.1
 
