@@ -298,7 +298,7 @@ getPrediction <- function(
 
   if (!is.null(dropout_model_parameter)) {
     erify::check_class(dropout_model_parameter, "list")
-    erify::check_content(tolower(dropout_model_parameter),
+    erify::check_content(tolower(dropout_model_parameter$model),
                          c("exponential", "weibull", "log-normal",
                            "piecewise exponential"))
 
