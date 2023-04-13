@@ -78,6 +78,11 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
                   n = dplyr::row_number())
 
+  df1u <- df1 %>%
+    dplyr::group_by(.data$randdt) %>%
+    dplyr::slice(dplyr::n()) %>%
+    dplyr::ungroup()
+
   # fit enrollment model
   if (tolower(enroll_model) == "poisson") {
     # lambda(t) = lambda
@@ -109,7 +114,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     }
 
     # slope in the last 1/4 "active" enrollment time interval
-    beta = (n0 - df1$n[df1$t >= 3/4*t0][1])/(1/4*t0)
+    beta = (n0 - df1u$n[df1u$t >= 3/4*t0])/(1/4*t0)
     mu0 = 2*n0/t0^2
     delta0 = mu0/beta
     theta <- c(log(mu0), log(delta0))
@@ -206,7 +211,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   # plot the enrollment curve
   fittedEnroll <- plotly::plot_ly() %>%
-    plotly::add_lines(data=df1, x=~t, y=~n, name="observed",
+    plotly::add_lines(data=df1u, x=~t, y=~n, name="observed",
                       line=list(shape="hv")) %>%
     plotly::add_lines(data=dffit1, x=~t, y=~n, name="fitted") %>%
     plotly::layout(
