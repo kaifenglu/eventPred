@@ -861,15 +861,6 @@ getPrediction <- function(
       if (showplot) print(enroll_pred$enroll_pred_plot)
 
       list(enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred)
-    } else if (tolower(to_predict) == "event only") {
-      if (showplot) print(event_pred$event_pred_plot)
-
-      if (!is.null(dropout_model_parameter)) {
-        list(event_fit = event_model_parameter,
-             dropout_fit = dropout_model_parameter, event_pred = event_pred)
-      } else {
-        list(event_fit = event_model_parameter, event_pred = event_pred)
-      }
     } else if (tolower(to_predict) == "enrollment and event") {
       if (showplot) print(event_pred$event_pred_plot)
 
