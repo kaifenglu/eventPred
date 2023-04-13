@@ -59,8 +59,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
     dplyr::mutate(adt = as.Date(.data$time - 1, origin = .data$randdt),
                   n = dplyr::row_number(),
                   parameter = "Enrollment",
-                  date = .data$randdt) %>%
-    dplyr::mutate(year = format(.data$date, format = "%Y"))
+                  date = .data$randdt)
 
   adslu <- adsl %>%
     dplyr::group_by(.data$randdt) %>%
@@ -70,8 +69,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   # extend enrollment information to cutoff date
   adsl1 <- adsl %>%
     dplyr::slice(dplyr::n()) %>%
-    dplyr::mutate(date = cutoffdt,
-                  year = format(.data$date, format = "%Y"))
+    dplyr::mutate(date = cutoffdt)
 
 
 
@@ -82,8 +80,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       dplyr::arrange(.data$adt) %>%
       dplyr::mutate(n = cumsum(.data$event),
                     parameter = "Event",
-                    date = .data$adt) %>%
-      dplyr::mutate(year = format(.data$date, format = "%Y"))
+                    date = .data$adt)
 
     adtteu <- adtte %>%
       dplyr::group_by(.data$adt) %>%
@@ -95,8 +92,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       dplyr::slice(1) %>%
       dplyr::mutate(randdt = trialsdt, adt = trialsdt, time = 1,
                     event = 0, dropout = 0,
-                    n = 0, parameter = "Event", date = trialsdt) %>%
-      dplyr::mutate(year = format(.data$date, format = "%Y"))
+                    n = 0, parameter = "Event", date = trialsdt)
 
     # combine enrollment and time to event data
     ad <- adslu %>%
@@ -109,27 +105,20 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   }
 
 
-  # use number of months between first and last dates to determine ticks
-  n_months = lubridate::interval(min(ad$date), max(ad$date)) %/% months(1)
-  bw = fbw(n_months)
-
-
   # plot cumulative enrollment and event data
   if (length(unique(ad$parameter)) > 1) {
     cumAccrual <- plotly::plot_ly(
       ad, x=~date, y=~n, color=~parameter, colors=c("blue", "red")) %>%
       plotly::add_lines(line = list(shape = "hv")) %>%
       plotly::layout(
-        xaxis = list(title = "",
-                     tickmode = "linear", dtick = bw),
+        xaxis = list(title = ""),
         yaxis = list(zeroline = FALSE),
         legend = list(x = 0, y = 1.2, orientation = 'h'))
   } else {
     cumAccrual <- plotly::plot_ly(ad, x=~date, y=~n) %>%
       plotly::add_lines(line = list(shape = "hv")) %>%
       plotly::layout(
-        xaxis = list(title = "",
-                     tickmode = "linear", dtick = bw),
+        xaxis = list(title = ""),
         yaxis = list(zeroline = FALSE),
         title = list(text = "Cumulative enrollment"))
   }
@@ -143,12 +132,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
     n = as.numeric(table(factor(t, levels = days)))
 
     enroll <- dplyr::tibble(day = days, n = n) %>%
-      dplyr::mutate(date = as.Date(.data$day - 1, origin = trialsdt),
-                    year = format(.data$date, format = "%Y"))
-
-    n_months = lubridate::interval(min(enroll$date),
-                                   max(enroll$date)) %/% months(1)
-    bw = fbw(n_months)
+      dplyr::mutate(date = as.Date(.data$day - 1, origin = trialsdt))
 
     fit <- loess.smooth(enroll$date, enroll$n,
                         span = 1/3, degree = 1,
@@ -157,8 +141,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
     dailyAccrual <- plotly::plot_ly(enroll, x=~date, y=~n, name="observed",
                                     type='scatter', mode='markers') %>%
       plotly::add_lines(x = fit$x, y = fit$y, name="loess") %>%
-      plotly::layout(xaxis = list(title = "",
-                                  tickmode = "linear", dtick = bw),
+      plotly::layout(xaxis = list(title = ""),
                      yaxis = list(zeroline = FALSE),
                      title = list(text = "Daily enrollment")) %>%
       plotly::hide_legend()
