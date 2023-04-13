@@ -278,15 +278,20 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     # arrival time for subjects already enrolled before data cut
     dfa <- df %>%
       dplyr::mutate(lower = NA, upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::group_by(.data$t) %>%
+      dplyr::slice(dplyr::n()) %>%
+      dplyr::ungroup()
 
     # extend observed to cutoff date
-    dfa1 <- dfa %>%
-      dplyr::slice(dplyr::n()) %>%
-      dplyr::mutate(t = t0)
+    if (max(dfa$t) < t0) {
+      dfa1 <- dfa %>%
+        dplyr::slice(dplyr::n()) %>%
+        dplyr::mutate(t = t0)
 
-    dfa <- dfa %>%
-      dplyr::bind_rows(dfa1)
+      dfa <- dfa %>%
+        dplyr::bind_rows(dfa1)
+    }
 
     # concatenate subjects enrolled before and after data cut
     dfs <- dfa %>%
