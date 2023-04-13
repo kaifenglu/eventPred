@@ -172,6 +172,9 @@ getPrediction <- function(
   if (!is.na(target_d)) erify::check_n(target_d)
   if (is.na(target_n) && is.na(target_d))
     stop("At least one of target_n and target_d must be specified.")
+  if (!is.na(target_n) && !is.na(target_d) && target_d > target_n)
+    stop("target_d cannot exceed target_n.")
+
 
   erify::check_content(tolower(enroll_model),
                        c("poisson", "time-decay", "b-spline",
@@ -181,7 +184,7 @@ getPrediction <- function(
   erify::check_n(lags, zero = TRUE)
 
   if (accrualTime[1] != 0) {
-    stop("accrualTime must start with 0");
+    stop("accrualTime must start with 0")
   }
   if (length(accrualTime) > 1 && any(diff(accrualTime) <= 0)) {
     stop("accrualTime should be increasing")
@@ -189,6 +192,9 @@ getPrediction <- function(
 
   if (!is.null(enroll_model_parameter)) {
     erify::check_class(enroll_model_parameter, "list")
+    erify::check_content(tolower(enroll_model_parameter$model),
+                         c("poisson", "time-decay", "piecewise poisson"))
+
     if (!is.null(df)) {
       if (tolower(enroll_model_parameter$model) != tolower(enroll_model)) {
         stop("Prior and likelihood must use the same enrollment model.")
@@ -197,10 +203,6 @@ getPrediction <- function(
       if (tolower(enroll_model_parameter$model) == "piecewise poisson" &&
           !all.equal(enroll_model_parameter$accrualTime, accrualTime)) {
         stop("Knots for piecewise Poisson must be the same for prior.")
-      }
-
-      if (tolower(enroll_model_parameter$model) == "b-spline") {
-        stop("B-spline enrollment model cannot be used as prior.")
       }
     }
   }
@@ -211,7 +213,7 @@ getPrediction <- function(
                          "piecewise exponential", "model averaging"))
 
   if (piecewiseSurvivalTime[1] != 0) {
-    stop("piecewiseSurvivalTime must start with 0");
+    stop("piecewiseSurvivalTime must start with 0")
   }
   if (length(piecewiseSurvivalTime) > 1 &&
       any(diff(piecewiseSurvivalTime) <= 0)) {
@@ -220,6 +222,53 @@ getPrediction <- function(
 
   if (!is.null(event_model_parameter)) {
     erify::check_class(event_model_parameter, "list")
+    erify::check_content(tolower(event_model_parameter$model),
+                         c("exponential", "weibull", "log-normal",
+                           "piecewise exponential"))
+
+    if (length(event_model_parameter$alloc) !=
+        event_model_parameter$ngroups) {
+      stop(paste("Number of treatments in alloc must be equal to ngroups",
+                 "in event_model_parameter"))
+    }
+
+    if (nrow(event_model_parameter$vtheta) !=
+        length(event_model_parameter$theta) ||
+        ncol(event_model_parameter$vtheta) !=
+        length(event_model_parameter$theta)) {
+      stop(paste("Dimensions of vtheta must be compatible with the length",
+                 "of theta in event_model_parameter"))
+    }
+
+    if ((tolower(event_model_parameter$model) == "exponential" &&
+         length(event_model_parameter$theta) !=
+         event_model_parameter$ngroups) ||
+        (tolower(event_model_parameter$model) == "weibull" &&
+         length(event_model_parameter$theta) !=
+         2*event_model_parameter$ngroups) ||
+        (tolower(event_model_parameter$model) == "log-normal" &&
+         length(event_model_parameter$theta) !=
+         2*event_model_parameter$ngroups) ||
+        (tolower(event_model_parameter$model) == "piecewise_exponential" &&
+         length(event_model_parameter$theta) !=
+         length(event_model_parameter$piecewiseSurvivalTime)*
+         event_model_parameter$ngroups)) {
+      stop(paste("Length of theta must be compatible with ngroups",
+                 "in event_model_parameter"))
+    }
+
+    if (tolower(event_model_parameter$model) == "piecewise_exponential") {
+      if (event_model_parameter$piecewiseSurvivalTime[1] != 0) {
+        stop(paste("piecewiseSurvivalTime must start with 0",
+                   "in event_model_parameter"))
+      }
+      if (length(event_model_parameter$piecewiseSurvivalTime) > 1 &&
+          any(diff(event_model_parameter$piecewiseSurvivalTime) <= 0)) {
+        stop(paste("piecewiseSurvivalTime should be increasing",
+                   "in event_model_parameter"))
+      }
+    }
+
     if (!is.null(df)) {
       if (tolower(event_model_parameter$model) != tolower(event_model)) {
         stop("Prior and likelihood must use the same event model.")
@@ -231,10 +280,6 @@ getPrediction <- function(
         stop(paste("Knots for piecewise exponential survival must be",
         "the same for prior."))
       }
-
-      if (tolower(event_model_parameter$model) == "model averaging") {
-        stop("Model averaging event model cannot be used as prior.")
-      }
     }
   }
 
@@ -243,15 +288,64 @@ getPrediction <- function(
                          "piecewise exponential"))
 
   if (piecewiseDropoutTime[1] != 0) {
-    stop("piecewiseDropoutTime must start with 0");
+    stop("piecewiseDropoutTime must start with 0")
   }
   if (length(piecewiseDropoutTime) > 1 &&
       any(diff(piecewiseDropoutTime) <= 0)) {
     stop("piecewiseDropoutTime should be increasing")
   }
 
+
   if (!is.null(dropout_model_parameter)) {
     erify::check_class(dropout_model_parameter, "list")
+    erify::check_content(tolower(dropout_model_parameter),
+                         c("exponential", "weibull", "log-normal",
+                           "piecewise exponential"))
+
+    if (length(dropout_model_parameter$alloc) !=
+        dropout_model_parameter$ngroups) {
+      stop(paste("Number of treatments in alloc must be equal to ngroups",
+                 "in dropout_model_parameter"))
+    }
+
+    if (nrow(dropout_model_parameter$vtheta) !=
+        length(dropout_model_parameter$theta) ||
+        ncol(dropout_model_parameter$vtheta) !=
+        length(dropout_model_parameter$theta)) {
+      stop(paste("Dimensions of vtheta must be compatible with the length",
+                 "of theta in dropout_model_parameter"))
+    }
+
+    if ((tolower(dropout_model_parameter$model) == "exponential" &&
+         length(dropout_model_parameter$theta) !=
+         dropout_model_parameter$ngroups) ||
+        (tolower(dropout_model_parameter$model) == "weibull" &&
+         length(dropout_model_parameter$theta) !=
+         2*dropout_model_parameter$ngroups) ||
+        (tolower(dropout_model_parameter$model) == "log-normal" &&
+         length(dropout_model_parameter$theta) !=
+         2*dropout_model_parameter$ngroups) ||
+        (tolower(dropout_model_parameter$model) == "piecewise_exponential" &&
+         length(dropout_model_parameter$theta) !=
+         length(dropout_model_parameter$piecewiseDropoutTime)*
+         dropout_model_parameter$ngroups)) {
+      stop(paste("Length of theta must be compatible with ngroups",
+                 "in dropout_model_parameter"))
+    }
+
+    if (tolower(dropout_model_parameter$model) == "piecewise_exponential") {
+      if (dropout_model_parameter$piecewiseDropoutTime[1] != 0) {
+        stop(paste("piecewiseDropoutTime must start with 0",
+                   "in dropout_model_parameter"))
+      }
+      if (length(dropout_model_parameter$piecewiseDropoutTime) > 1 &&
+          any(diff(dropout_model_parameter$piecewiseDropoutTime) <= 0)) {
+        stop(paste("piecewiseDropoutTime should be increasing",
+                   "in dropout_model_parameter"))
+      }
+    }
+
+
     if (!is.null(df)) {
       if (tolower(dropout_model_parameter$model) != tolower(dropout_model)) {
         stop("Prior and likelihood must use the same dropout model.")
@@ -263,12 +357,22 @@ getPrediction <- function(
         stop(paste("Knots for piecewise exponential dropout must be",
                    "the same for prior."))
       }
+    }
 
-      if (tolower(dropout_model_parameter$model) == "none") {
-        stop("None dropout model cannot be used as prior.")
+
+    if (!is.null(event_model_parameter)) {
+      if (event_model_parameter$ngroups != dropout_model_parameter$ngroups) {
+        stop(paste("Number of treatments must match between",
+                   "event_model_parameter and dropout_model_parameter"))
+      }
+
+      if (event_model_parameter$alloc != dropout_model_parameter$alloc) {
+        stop(paste("Treatment allocation must match between",
+                   "event_model_parameter and dropout_model_parameter"))
       }
     }
   }
+
 
   erify::check_bool(fixedFollowup)
   erify::check_positive(followupTime)
@@ -296,6 +400,7 @@ getPrediction <- function(
     # summarize observed data
     observed <- summarizeObserved(df, to_predict, showplot)
   }
+
 
   # fit and predict enrollment
   if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
@@ -346,6 +451,7 @@ getPrediction <- function(
     }
   }
 
+
   # fit and predict event
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     if (!is.null(df)) { # event prediction at analysis stage
@@ -356,11 +462,6 @@ getPrediction <- function(
       if (!is.null(event_model_parameter)) {
         k = event_model_parameter$ngroups
         alloc = event_model_parameter$alloc
-        if (length(alloc) == k-1) {
-          alloc = c(alloc, 1)
-        } else if (length(alloc) != k) {
-          stop("Incorrect length of alloc in event_model_parameter")
-        }
         w = alloc/sum(alloc)
 
         if (tolower(event_model_parameter$model) == "exponential") {
@@ -492,11 +593,6 @@ getPrediction <- function(
           # match the mean within each interval
           lambda = exp(event_model_parameter$theta)
           npieces = length(event_model_parameter$piecewiseSurvivalTime)
-          if (length(lambda) != k*npieces) {
-            stop(paste("Number of hazard rate parameters does not match",
-                       "number of pieces for piecewise exponential",
-                       "survival"))
-          }
 
           # construct theta and vtheta piece by piece
           theta1 = rep(NA, npieces)
@@ -561,11 +657,7 @@ getPrediction <- function(
         if (!is.null(dropout_model_parameter)) {
           k = dropout_model_parameter$ngroups
           alloc = dropout_model_parameter$alloc
-          if (length(alloc) == k-1) {
-            alloc = c(alloc, 1)
-          } else if (length(alloc) != k) {
-            stop("Incorrect length of alloc in dropout_model_parameter")
-          }
+
           w = alloc/sum(alloc)
 
           if (tolower(dropout_model_parameter$model) == "exponential") {
@@ -697,11 +789,6 @@ getPrediction <- function(
             # match the mean within each interval
             lambda = exp(dropout_model_parameter$theta)
             npieces = length(dropout_model_parameter$piecewiseDropoutTime)
-            if (length(lambda) != k*npieces) {
-              stop(paste("Number of hazard rate parameters does not match",
-                         "number of pieces for piecewise exponential",
-                         "dropout"))
-            }
 
             # construct theta and vtheta piece by piece
             theta1 = rep(NA, npieces)
