@@ -119,15 +119,107 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   }
 
   erify::check_class(event_fit, "list")
-  erify::check_content(tolower(event_fit$model),
-                       c("exponential", "weibull", "log-normal",
-                         "piecewise exponential", "model averaging"))
+  if (!is.null(df)) {
+    erify::check_content(tolower(event_fit$model),
+                         c("exponential", "weibull", "log-normal",
+                           "piecewise exponential", "model averaging"))
+  } else { # design stage
+    erify::check_content(tolower(event_fit$model),
+                         c("exponential", "weibull", "log-normal",
+                           "piecewise exponential"))
+
+    if (length(event_fit$alloc) != event_fit$ngroups) {
+      stop(paste("Number of treatments in alloc must be equal to ngroups",
+                 "in event_fit"))
+    }
+
+    if (nrow(event_fit$vtheta) != length(event_fit$theta) ||
+        ncol(event_fit$vtheta) != length(event_fit$theta)) {
+      stop(paste("Dimensions of vtheta must be compatible with the length",
+                 "of theta in event_fit"))
+    }
+
+    if ((tolower(event_fit$model) == "exponential" &&
+         length(event_fit$theta) != event_fit$ngroups) ||
+        (tolower(event_fit$model) == "weibull" &&
+         length(event_fit$theta) != 2*event_fit$ngroups) ||
+        (tolower(event_fit$model) == "log-normal" &&
+         length(event_fit$theta) != 2*event_fit$ngroups) ||
+        (tolower(event_fit$model) == "piecewise_exponential" &&
+         length(event_fit$theta) !=
+         length(event_fit$piecewiseSurvivalTime)*event_fit$ngroups)) {
+      stop(paste("Length of theta must be compatible with ngroups",
+                 "in event_fit"))
+    }
+
+    if (tolower(event_fit$model) == "piecewise_exponential") {
+      if (event_fit$piecewiseSurvivalTime[1] != 0) {
+        stop(paste("piecewiseSurvivalTime must start with 0",
+                   "in event_fit"))
+      }
+      if (length(event_fit$piecewiseSurvivalTime) > 1 &&
+          any(diff(event_fit$piecewiseSurvivalTime) <= 0)) {
+        stop(paste("piecewiseSurvivalTime should be increasing",
+                   "in event_fit"))
+      }
+    }
+  }
+
 
   if (!is.null(dropout_fit)) {
     erify::check_class(dropout_fit, "list")
     erify::check_content(tolower(dropout_fit$model),
                          c("exponential", "weibull", "log-normal",
                            "piecewise exponential"))
+
+    if (is.null(df)) { # design stage
+      if (length(dropout_fit$alloc) != dropout_fit$ngroups) {
+        stop(paste("Number of treatments in alloc must be equal to ngroups",
+                   "in dropout_fit"))
+      }
+
+      if (nrow(dropout_fit$vtheta) != length(dropout_fit$theta) ||
+          ncol(dropout_fit$vtheta) != length(dropout_fit$theta)) {
+        stop(paste("Dimensions of vtheta must be compatible with the length",
+                   "of theta in dropout_fit"))
+      }
+
+      if ((tolower(dropout_fit$model) == "exponential" &&
+           length(dropout_fit$theta) != dropout_fit$ngroups) ||
+          (tolower(dropout_fit$model) == "weibull" &&
+           length(dropout_fit$theta) != 2*dropout_fit$ngroups) ||
+          (tolower(dropout_fit$model) == "log-normal" &&
+           length(dropout_fit$theta) != 2*dropout_fit$ngroups) ||
+          (tolower(dropout_fit$model) == "piecewise_exponential" &&
+           length(dropout_fit$theta) !=
+           length(dropout_fit$piecewiseDropoutTime)*dropout_fit$ngroups)) {
+        stop(paste("Length of theta must be compatible with ngroups",
+                   "in dropout_fit"))
+      }
+
+      if (tolower(dropout_fit$model) == "piecewise_exponential") {
+        if (dropout_fit$piecewiseDropoutTime[1] != 0) {
+          stop(paste("piecewiseDropoutTime must start with 0",
+                     "in dropout_fit"))
+        }
+        if (length(dropout_fit$piecewiseDropoutTime) > 1 &&
+            any(diff(dropout_fit$piecewiseDropoutTime) <= 0)) {
+          stop(paste("piecewiseDropoutTime should be increasing",
+                     "in dropout_fit"))
+        }
+      }
+
+
+      if (event_fit$ngroups != dropout_fit$ngroups) {
+        stop(paste("Number of treatments must match between",
+                   "event_fit and dropout_fit"))
+      }
+
+      if (event_fit$alloc != dropout_fit$alloc) {
+        stop(paste("Treatment allocation must match between",
+                   "event_fit and dropout_fit"))
+      }
+    }
   }
 
   erify::check_bool(fixedFollowup)
@@ -215,8 +307,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
 
   if (!is.null(newSubjects)) {
-    # arrival time for new subjects enrolled after data cut
-    n1 = nrow(newSubjects)/nreps
 
     # lower and upper percentages
     plower = (1 - pilevel)/2
@@ -258,8 +348,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         dplyr::mutate(parameter = "Enrollment")
     }
   } else {
-    # existing subjects only
-    n1 = 0
 
     # add predicted from data cut to specified years after data cut
     dfb1 <- dfa1 %>%
@@ -376,13 +464,28 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   # generate the event and dropout times
   if (!is.null(df)) { # analysis stage event prediction
     # output data frame
-    m = r0 + n1 # number of ongoing and new subjects
+    if (!is.null(newSubjects)) {
+      m1 = nrow(newSubjects)
+    } else {
+      m1 = 0
+    }
+
     newEvents = dplyr::as_tibble(matrix(
-      nrow = nreps*m, ncol = 5,
+      nrow = nreps*r0 + m1, ncol = 5,
       dimnames = list(NULL, c("draw", "arrivalTime", "time", "event",
                               "dropout"))))
 
+    offset = 0
     for (i in 1:nreps) {
+      # number of new subjects in the simulated data set
+      if (m1 > 0) {
+        n1 = nrow(newSubjects %>% dplyr::filter(.data$draw == i))
+      } else {
+        n1 = 0
+      }
+
+      m = r0 + n1
+
       # concatenate arrival time for ongoing and new subjects
       if (n1 > 0) {
         arrivalTimeNew = newSubjects$arrivalTime[newSubjects$draw == i]
@@ -580,30 +683,25 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       }
 
       # fill out the ith block of output data frame
-      index = (i-1)*m + (1:m)
+      index = offset + (1:m)
       newEvents[index, "draw"] = i
       newEvents[index, "arrivalTime"] = arrivalTime
       newEvents[index, "time"] = time
       newEvents[index, "event"] = event
       newEvents[index, "dropout"] = dropout
+      offset = offset + m
     }
   } else { # design stage event prediction
     # output data frame
-    m = n1 # number of subjects
+    n1 = nrow(newSubjects)/nreps
     newEvents = dplyr::as_tibble(matrix(
-      nrow = nreps*m, ncol = 6,
+      nrow = nreps*n1, ncol = 6,
       dimnames = list(NULL, c("draw", "arrivalTime", "treatment", "time",
                               "event", "dropout"))))
 
     k = event_fit$ngroups # number of treatment groups
     if (k > 1) {
       alloc = event_fit$alloc # treatment allocation within a block
-      if (length(alloc) == k-1) {
-        alloc = c(alloc, 1)
-      } else if (length(alloc) != k) {
-        stop("Incorrect length of alloc in event_fit")
-      }
-
       blocksize = sum(alloc)
       nblocks = ceiling(n1/blocksize)
       treats = rep(1:k, alloc)
@@ -743,7 +841,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       }
 
       # fill out the ith block of output data frame
-      index = (i-1)*m + (1:m)
+      index = (i-1)*n1 + (1:n1)
       newEvents[index, "draw"] = i
       newEvents[index, "arrivalTime"] = arrivalTime
       newEvents[index, "treatment"] = treatment
