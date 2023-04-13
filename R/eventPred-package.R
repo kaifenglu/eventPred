@@ -116,7 +116,6 @@
 #'   summarize tibble
 #' @importFrom plotly plot_ly add_lines add_ribbons hide_legend layout
 #' @importFrom survival Surv survfit survreg
-#' @importFrom lubridate interval
 #' @importFrom splines bs
 #' @importFrom Matrix bdiag
 #' @importFrom mvtnorm rmvnorm
