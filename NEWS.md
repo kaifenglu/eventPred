@@ -20,6 +20,8 @@
 - added piecewise exponential dropout model
 - use delta method to obtain the variance of model parameters for pooled population
 - replace randomization probabilities with treatment allocation within a randomization block
+- allow number of subjects to differ among simulated data sets
+- remove custom date axis
 
 # eventPred 0.0.1
 
