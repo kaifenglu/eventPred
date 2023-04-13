@@ -296,17 +296,12 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     # concatenate subjects enrolled before and after data cut
     dfs <- dfa %>%
       dplyr::bind_rows(dfb) %>%
-      dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-      dplyr::mutate(year = format(.data$date, format = "%Y"))
+      dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt))
 
 
     # separate data into observed and predicted
     dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
     dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
-
-    n_months = lubridate::interval(min(dfs$date),
-                                   max(dfs$date)) %/% months(1)
-    bw = fbw(n_months)
 
     # plot the enrollment data with month as x-axis label
     g1 <- plotly::plot_ly() %>%
@@ -330,9 +325,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                            text = 'cutoff', xanchor = "left",
                            font = list(size=12),
                            showarrow = FALSE),
-        xaxis = list(title = "",
-                     zeroline = FALSE,
-                     tickmode = "linear", dtick = bw),
+        xaxis = list(title = "", zeroline = FALSE),
         yaxis = list(title = "Subjects", zeroline = FALSE),
         legend = list(x = 0, y = 1.2, orientation = "h"))
   } else {
