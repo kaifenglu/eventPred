@@ -15,7 +15,6 @@ Imports:
     rlang (>= 1.0.6),
     plotly (>= 4.10.1),
     survival (>= 2.41-3),
-    lubridate (>= 1.8.0),
     splines (>= 3.5.0),
     Matrix (>= 1.2-14),
     mvtnorm (>= 1.1-3),
