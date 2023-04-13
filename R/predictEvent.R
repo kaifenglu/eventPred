@@ -186,6 +186,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     r0 = 0
   }
 
+
   # time zero
   df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA)
 
@@ -196,16 +197,22 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
                     n = dplyr::row_number()) %>%
       dplyr::mutate(lower = NA, upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::group_by(.data$t) %>%
+      dplyr::slice(dplyr::n()) %>%
+      dplyr::ungroup()
 
     # extend observed to cutoff date
-    dfa1 <- dfa %>%
-      dplyr::slice(dplyr::n()) %>%
-      dplyr::mutate(t = t0)
+    if (max(dfa$t) < t0) {
+      dfa1 <- dfa %>%
+        dplyr::slice(dplyr::n()) %>%
+        dplyr::mutate(t = t0)
 
-    dfa <- dfa %>%
-      dplyr::bind_rows(dfa1)
+      dfa <- dfa %>%
+        dplyr::bind_rows(dfa1)
+    }
   }
+
 
   if (!is.null(newSubjects)) {
     # arrival time for new subjects enrolled after data cut
@@ -268,6 +275,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::mutate(year = format(.data$date, format = "%Y")) %>%
       dplyr::mutate(parameter = "Enrollment")
   }
+
 
   # extract posterior draws of model parameters
   if (!is.null(df)) { # analysis stage event prediction
@@ -334,6 +342,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     }
   }
 
+
   # define distribution function for model averaging
   if (tolower(event_fit$model) == "model averaging") {
     if (is.null(df)) {
@@ -362,6 +371,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         u*pmodavg(time0, theta, w1, lower.tail = FALSE)
     }
   }
+
 
   # generate the event and dropout times
   if (!is.null(df)) { # analysis stage event prediction
@@ -823,7 +833,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                     n = cumsum(.data$event),
                     lower = NA,
                     upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::group_by(.data$t) %>%
+      dplyr::slice(dplyr::n()) %>%
+      dplyr::ungroup()
 
     # observed number of dropouts before data cut
     dfc <- df %>%
@@ -832,7 +845,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                     n = cumsum(.data$dropout),
                     lower = NA,
                     upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::group_by(.data$t) %>%
+      dplyr::slice(dplyr::n()) %>%
+      dplyr::ungroup()
 
     # observed number of subjects at risk before (not including) data cutoff
     t2 = setdiff(sort(unique(round(c(df$arrivalTime, df$totalTime)))), t0)
