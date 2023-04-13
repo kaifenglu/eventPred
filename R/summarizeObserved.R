@@ -44,8 +44,8 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
 
   trialsdt = min(df$randdt)
   cutoffdt = df$cutoffdt[1]
-  n0 = nrow(df)  # current number of subjects enrolled
   t0 = as.numeric(cutoffdt - trialsdt + 1)
+  n0 = nrow(df)  # current number of subjects enrolled
 
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     d0 = sum(df$event)  # current number of events
@@ -62,11 +62,18 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                   date = .data$randdt) %>%
     dplyr::mutate(year = format(.data$date, format = "%Y"))
 
+  adslu <- adsl %>%
+    dplyr::group_by(.data$randdt) %>%
+    dplyr::slice(dplyr::n()) %>%
+    dplyr::ungroup()
+
   # extend enrollment information to cutoff date
   adsl1 <- adsl %>%
     dplyr::slice(dplyr::n()) %>%
     dplyr::mutate(date = cutoffdt,
                   year = format(.data$date, format = "%Y"))
+
+
 
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     # time to event data
@@ -78,20 +85,26 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                     date = .data$adt) %>%
       dplyr::mutate(year = format(.data$date, format = "%Y"))
 
+    adtteu <- adtte %>%
+      dplyr::group_by(.data$adt) %>%
+      dplyr::slice(dplyr::n()) %>%
+      dplyr::ungroup()
+
     # dummy subject to initialize time to event axis at trial start
-    adtte0 <- df %>% dplyr::slice(1) %>%
+    adtte0 <- adtte %>%
+      dplyr::slice(1) %>%
       dplyr::mutate(randdt = trialsdt, adt = trialsdt, time = 1,
                     event = 0, dropout = 0,
                     n = 0, parameter = "Event", date = trialsdt) %>%
       dplyr::mutate(year = format(.data$date, format = "%Y"))
 
     # combine enrollment and time to event data
-    ad <- adsl %>%
+    ad <- adslu %>%
       dplyr::bind_rows(adsl1) %>%
       dplyr::bind_rows(adtte0) %>%
-      dplyr::bind_rows(adtte)
+      dplyr::bind_rows(adtteu)
   } else {
-    ad <- adsl %>%
+    ad <- adslu %>%
       dplyr::bind_rows(adsl1)
   }
 
@@ -197,8 +210,8 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
       # enrollment and event
-      list(trialsdt = trialsdt, cutoffdt = cutoffdt,
-           n0 = n0, t0 = t0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
+      list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+           n0 = n0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
            adtte = adtte, event_km_df = kmdfEvent,
            dropout_km_df = kmdfDropout,
            cum_accrual_plot = cumAccrual,
@@ -206,8 +219,8 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
            event_km_plot = kmEvent,
            dropout_km_plot = kmDropout)
     } else { # event only
-      list(trialsdt = trialsdt, cutoffdt = cutoffdt,
-           n0 = n0, t0 = t0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
+      list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+           n0 = n0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
            adtte = adtte, event_km_df = kmdfEvent,
            dropout_km_df = kmdfDropout,
            cum_accrual_plot = cumAccrual,
@@ -215,8 +228,8 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
            dropout_km_plot = kmDropout)
     }
   } else { # enrollment only
-    list(trialsdt = trialsdt, cutoffdt = cutoffdt,
-         n0 = n0, t0 = t0, adsl = adsl,
+    list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+         n0 = n0, adsl = adsl,
          cum_accrual_plot = cumAccrual,
          daily_accrual_plot = dailyAccrual)
   }
