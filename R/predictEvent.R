@@ -339,7 +339,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       enroll_pred_df <- dfa %>%
         dplyr::bind_rows(dfb) %>%
         dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(year = format(.data$date, format = "%Y")) %>%
         dplyr::mutate(parameter = "Enrollment")
     } else {
       # new subjects only
@@ -360,7 +359,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::bind_rows(dfb1) %>%
       dplyr::bind_rows(dfb2) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-      dplyr::mutate(year = format(.data$date, format = "%Y")) %>%
       dplyr::mutate(parameter = "Enrollment")
   }
 
@@ -966,7 +964,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::bind_rows(dfa) %>%
       dplyr::bind_rows(dfb) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-      dplyr::mutate(year = format(.data$date, format = "%Y")) %>%
       dplyr::mutate(parameter = "Event")
 
     # add time zero and concatenate dropouts before and after data cut
@@ -974,7 +971,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::bind_rows(dfc) %>%
       dplyr::bind_rows(dfd) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-      dplyr::mutate(year = format(.data$date, format = "%Y")) %>%
       dplyr::mutate(parameter = "Dropout")
 
     # add time zero and concatenate ongoing subjects before and after data cut
@@ -982,7 +978,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::bind_rows(dfe) %>%
       dplyr::bind_rows(dff) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-      dplyr::mutate(year = format(.data$date, format = "%Y")) %>%
       dplyr::mutate(parameter = "Ongoing")
   } else {
     event_pred_df <- df0 %>%
@@ -1018,10 +1013,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
     dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
-    n_months = lubridate::interval(min(dfs$date),
-                                   max(dfs$date)) %/% months(1)
-    bw = fbw(n_months)
-
     p1 <- plotly::plot_ly() %>%
       plotly::add_ribbons(
         data = dfb, x = ~date, ymin = ~lower, ymax = ~upper,
@@ -1042,9 +1033,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                            text = 'cutoff', xanchor = "left",
                            font = list(size=12),
                            showarrow = FALSE),
-        xaxis = list(title = "",
-                     zeroline = FALSE,
-                     tickmode = "linear", dtick = bw),
+        xaxis = list(title = "", zeroline = FALSE),
         yaxis = list(zeroline = FALSE),
         legend = list(x = 0, y = 1.2, orientation = 'h'))
 
