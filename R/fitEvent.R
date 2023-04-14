@@ -234,7 +234,7 @@ fitEvent <- function(df, event_model = "model averaging",
       yaxis = list(title = "Survival probability", zeroline = FALSE),
       title = list(text = "Fitted time to event survival curve"),
       annotations = list(
-        x = c(0.75, 0.75), y = c(0.95, 0.88),
+        x = c(0.75, 0.75), y = c(0.95, 0.85),
         xref = "paper", yref = "paper",
         text = paste('<i>', c(fit2$model, bictext), '</i>'),
         xanchor = "left",
