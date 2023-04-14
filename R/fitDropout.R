@@ -6,7 +6,7 @@
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
 #'   "Weibull", "log-normal", or "piecewise exponential". By default,
-#'   it is set to "Weibull".
+#'   it is set to "exponential".
 #' @param piecewiseDropoutTime A vector that specifies the time
 #'   intervals for the piecewise exponential dropout distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
@@ -32,7 +32,7 @@
 #'
 #' @export
 #'
-fitDropout <- function(df, dropout_model = "weibull",
+fitDropout <- function(df, dropout_model = "exponential",
                        piecewiseDropoutTime = 0, showplot = TRUE) {
   erify::check_class(df, "data.frame")
 
@@ -55,10 +55,10 @@ fitDropout <- function(df, dropout_model = "weibull",
   names(df) <- tolower(names(df))
 
   n0 = nrow(df)
-  d0 = sum(df$dropout)
+  c0 = sum(df$dropout)
   ex0 = sum(df$time)
 
-  erify::check_positive(d0, supplement = paste(
+  erify::check_positive(c0, supplement = paste(
     "The number of dropouts must be positive to fit a dropout model."))
 
   kmfit <- survival::survfit(survival::Surv(time, dropout) ~ 1, data = df)
@@ -71,9 +71,9 @@ fitDropout <- function(df, dropout_model = "weibull",
     # S(t) = exp(-lambda*t)
 
     fit3 <- list(model = 'Exponential',
-                 theta = log(d0/ex0),
-                 vtheta = 1/d0,
-                 bic = -2*(-d0 + d0*log(d0/ex0)) + log(n0))
+                 theta = log(c0/ex0),
+                 vtheta = 1/c0,
+                 bic = -2*(-c0 + c0*log(c0/ex0)) + log(n0))
 
     # fitted survival curve
     dffit3 <- dplyr::tibble(
@@ -174,7 +174,7 @@ fitDropout <- function(df, dropout_model = "weibull",
       yaxis = list(title = "Survival probability", zeroline = FALSE),
       title = list(text = "Fitted time to dropout survival curve"),
       annotations = list(
-        x = c(0.75, 0.75), y = c(0.95, 0.88),
+        x = c(0.75, 0.75), y = c(0.95, 0.85),
         xref = "paper", yref = "paper",
         text = paste('<i>', c(fit3$model, bictext), '</i>'),
         xanchor = "left",
