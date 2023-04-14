@@ -1,3 +1,9 @@
+# eventPred 0.1.1
+
+- add stage and to_predict information in getPrediction output
+- add the cutoff time point to the number of ongoing subjects
+- change the default model for dropout to exponential
+
 # eventPred 0.1.0
 
 - added the piecewise Poisson model to fitEnrollment and predictEnrollment at the analysis stage
