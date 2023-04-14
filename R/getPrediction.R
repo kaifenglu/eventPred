@@ -366,7 +366,8 @@ getPrediction <- function(
                    "event_model_parameter and dropout_model_parameter"))
       }
 
-      if (event_model_parameter$alloc != dropout_model_parameter$alloc) {
+      if (!all.equal(event_model_parameter$alloc,
+                     dropout_model_parameter$alloc)) {
         stop(paste("Treatment allocation must match between",
                    "event_model_parameter and dropout_model_parameter"))
       }
@@ -914,54 +915,69 @@ getPrediction <- function(
 
 
   # output results
-  if (!is.null(df)) { # analysis stage prediction
+  if (is.null(df)) { # design stage prediction
     if (tolower(to_predict) == "enrollment only") {
       if (showplot) print(enroll_pred$enroll_pred_plot)
 
-      list(observed = observed, enroll_fit = enroll_fit,
-           enroll_pred = enroll_pred)
-    } else if (tolower(to_predict) == "event only") {
-      if (showplot) print(event_pred$event_pred_plot)
-
-      if (tolower(dropout_model) != "none") {
-        list(observed = observed, event_fit = event_fit,
-             dropout_fit = dropout_fit, event_pred = event_pred)
-      } else {
-        list(observed = observed, event_fit = event_fit,
-             event_pred = event_pred)
-      }
-    } else if (tolower(to_predict) == "enrollment and event") {
-      if (showplot) print(event_pred$event_pred_plot)
-
-      if (tolower(dropout_model) != "none") {
-        list(observed = observed, enroll_fit = enroll_fit,
-             enroll_pred = enroll_pred, event_fit = event_fit,
-             dropout_fit = dropout_fit, event_pred = event_pred)
-      } else {
-        list(observed = observed, enroll_fit = enroll_fit,
-             enroll_pred = enroll_pred, event_fit = event_fit,
-             event_pred = event_pred)
-      }
-    }
-  } else { # design stage prediction
-    if (tolower(to_predict) == "enrollment only") {
-      if (showplot) print(enroll_pred$enroll_pred_plot)
-
-      list(enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred)
+      list(stage = "Design stage",
+           to_predict = "Enrollment only",
+           enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred)
     } else if (tolower(to_predict) == "enrollment and event") {
       if (showplot) print(event_pred$event_pred_plot)
 
       if (!is.null(dropout_model_parameter)) {
-        list(enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred,
+        list(stage = "Design stage",
+             to_predict = "Enrollment and event",
+             enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred,
              event_fit = event_model_parameter,
              dropout_fit = dropout_model_parameter, event_pred = event_pred)
       } else {
-        list(enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred,
+        list(stage = "Design stage",
+             to_predict = "Enrollment and event",
+             enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred,
              event_fit = event_model_parameter, event_pred = event_pred)
       }
     }
-  }
+  } else { # analysis stage prediction
+    if (tolower(to_predict) == "enrollment only") {
+      if (showplot) print(enroll_pred$enroll_pred_plot)
 
+      list(stage = "Real-time before enrollment completion",
+           to_predict = "Enrollment only",
+           observed = observed, enroll_fit = enroll_fit,
+           enroll_pred = enroll_pred)
+    } else if (tolower(to_predict) == "enrollment and event") {
+      if (showplot) print(event_pred$event_pred_plot)
+
+      if (tolower(dropout_model) != "none") {
+        list(stage = "Real-time before enrollment completion",
+             to_predict = "Enrollment and event",
+             observed = observed, enroll_fit = enroll_fit,
+             enroll_pred = enroll_pred, event_fit = event_fit,
+             dropout_fit = dropout_fit, event_pred = event_pred)
+      } else {
+        list(stage = "Real-time before enrollment completion",
+             to_predict = "Enrollment and event",
+             observed = observed, enroll_fit = enroll_fit,
+             enroll_pred = enroll_pred, event_fit = event_fit,
+             event_pred = event_pred)
+      }
+    } else if (tolower(to_predict) == "event only") {
+      if (showplot) print(event_pred$event_pred_plot)
+
+      if (tolower(dropout_model) != "none") {
+        list(stage = "Real-time after enrollment completion",
+             to_predict = "Event only",
+             observed = observed, event_fit = event_fit,
+             dropout_fit = dropout_fit, event_pred = event_pred)
+      } else {
+        list(stage = "Real-time after enrollment completion",
+             to_predict = "Event only",
+             observed = observed, event_fit = event_fit,
+             event_pred = event_pred)
+      }
+    }
+  }
 }
 
 
