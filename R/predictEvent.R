@@ -215,7 +215,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                    "event_fit and dropout_fit"))
       }
 
-      if (event_fit$alloc != dropout_fit$alloc) {
+      if (!all.equal(event_fit$alloc, dropout_fit$alloc)) {
         stop(paste("Treatment allocation must match between",
                    "event_fit and dropout_fit"))
       }
@@ -956,7 +956,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                                  .data$totalTime > .data$t),
                        .groups = "drop_last") %>%
       dplyr::mutate(lower = NA, upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper)
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::bind_rows(dplyr::tibble(t = t0, n = r0,
+                                     lower = NA, upper = NA))
 
 
     # add time zero and concatenate events before and after data cut
@@ -1029,13 +1031,15 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         line = list(dash="dash"),
         showlegend = FALSE) %>%
       plotly::layout(
-        annotations = list(x = cutoffdt, y = 0.1, yref = "paper",
+        annotations = list(x = cutoffdt, y = 0,
                            text = 'cutoff', xanchor = "left",
+                           yanchor = "bottom",
                            font = list(size=12),
                            showarrow = FALSE),
         xaxis = list(title = "", zeroline = FALSE),
         yaxis = list(zeroline = FALSE),
-        legend = list(x = 0, y = 1.2, orientation = 'h'))
+        legend = list(x = 0, y = 1.05, yanchor = "bottom",
+                      orientation = 'h'))
 
     if (showEvent) {
       p1 <- p1 %>%
@@ -1068,7 +1072,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         xaxis = list(title = "Days since trial start",
                      zeroline = FALSE),
         yaxis = list(zeroline = FALSE),
-        legend = list(x = 0, y = 1.2, orientation = 'h'))
+        legend = list(x = 0, y = 1.05, yanchor = "bottom",
+                      orientation = 'h'))
 
     if (showEvent) {
       p1 <- p1 %>%
