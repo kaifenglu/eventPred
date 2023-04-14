@@ -113,7 +113,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
       plotly::layout(
         xaxis = list(title = ""),
         yaxis = list(zeroline = FALSE),
-        legend = list(x = 0, y = 1.2, orientation = 'h'))
+        legend = list(x = 0, y = 1.05, yanchor = "bottom", orientation = 'h'))
   } else {
     cumAccrual <- plotly::plot_ly(ad, x=~date, y=~n) %>%
       plotly::add_lines(line = list(shape = "hv")) %>%
