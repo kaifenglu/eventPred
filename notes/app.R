@@ -896,13 +896,7 @@ server <- function(input, output, session) {
   treatment_allocation <- reactive({
     req(k())
     if (k() > 1) {
-      d = switch(k(),
-                 NA,
-                 input$treatment_allocation_2,
-                 input$treatment_allocation_3,
-                 input$treatment_allocation_4,
-                 input$treatment_allocation_5,
-                 input$treatment_allocation_6)
+      d = input[[paste0("treatment_allocation_", k())]]
       d <- as.numeric(d)
 
       valid = all(d > 0 & d == round(d))
@@ -1020,13 +1014,7 @@ server <- function(input, output, session) {
 
   exponential_survival <- reactive({
     req(k())
-    param = switch(k(),
-                   input$exponential_survival_1,
-                   input$exponential_survival_2,
-                   input$exponential_survival_3,
-                   input$exponential_survival_4,
-                   input$exponential_survival_5,
-                   input$exponential_survival_6)
+    param = input[[paste0("exponential_survival_", k())]]
     lambda = as.numeric(param)
     valid = all(lambda > 0)
     if (!valid) {
@@ -1041,14 +1029,7 @@ server <- function(input, output, session) {
 
   weibull_survival <- reactive({
     req(k())
-    param = switch(k(),
-                   input$weibull_survival_1,
-                   input$weibull_survival_2,
-                   input$weibull_survival_3,
-                   input$weibull_survival_4,
-                   input$weibull_survival_5,
-                   input$weibull_survival_6)
-
+    param = input[[paste0("weibull_survival_", k())]]
     shape = as.numeric(param[1,])
     scale = as.numeric(param[2,])
 
@@ -1074,14 +1055,7 @@ server <- function(input, output, session) {
 
   lnorm_survival <- reactive({
     req(k())
-    param = switch(k(),
-                   input$lnorm_survival_1,
-                   input$lnorm_survival_2,
-                   input$lnorm_survival_3,
-                   input$lnorm_survival_4,
-                   input$lnorm_survival_5,
-                   input$lnorm_survival_6)
-
+    param = input[[paste0("lnorm_survival_", k())]]
     meanlog = as.numeric(param[1,])
     sdlog = as.numeric(param[2,])
 
@@ -1100,14 +1074,7 @@ server <- function(input, output, session) {
 
   piecewise_exponential_survival <- reactive({
     req(k())
-    param = switch(k(),
-                   input$piecewise_exponential_survival_1,
-                   input$piecewise_exponential_survival_2,
-                   input$piecewise_exponential_survival_3,
-                   input$piecewise_exponential_survival_4,
-                   input$piecewise_exponential_survival_5,
-                   input$piecewise_exponential_survival_6)
-
+    param = input[[paste0("piecewise_exponential_survival_", k())]]
     t = as.numeric(param[,1])
     lambda = as.numeric(param[,-1])
 
@@ -1146,14 +1113,7 @@ server <- function(input, output, session) {
 
   exponential_dropout <- reactive({
     req(k())
-    param = switch(k(),
-                   input$exponential_dropout_1,
-                   input$exponential_dropout_2,
-                   input$exponential_dropout_3,
-                   input$exponential_dropout_4,
-                   input$exponential_dropout_5,
-                   input$exponential_dropout_6)
-
+    param = input[[paste0("exponential_dropout_", k())]]
     lambda = as.numeric(param)
     valid = all(lambda > 0)
     if (!valid) {
@@ -1168,14 +1128,7 @@ server <- function(input, output, session) {
 
   weibull_dropout <- reactive({
     req(k())
-    param = switch(k(),
-                   input$weibull_dropout_1,
-                   input$weibull_dropout_2,
-                   input$weibull_dropout_3,
-                   input$weibull_dropout_4,
-                   input$weibull_dropout_5,
-                   input$weibull_dropout_6)
-
+    param = input[[paste0("weiull_dropout_", k())]]
     shape = as.numeric(param[1,])
     scale = as.numeric(param[2,])
 
@@ -1201,14 +1154,7 @@ server <- function(input, output, session) {
 
   lnorm_dropout <- reactive({
     req(k())
-    param = switch(k(),
-                   input$lnorm_dropout_1,
-                   input$lnorm_dropout_2,
-                   input$lnorm_dropout_3,
-                   input$lnorm_dropout_4,
-                   input$lnorm_dropout_5,
-                   input$lnorm_dropout_6)
-
+    param = input[[paste0("lnorm_dropout_", k())]]
     meanlog = as.numeric(param[1,])
     sdlog = as.numeric(param[2,])
 
@@ -1227,14 +1173,7 @@ server <- function(input, output, session) {
 
   piecewise_exponential_dropout <- reactive({
     req(k())
-    param = switch(k(),
-                   input$piecewise_exponential_dropout_1,
-                   input$piecewise_exponential_dropout_2,
-                   input$piecewise_exponential_dropout_3,
-                   input$piecewise_exponential_dropout_4,
-                   input$piecewise_exponential_dropout_5,
-                   input$piecewise_exponential_dropout_6)
-
+    param = input[[paste0("piecewise_exponential_dropout_", k())]]
     t = as.numeric(param[,1])
     lambda = as.numeric(param[,-1])
 
@@ -3569,7 +3508,8 @@ server <- function(input, output, session) {
     pwexp <- paste0("piecewise_exponential_survival_", i)
     observeEvent(input[[paste0("add_piecewise_exponential_survival_", i)]], {
       a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
-      b = matrix(a[nrow(a),] + 1, nrow=1)
+      b = matrix(a[nrow(a),], nrow=1)
+      b[1,1] = b[1,1] + 1
       c = rbind(a, b)
       rownames(c) = paste("Interval", seq(1:nrow(c)))
       colnames(c) = colnames(input[[pwexp]])
@@ -3620,7 +3560,8 @@ server <- function(input, output, session) {
     pwexp <- paste0("piecewise_exponential_dropout_", i)
     observeEvent(input[[paste0("add_piecewise_exponential_dropout_", i)]], {
       a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
-      b = matrix(a[nrow(a),] + 1, nrow=1)
+      b = matrix(a[nrow(a),], nrow=1)
+      b[1,1] = b[1,1] + 1
       c = rbind(a, b)
       rownames(c) = paste("Interval", seq(1:nrow(c)))
       colnames(c) = colnames(input[[pwexp]])
