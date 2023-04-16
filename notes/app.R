@@ -3522,7 +3522,7 @@ server <- function(input, output, session) {
   lapply(1:6, function(i) {
     pwexp <- paste0("piecewise_exponential_survival_", i)
     observeEvent(input[[paste0("del_piecewise_exponential_survival_", i)]], {
-      if (nrow(input[[pwexp]]) >= i) {
+      if (nrow(input[[pwexp]]) >= 2) {
         a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
         b = matrix(a[-nrow(a),], ncol=ncol(a))
         rownames(b) = paste("Interval", seq(1:nrow(b)))
@@ -3574,7 +3574,7 @@ server <- function(input, output, session) {
   lapply(1:6, function(i) {
     pwexp <- paste0("piecewise_exponential_dropout_", i)
     observeEvent(input[[paste0("del_piecewise_exponential_dropout_", i)]], {
-      if (nrow(input[[pwexp]]) >= i) {
+      if (nrow(input[[pwexp]]) >= 2) {
         a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
         b = matrix(a[-nrow(a),], ncol=ncol(a))
         rownames(b) = paste("Interval", seq(1:nrow(b)))
