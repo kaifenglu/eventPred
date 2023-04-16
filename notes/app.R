@@ -419,35 +419,10 @@ eventPanel <- tabPanel(
 
 
       column(8,
-
-             f_exponential_survival(1),
-             f_exponential_survival(2),
-             f_exponential_survival(3),
-             f_exponential_survival(4),
-             f_exponential_survival(5),
-             f_exponential_survival(6),
-
-             f_weibull_survival(1),
-             f_weibull_survival(2),
-             f_weibull_survival(3),
-             f_weibull_survival(4),
-             f_weibull_survival(5),
-             f_weibull_survival(6),
-
-             f_lnorm_survival(1),
-             f_lnorm_survival(2),
-             f_lnorm_survival(3),
-             f_lnorm_survival(4),
-             f_lnorm_survival(5),
-             f_lnorm_survival(6),
-
-             f_piecewise_exponential_survival(1),
-             f_piecewise_exponential_survival(2),
-             f_piecewise_exponential_survival(3),
-             f_piecewise_exponential_survival(4),
-             f_piecewise_exponential_survival(5),
-             f_piecewise_exponential_survival(6)
-
+             lapply(1:6, f_exponential_survival),
+             lapply(1:6, f_weibull_survival),
+             lapply(1:6, f_lnorm_survival),
+             lapply(1:6, f_piecewise_exponential_survival)
       )
     )
   ),
@@ -518,35 +493,10 @@ dropoutPanel <- tabPanel(
       ),
 
       column(8,
-
-             f_exponential_dropout(1),
-             f_exponential_dropout(2),
-             f_exponential_dropout(3),
-             f_exponential_dropout(4),
-             f_exponential_dropout(5),
-             f_exponential_dropout(6),
-
-             f_weibull_dropout(1),
-             f_weibull_dropout(2),
-             f_weibull_dropout(3),
-             f_weibull_dropout(4),
-             f_weibull_dropout(5),
-             f_weibull_dropout(6),
-
-             f_lnorm_dropout(1),
-             f_lnorm_dropout(2),
-             f_lnorm_dropout(3),
-             f_lnorm_dropout(4),
-             f_lnorm_dropout(5),
-             f_lnorm_dropout(6),
-
-             f_piecewise_exponential_dropout(1),
-             f_piecewise_exponential_dropout(2),
-             f_piecewise_exponential_dropout(3),
-             f_piecewise_exponential_dropout(4),
-             f_piecewise_exponential_dropout(5),
-             f_piecewise_exponential_dropout(6)
-
+             lapply(1:6, f_exponential_dropout),
+             lapply(1:6, f_weibull_dropout),
+             lapply(1:6, f_lnorm_dropout),
+             lapply(1:6, f_piecewise_exponential_dropout)
       )
     )
   ),
@@ -626,7 +576,8 @@ ui <- fluidPage(
           border-color: #2e6da4"),
            style="position:absolute;right:0.5em;",
            tags$style(type='text/css', "#saveInputs{margin-top: -5px;}")
-         )))),
+         ))),
+    windowTitle = "Enrollment and Event Prediction"),
 
   sidebarLayout(
     sidebarPanel(
@@ -744,24 +695,6 @@ ui <- fluidPage(
 
 
       fluidRow(
-        column(7, numericInput(
-          "nreps",
-          label = "Simulation runs",
-          value = 200,
-          min = 100, max = 2000, step = 1)
-        ),
-
-        column(5, numericInput(
-          "seed",
-          label = "Seed",
-          value = 2000,
-          min = 0, max = 100000, step = 1
-        ))
-      ),
-
-
-
-      fluidRow(
         column(7, checkboxInput(
           "by_treatment",
           "By treatment?",
@@ -789,12 +722,28 @@ ui <- fluidPage(
         (input.by_treatment &&
         input.stage != 'Real-time after enrollment completion')",
 
-        f_treatment_allocation(2),
-        f_treatment_allocation(3),
-        f_treatment_allocation(4),
-        f_treatment_allocation(5),
-        f_treatment_allocation(6)
+        lapply(2:6, f_treatment_allocation)
+      ),
+
+
+      fluidRow(
+        column(7, numericInput(
+          "nreps",
+          label = "Simulation runs",
+          value = 200,
+          min = 100, max = 2000, step = 1)
+        ),
+
+        column(5, numericInput(
+          "seed",
+          label = "Seed",
+          value = 2000,
+          min = 0, max = 100000, step = 1
+        ))
       )
+
+
+
 
     ),
 
@@ -3616,145 +3565,31 @@ server <- function(input, output, session) {
   })
 
 
-  observeEvent(input$add_piecewise_exponential_survival_1, {
-    a = matrix(as.numeric(input$piecewise_exponential_survival_1),
-               ncol=ncol(input$piecewise_exponential_survival_1))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_survival_1)
-    updateMatrixInput(session, "piecewise_exponential_survival_1", c)
+  lapply(1:6, function(i) {
+    pwexp <- paste0("piecewise_exponential_survival_", i)
+    observeEvent(input[[paste0("add_piecewise_exponential_survival_", i)]], {
+      a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
+      b = matrix(a[nrow(a),] + 1, nrow=1)
+      c = rbind(a, b)
+      rownames(c) = paste("Interval", seq(1:nrow(c)))
+      colnames(c) = colnames(input[[pwexp]])
+      updateMatrixInput(session, pwexp, c)
+    })
   })
 
 
-  observeEvent(input$add_piecewise_exponential_survival_2, {
-    a = matrix(as.numeric(input$piecewise_exponential_survival_2),
-               ncol=ncol(input$piecewise_exponential_survival_2))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_survival_2)
-    updateMatrixInput(session, "piecewise_exponential_survival_2", c)
+  lapply(1:6, function(i) {
+    pwexp <- paste0("piecewise_exponential_survival_", i)
+    observeEvent(input[[paste0("del_piecewise_exponential_survival_", i)]], {
+      if (nrow(input[[pwexp]]) >= i) {
+        a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
+        b = matrix(a[-nrow(a),], ncol=ncol(a))
+        rownames(b) = paste("Interval", seq(1:nrow(b)))
+        colnames(b) = colnames(input[[pwexp]])
+        updateMatrixInput(session, pwexp, b)
+      }
+    })
   })
-
-
-  observeEvent(input$add_piecewise_exponential_survival_3, {
-    a = matrix(as.numeric(input$piecewise_exponential_survival_3),
-               ncol=ncol(input$piecewise_exponential_survival_3))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_survival_3)
-    updateMatrixInput(session, "piecewise_exponential_survival_3", c)
-  })
-
-
-  observeEvent(input$add_piecewise_exponential_survival_4, {
-    a = matrix(as.numeric(input$piecewise_exponential_survival_4),
-               ncol=ncol(input$piecewise_exponential_survival_4))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_survival_4)
-    updateMatrixInput(session, "piecewise_exponential_survival_4", c)
-  })
-
-
-  observeEvent(input$add_piecewise_exponential_survival_5, {
-    a = matrix(as.numeric(input$piecewise_exponential_survival_5),
-               ncol=ncol(input$piecewise_exponential_survival_5))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_survival_5)
-    updateMatrixInput(session, "piecewise_exponential_survival_5", c)
-  })
-
-
-  observeEvent(input$add_piecewise_exponential_survival_6, {
-    a = matrix(as.numeric(input$piecewise_exponential_survival_6),
-               ncol=ncol(input$piecewise_exponential_survival_6))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_survival_6)
-    updateMatrixInput(session, "piecewise_exponential_survival_6", c)
-  })
-
-
-
-  observeEvent(input$del_piecewise_exponential_survival_1, {
-    if (nrow(input$piecewise_exponential_survival_1) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_survival_1),
-                 ncol=ncol(input$piecewise_exponential_survival_1))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_survival_1)
-      updateMatrixInput(session, "piecewise_exponential_survival_1", b)
-    }
-  })
-
-
-  observeEvent(input$del_piecewise_exponential_survival_2, {
-    if (nrow(input$piecewise_exponential_survival_2) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_survival_2),
-                 ncol=ncol(input$piecewise_exponential_survival_2))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_survival_2)
-      updateMatrixInput(session, "piecewise_exponential_survival_2", b)
-    }
-  })
-
-
-  observeEvent(input$del_piecewise_exponential_survival_3, {
-    if (nrow(input$piecewise_exponential_survival_3) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_survival_3),
-                 ncol=ncol(input$piecewise_exponential_survival_3))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_survival_3)
-      updateMatrixInput(session, "piecewise_exponential_survival_3", b)
-    }
-  })
-
-
-
-  observeEvent(input$del_piecewise_exponential_survival_4, {
-    if (nrow(input$piecewise_exponential_survival_4) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_survival_4),
-                 ncol=ncol(input$piecewise_exponential_survival_4))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_survival_4)
-      updateMatrixInput(session, "piecewise_exponential_survival_4", b)
-    }
-  })
-
-
-  observeEvent(input$del_piecewise_exponential_survival_5, {
-    if (nrow(input$piecewise_exponential_survival_5) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_survival_5),
-                 ncol=ncol(input$piecewise_exponential_survival_5))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_survival_5)
-      updateMatrixInput(session, "piecewise_exponential_survival_5", b)
-    }
-  })
-
-
-  observeEvent(input$del_piecewise_exponential_survival_6, {
-    if (nrow(input$piecewise_exponential_survival_6) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_survival_6),
-                 ncol=ncol(input$piecewise_exponential_survival_6))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_survival_6)
-      updateMatrixInput(session, "piecewise_exponential_survival_6", b)
-    }
-  })
-
 
 
   observeEvent(input$add_piecewiseDropoutTime, {
@@ -3781,143 +3616,30 @@ server <- function(input, output, session) {
 
 
 
-  observeEvent(input$add_piecewise_exponential_dropout_1, {
-    a = matrix(as.numeric(input$piecewise_exponential_dropout_1),
-               ncol=ncol(input$piecewise_exponential_dropout_1))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_dropout_1)
-    updateMatrixInput(session, "piecewise_exponential_dropout_1", c)
+  lapply(1:6, function(i) {
+    pwexp <- paste0("piecewise_exponential_dropout_", i)
+    observeEvent(input[[paste0("add_piecewise_exponential_dropout_", i)]], {
+      a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
+      b = matrix(a[nrow(a),] + 1, nrow=1)
+      c = rbind(a, b)
+      rownames(c) = paste("Interval", seq(1:nrow(c)))
+      colnames(c) = colnames(input[[pwexp]])
+      updateMatrixInput(session, pwexp, c)
+    })
   })
 
 
-  observeEvent(input$add_piecewise_exponential_dropout_2, {
-    a = matrix(as.numeric(input$piecewise_exponential_dropout_2),
-               ncol=ncol(input$piecewise_exponential_dropout_2))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_dropout_2)
-    updateMatrixInput(session, "piecewise_exponential_dropout_2", c)
-  })
-
-
-  observeEvent(input$add_piecewise_exponential_dropout_3, {
-    a = matrix(as.numeric(input$piecewise_exponential_dropout_3),
-               ncol=ncol(input$piecewise_exponential_dropout_3))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_dropout_3)
-    updateMatrixInput(session, "piecewise_exponential_dropout_3", c)
-  })
-
-
-  observeEvent(input$add_piecewise_exponential_dropout_4, {
-    a = matrix(as.numeric(input$piecewise_exponential_dropout_4),
-               ncol=ncol(input$piecewise_exponential_dropout_4))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_dropout_4)
-    updateMatrixInput(session, "piecewise_exponential_dropout_4", c)
-  })
-
-
-  observeEvent(input$add_piecewise_exponential_dropout_5, {
-    a = matrix(as.numeric(input$piecewise_exponential_dropout_5),
-               ncol=ncol(input$piecewise_exponential_dropout_5))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_dropout_5)
-    updateMatrixInput(session, "piecewise_exponential_dropout_5", c)
-  })
-
-
-  observeEvent(input$add_piecewise_exponential_dropout_6, {
-    a = matrix(as.numeric(input$piecewise_exponential_dropout_6),
-               ncol=ncol(input$piecewise_exponential_dropout_6))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
-    c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
-    colnames(c) = colnames(input$piecewise_exponential_dropout_6)
-    updateMatrixInput(session, "piecewise_exponential_dropout_6", c)
-  })
-
-
-
-  observeEvent(input$del_piecewise_exponential_dropout_1, {
-    if (nrow(input$piecewise_exponential_dropout_1) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_dropout_1),
-                 ncol=ncol(input$piecewise_exponential_dropout_1))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_dropout_1)
-      updateMatrixInput(session, "piecewise_exponential_dropout_1", b)
-    }
-  })
-
-
-  observeEvent(input$del_piecewise_exponential_dropout_2, {
-    if (nrow(input$piecewise_exponential_dropout_2) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_dropout_2),
-                 ncol=ncol(input$piecewise_exponential_dropout_2))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_dropout_2)
-      updateMatrixInput(session, "piecewise_exponential_dropout_2", b)
-    }
-  })
-
-
-  observeEvent(input$del_piecewise_exponential_dropout_3, {
-    if (nrow(input$piecewise_exponential_dropout_3) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_dropout_3),
-                 ncol=ncol(input$piecewise_exponential_dropout_3))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_dropout_3)
-      updateMatrixInput(session, "piecewise_exponential_dropout_3", b)
-    }
-  })
-
-
-
-  observeEvent(input$del_piecewise_exponential_dropout_4, {
-    if (nrow(input$piecewise_exponential_dropout_4) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_dropout_4),
-                 ncol=ncol(input$piecewise_exponential_dropout_4))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_dropout_4)
-      updateMatrixInput(session, "piecewise_exponential_dropout_4", b)
-    }
-  })
-
-
-  observeEvent(input$del_piecewise_exponential_dropout_5, {
-    if (nrow(input$piecewise_exponential_dropout_5) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_dropout_5),
-                 ncol=ncol(input$piecewise_exponential_dropout_5))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_dropout_5)
-      updateMatrixInput(session, "piecewise_exponential_dropout_5", b)
-    }
-  })
-
-
-  observeEvent(input$del_piecewise_exponential_dropout_6, {
-    if (nrow(input$piecewise_exponential_dropout_6) >= 2) {
-      a = matrix(as.numeric(input$piecewise_exponential_dropout_6),
-                 ncol=ncol(input$piecewise_exponential_dropout_6))
-      b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
-      colnames(b) = colnames(input$piecewise_exponential_dropout_6)
-      updateMatrixInput(session, "piecewise_exponential_dropout_6", b)
-    }
+  lapply(1:6, function(i) {
+    pwexp <- paste0("piecewise_exponential_dropout_", i)
+    observeEvent(input[[paste0("del_piecewise_exponential_dropout_", i)]], {
+      if (nrow(input[[pwexp]]) >= i) {
+        a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
+        b = matrix(a[-nrow(a),], ncol=ncol(a))
+        rownames(b) = paste("Interval", seq(1:nrow(b)))
+        colnames(b) = colnames(input[[pwexp]])
+        updateMatrixInput(session, pwexp, b)
+      }
+    })
   })
 
 }
