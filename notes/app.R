@@ -3461,7 +3461,8 @@ server <- function(input, output, session) {
   observeEvent(input$add_piecewise_poisson_rate, {
     a = matrix(as.numeric(input$piecewise_poisson_rate),
                ncol=ncol(input$piecewise_poisson_rate))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
+    b = matrix(a[nrow(a),], nrow=1)
+    b[1,1] = b[1,1] + 1
     c = rbind(a, b)
     rownames(c) = paste("Interval", seq(1:nrow(c)))
     colnames(c) = colnames(input$piecewise_poisson_rate)
