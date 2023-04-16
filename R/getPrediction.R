@@ -41,7 +41,7 @@
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
 #'   "Weibull", "log-normal", or "piecewise exponential". By default,
-#'   it is set to "Weibull".
+#'   it is set to "exponential".
 #' @param piecewiseDropoutTime A vector that specifies the time
 #'   intervals for the piecewise exponential dropout distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
@@ -154,7 +154,7 @@ getPrediction <- function(
     enroll_model_parameter = NULL,
     event_model = "model averaging", piecewiseSurvivalTime = 0,
     event_model_parameter = NULL,
-    dropout_model = "weibull", piecewiseDropoutTime = 0,
+    dropout_model = "exponential", piecewiseDropoutTime = 0,
     dropout_model_parameter = NULL,
     fixedFollowup = FALSE, followupTime = 365,
     pilevel = 0.90, nyears = 4, nreps = 500,
