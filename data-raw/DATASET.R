@@ -75,7 +75,8 @@ event = 1*(time == survivalTime)
 dropout = 1*(dropoutTime < survivalTime)
 
 # complete data without administrative censoring
-dfcomplete <- dplyr::tibble(arrivalTime, treatment, time, event, dropout) %>%
+dfcomplete <- dplyr::tibble(trialsdt, arrivalTime, treatment,
+                            time, event, dropout) %>%
   dplyr::mutate(totalTime = arrivalTime + time) %>%
   dplyr::arrange(totalTime) %>%
   dplyr::mutate(n = cumsum(event))
@@ -95,7 +96,8 @@ finalData <- dfcomplete %>%
                 time = pmax(pmin(time, followupTime), 1e-8),
                 randdt = as.Date(arrivalTime - 1, origin = trialsdt),
                 cutoffdt = as.Date(cutoff - 1, origin = trialsdt)) %>%
-  dplyr::select(randdt, cutoffdt, treatment, time, event, dropout) %>%
+  dplyr::select(trialsdt, randdt, cutoffdt, treatment,
+                time, event, dropout) %>%
   dplyr::arrange(randdt)
 
 trialsdt = min(finalData$randdt)
@@ -117,7 +119,7 @@ interimData1 <- finalData %>%
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
                 time = pmax(pmin(time, followupTime), 1e-8)) %>%
-  dplyr::select(randdt, cutoffdt, treatment, time, event, dropout)
+  dplyr::select(trialsdt, randdt, cutoffdt, treatment, time, event, dropout)
 
 
 # partial data after enrollment completion
@@ -140,7 +142,7 @@ interimData2 <- finalData %>%
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
                 time = pmax(pmin(time, followupTime), 1e-8)) %>%
-  dplyr::select(randdt, cutoffdt, treatment, time, event, dropout)
+  dplyr::select(trialsdt, randdt, cutoffdt, treatment, time, event, dropout)
 
 
 # save to data/ folder
