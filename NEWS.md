@@ -3,6 +3,7 @@
 - add stage and to_predict information in getPrediction output
 - add the cutoff time point to the number of ongoing subjects
 - change the default model for dropout to exponential
+- require trialsdt in input data set
 
 # eventPred 0.1.0
 
