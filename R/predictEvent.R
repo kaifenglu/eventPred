@@ -6,7 +6,7 @@
 #'   number of events.
 #'
 #' @param df The subject-level enrollment and event data,
-#'   including \code{randdt}, \code{cutoffdt},
+#'   including \code{trialsdt}, \code{randdt}, \code{cutoffdt},
 #'   \code{time}, \code{event}, and \code{dropout}. By default, it
 #'   is set to \code{NULL} for event prediction at the design stage.
 #' @param target_d The target number of events to reach in the study.
@@ -242,10 +242,11 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   if (!is.null(df)) {
     df <- dplyr::as_tibble(df)
     names(df) <- tolower(names(df))
+    df$trialsdt <- as.Date(df$trialsdt)
     df$randdt <- as.Date(df$randdt)
     df$cutoffdt <- as.Date(df$cutoffdt)
 
-    trialsdt = min(df$randdt)
+    trialsdt = df$trialsdt[1]
     cutoffdt = df$cutoffdt[1]
 
     df <- df %>%
@@ -295,11 +296,11 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::ungroup()
 
     # extend observed to cutoff date
-    if (max(dfa$t) < t0) {
-      dfa1 <- dfa %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(t = t0)
+    dfa1 <- dfa %>%
+      dplyr::slice(dplyr::n()) %>%
+      dplyr::mutate(t = t0)
 
+    if (max(dfa$t) < t0) {
       dfa <- dfa %>%
         dplyr::bind_rows(dfa1)
     }
