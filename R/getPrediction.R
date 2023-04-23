@@ -2,10 +2,10 @@
 #' @description Performs enrollment and event prediction by utilizing
 #'   observed data and specified enrollment and event models.
 #'
-#' @param df The subject-level enrollment and event data,
-#'   including \code{randdt}, \code{cutoffdt}, \code{time}, \code{event},
-#'   and \code{dropout}. By default, it is set to \code{NULL} for
-#'   enrollment and event prediction at the design stage.
+#' @param df The subject-level enrollment and event data, including
+#'   \code{trialsdt}, \code{randdt}, \code{cutoffdt}, \code{time},
+#'   \code{event}, and \code{dropout}. By default, it is set to
+#'   \code{NULL} for enrollment and event prediction at the design stage.
 #' @param to_predict Specifies what to predict: "enrollment only", "event
 #'   only", or "enrollment and event". By default, it is set to
 #'   "enrollment and event".
@@ -392,10 +392,11 @@ getPrediction <- function(
   if (!is.null(df)) {
     df <- dplyr::as_tibble(df)
     names(df) <- tolower(names(df))
+    df$trialsdt <- as.Date(df$trialsdt)
     df$randdt <- as.Date(df$randdt)
     df$cutoffdt <- as.Date(df$cutoffdt)
 
-    trialsdt = min(df$randdt)
+    trialsdt = df$trialsdt[1]
     cutoffdt = df$cutoffdt[1]
 
     # summarize observed data
