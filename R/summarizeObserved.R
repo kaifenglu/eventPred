@@ -6,8 +6,8 @@
 #' daily enrollment rates, and Kaplan-Meier plots for time to event
 #' and time to dropout.
 #'
-#' @param df The subject-level data, including \code{randdt} and
-#'   \code{cutoffdt} for enrollment prediction,
+#' @param df The subject-level data, including \code{trialsdt},
+#'   \code{randdt}, \code{cutoffdt} for enrollment prediction,
 #'   as well as \code{time}, \code{event} and \code{dropout}
 #'   for event prediction.
 #' @param to_predict Specifies what to predict: "enrollment only",
@@ -39,10 +39,11 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
 
   df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
+  df$trialsdt <- as.Date(df$trialsdt)
   df$randdt <- as.Date(df$randdt)
   df$cutoffdt <- as.Date(df$cutoffdt)
 
-  trialsdt = min(df$randdt)
+  trialsdt = df$trialsdt[1]
   cutoffdt = df$cutoffdt[1]
   t0 = as.numeric(cutoffdt - trialsdt + 1)
   n0 = nrow(df)  # current number of subjects enrolled
