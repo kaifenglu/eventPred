@@ -281,7 +281,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
 
   # time zero
-  df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA)
+  df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA,
+                       mean = 0, var = 0)
 
   if (!is.null(df)) {
     # arrival time for subjects already enrolled before data cut
@@ -289,8 +290,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::arrange(.data$randdt) %>%
       dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
                     n = dplyr::row_number()) %>%
-      dplyr::mutate(lower = NA, upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
+                    .data$mean, .data$var) %>%
       dplyr::group_by(.data$t) %>%
       dplyr::slice(dplyr::n()) %>%
       dplyr::ungroup()
@@ -333,7 +335,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                        .groups = "drop_last") %>%
       dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
                        lower = quantile(.data$nenrolled, probs = plower),
-                       upper = quantile(.data$nenrolled, probs = pupper))
+                       upper = quantile(.data$nenrolled, probs = pupper),
+                       mean = mean(.data$nenrolled),
+                       var = var(.data$nenrolled))
 
     if (!is.null(df)) {
       # concatenate subjects enrolled before and after data cut
@@ -351,7 +355,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # add predicted from data cut to specified years after data cut
     dfb1 <- dfa1 %>%
-      dplyr::mutate(lower = .data$n, upper = .data$n)
+      dplyr::mutate(lower = .data$n, upper = .data$n, mean = .data$n, var = 0)
 
     dfb2 <- dfb1 %>%
       dplyr::mutate(t = t0 + 365*nyears)
@@ -906,19 +910,25 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   dfb = df1 %>%
     dplyr::summarise(n = quantile(.data$nevents, probs = 0.5),
                      lower = quantile(.data$nevents, probs = plower),
-                     upper = quantile(.data$nevents, probs = pupper))
+                     upper = quantile(.data$nevents, probs = pupper),
+                     mean = mean(.data$nevents),
+                     var = var(.data$nevents))
 
   # predicted number of dropouts after data cut
   dfd = df1 %>%
     dplyr::summarise(n = quantile(.data$ndropouts, probs = 0.5),
                      lower = quantile(.data$ndropouts, probs = plower),
-                     upper = quantile(.data$ndropouts, probs = pupper))
+                     upper = quantile(.data$ndropouts, probs = pupper),
+                     mean = mean(.data$ndropouts),
+                     var = var(.data$ndropouts))
 
   # predicted number of subjects at risk after data cut
   dff = df1 %>%
     dplyr::summarise(n = quantile(.data$natrisk, probs = 0.5),
                      lower = quantile(.data$natrisk, probs = plower),
-                     upper = quantile(.data$natrisk, probs = pupper))
+                     upper = quantile(.data$natrisk, probs = pupper),
+                     mean = mean(.data$natrisk),
+                     var = var(.data$natrisk))
 
   if (!is.null(df)) {
     pred_date <- as.Date(pred_day - 1, origin = trialsdt)
@@ -930,7 +940,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                     n = cumsum(.data$event),
                     lower = NA,
                     upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::mutate(mean = .data$n, var = 0) %>%
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
+                    .data$mean, .data$var) %>%
       dplyr::group_by(.data$t) %>%
       dplyr::slice(dplyr::n()) %>%
       dplyr::ungroup()
@@ -942,7 +954,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                     n = cumsum(.data$dropout),
                     lower = NA,
                     upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::mutate(mean = .data$n, var = 0) %>%
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
+                    .data$mean, .data$var) %>%
       dplyr::group_by(.data$t) %>%
       dplyr::slice(dplyr::n()) %>%
       dplyr::ungroup()
@@ -956,10 +970,12 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::summarise(n = sum(.data$arrivalTime <= .data$t &
                                  .data$totalTime > .data$t),
                        .groups = "drop_last") %>%
-      dplyr::mutate(lower = NA, upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
+                    .data$mean, .data$var) %>%
       dplyr::bind_rows(dplyr::tibble(t = t0, n = r0,
-                                     lower = NA, upper = NA))
+                                     lower = NA, upper = NA,
+                                     mean = r0, var = 0))
 
 
     # add time zero and concatenate events before and after data cut
