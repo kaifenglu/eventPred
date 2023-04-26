@@ -264,7 +264,9 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                      .groups = "drop_last") %>%
     dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
                      lower = quantile(.data$nenrolled, probs = plower),
-                     upper = quantile(.data$nenrolled, probs = pupper))
+                     upper = quantile(.data$nenrolled, probs = pupper),
+                     mean = mean(.data$nenrolled),
+                     var = var(.data$nenrolled))
 
 
   if (!is.null(df)) {
@@ -278,8 +280,9 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
     # arrival time for subjects already enrolled before data cut
     dfa <- df %>%
-      dplyr::mutate(lower = NA, upper = NA) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper) %>%
+      dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
+      dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
+                    .data$mean, .data$var) %>%
       dplyr::group_by(.data$t) %>%
       dplyr::slice(dplyr::n()) %>%
       dplyr::ungroup()
