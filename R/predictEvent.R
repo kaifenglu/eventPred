@@ -434,36 +434,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   }
 
 
-  # define distribution function for model averaging
-  if (tolower(event_fit$model) == "model averaging") {
-    if (is.null(df)) {
-      stop("Model averaging is only used at the analysis stage.")
-    }
-
-    # distribution function for model averaging of Weibull and log-normal
-    pmodavg <- function(t, theta, w1, lower.tail = TRUE, log.p = FALSE) {
-      shape = exp(theta[1])
-      scale = exp(theta[2])
-      meanlog = theta[3]
-      sdlog = exp(theta[4])
-
-      p1 = pweibull(pmax(0,t), shape, scale)
-      p2 = plnorm(pmax(0,t), meanlog, sdlog)
-      p = w1*p1 + (1-w1)*p2
-
-      if (!lower.tail) p = 1 - p
-      if (log.p) p = log(p)
-      p
-    }
-
-    # inverse transform method to generate event time given surviving time0
-    fOngoing_avg <- function(time, theta, w1, time0, u) {
-      pmodavg(time, theta, w1, lower.tail = FALSE) -
-        u*pmodavg(time0, theta, w1, lower.tail = FALSE)
-    }
-  }
-
-
   # generate the event and dropout times
   if (!is.null(df)) { # analysis stage event prediction
     # output data frame
@@ -522,10 +492,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         meanlog = theta2[i,1]
         sdlog = exp(theta2[i,2])
 
-        # first draw truncated normal on the log scale
-        y = tmvtnsim::rtnorm(mean = rep(meanlog, r0), sd = sdlog,
-                             lower = log(time0), upper = rep(Inf, r0))
-        survivalTimeOngoing = exp(y)
+        # draw truncated normal on the log scale and exponentiate
+        survivalTimeOngoing = exp(tmvtnsim::rtnorm(
+          mean = rep(meanlog, r0), sd = sdlog,
+          lower = log(time0), upper = rep(Inf, r0)))
 
         if (n1 > 0) {
           survivalTimeNew = rlnorm(n1, meanlog, sdlog)
@@ -562,19 +532,33 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           survivalTime = survivalTimeOngoing
         }
       } else if (tolower(event_fit$model) == "model averaging") {
-        u = runif(r0)
-        interval = cbind(time0, time0 + 365*10)
-        survivalTimeOngoing = rstpm2::vuniroot(
-          fOngoing_avg, interval, theta = theta2[i,],
-          w1 = event_fit$w1, time0, u, extendInt = "yes")$root
+        theta = theta2[i,]
+        shape = exp(theta[1])
+        scale = exp(theta[2])
+        meanlog = theta[3]
+        sdlog = exp(theta[4])
 
+        # event time for ongoing subjects
+        # draw component indicator
+        p1 = event_fit$w1*pweibull(time0, shape, scale, lower.tail = FALSE)
+        p2 = (1-event_fit$w1)*plnorm(time0, meanlog, sdlog, lower.tail = FALSE)
+        w = (runif(r0) < p1/(p1+p2))
+
+        # draw from the corresponding component distribution
+        survivalTimeOngoing = rep(NA, r0)
+        if (sum(w) > 0) {
+          survivalTimeOngoing[w==1] = (rexp(sum(w))*scale^shape +
+                                         time0[w==1]^shape)^(1/shape)
+        }
+
+        if (sum(1-w) > 0) {
+          survivalTimeOngoing[w==0] = exp(tmvtnsim::rtnorm(
+            mean = rep(meanlog, sum(1-w)), sd = sdlog,
+            lower = log(time0[w==0]), upper = rep(Inf, sum(1-w))))
+        }
+
+        # event time for new subjects
         if (n1 > 0) {
-          theta = theta2[i,]
-          shape = exp(theta[1])
-          scale = exp(theta[2])
-          meanlog = theta[3]
-          sdlog = exp(theta[4])
-
           # draw component indicator
           w = rbinom(n1, size = 1, prob = event_fit$w1)
 
