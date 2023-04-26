@@ -1357,6 +1357,8 @@ server <- function(input, output, session) {
             dplyr::summarise(n = quantile(nenrolled, probs = 0.5),
                              lower = quantile(nenrolled, probs = plower),
                              upper = quantile(nenrolled, probs = pupper),
+                             mean = mean(nenrolled),
+                             var = var(nenrolled),
                              .groups = "drop_last")
 
           enroll_pred_df <- dfs %>%
@@ -1422,7 +1424,8 @@ server <- function(input, output, session) {
 
 
           df0 <- dplyr::tibble(treatment = 1:k,
-                               t = 0, n = 0, lower = NA, upper = NA)
+                               t = 0, n = 0, lower = 0, upper = 0,
+                               mean = 0, var = 0)
 
           newEvents <- pred1$event_pred$newEvents
 
@@ -1443,6 +1446,8 @@ server <- function(input, output, session) {
             dplyr::summarise(n = quantile(nenrolled, probs = 0.5),
                              lower = quantile(nenrolled, probs = plower),
                              upper = quantile(nenrolled, probs = pupper),
+                             mean = mean(nenrolled),
+                             var = var(nenrolled),
                              .groups = "drop_last") %>%
             dplyr::bind_rows(df0) %>%
             dplyr::arrange(treatment, t) %>%
@@ -1468,6 +1473,8 @@ server <- function(input, output, session) {
             dplyr::summarise(n = quantile(nevents, probs = 0.5),
                              lower = quantile(nevents, probs = plower),
                              upper = quantile(nevents, probs = pupper),
+                             mean = mean(nevents),
+                             var = var(nevents),
                              .groups = "drop_last") %>%
             dplyr::mutate(parameter = "Event") %>%
             dplyr::bind_rows(dplyr::bind_cols(
@@ -1481,6 +1488,8 @@ server <- function(input, output, session) {
             dplyr::summarise(n = quantile(natrisk, probs = 0.5),
                              lower = quantile(natrisk, probs = plower),
                              upper = quantile(natrisk, probs = pupper),
+                             mean = mean(natrisk),
+                             var = var(natrisk),
                              .groups = "drop_last") %>%
             dplyr::mutate(parameter = "Ongoing") %>%
             dplyr::bind_rows(dplyr::bind_cols(
@@ -1645,6 +1654,8 @@ server <- function(input, output, session) {
             dplyr::summarise(n = quantile(nenrolled, probs = 0.5),
                              lower = quantile(nenrolled, probs = plower),
                              upper = quantile(nenrolled, probs = pupper),
+                             mean = mean(nenrolled),
+                             var = var(nenrolled),
                              .groups = "drop_last")
 
           # arrival time for subjects already enrolled before data cut
@@ -1653,8 +1664,8 @@ server <- function(input, output, session) {
             dplyr::arrange(randdt) %>%
             dplyr::mutate(t = as.numeric(randdt - trialsdt + 1),
                           n = dplyr::row_number()) %>%
-            dplyr::mutate(lower = NA, upper = NA) %>%
-            dplyr::select(treatment, t, n, lower, upper) %>%
+            dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0) %>%
+            dplyr::select(treatment, t, n, lower, upper, mean, var) %>%
             dplyr::group_by(treatment, t) %>%
             dplyr::slice(dplyr::n()) %>%
             dplyr::group_by(treatment)
@@ -1823,6 +1834,8 @@ server <- function(input, output, session) {
             dplyr::summarise(n = quantile(nenrolled, probs = 0.5),
                              lower = quantile(nenrolled, probs = plower),
                              upper = quantile(nenrolled, probs = pupper),
+                             mean = mean(nenrolled),
+                             var = var(nenrolled),
                              .groups = "drop_last")
 
           # arrival time for subjects already enrolled before data cut
@@ -1831,8 +1844,8 @@ server <- function(input, output, session) {
             dplyr::arrange(randdt) %>%
             dplyr::mutate(t = as.numeric(randdt - trialsdt + 1),
                           n = dplyr::row_number()) %>%
-            dplyr::mutate(lower = NA, upper = NA) %>%
-            dplyr::select(treatment, t, n, lower, upper) %>%
+            dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0) %>%
+            dplyr::select(treatment, t, n, lower, upper, mean, var) %>%
             dplyr::group_by(treatment, t) %>%
             dplyr::slice(dplyr::n()) %>%
             dplyr::group_by(treatment)
@@ -1947,13 +1960,17 @@ server <- function(input, output, session) {
           dfb = df1 %>%
             dplyr::summarise(n = quantile(nevents, probs = 0.5),
                              lower = quantile(nevents, probs = plower),
-                             upper = quantile(nevents, probs = pupper))
+                             upper = quantile(nevents, probs = pupper),
+                             mean = mean(nevents),
+                             var = var(nevents))
 
           # predicted number of subjects at risk after data cut
           dff = df1 %>%
             dplyr::summarise(n = quantile(natrisk, probs = 0.5),
                              lower = quantile(natrisk, probs = plower),
-                             upper = quantile(natrisk, probs = pupper))
+                             upper = quantile(natrisk, probs = pupper),
+                             mean = mean(natrisk),
+                             var = var(natrisk))
 
           # observed number of events before data cut
           dfa <- df %>%
@@ -1962,7 +1979,8 @@ server <- function(input, output, session) {
                           n = cumsum(event),
                           lower = NA,
                           upper = NA) %>%
-            dplyr::select(t, n, lower, upper) %>%
+            dplyr::mutate(mean = n, var = 0) %>%
+            dplyr::select(t, n, lower, upper, mean, var) %>%
             dplyr::group_by(t) %>%
             dplyr::slice(dplyr::n()) %>%
             dplyr::ungroup()
@@ -1979,13 +1997,15 @@ server <- function(input, output, session) {
             dplyr::summarise(n = sum(arrivalTime <= t &
                                        totalTime > t),
                              .groups = "drop_last") %>%
-            dplyr::mutate(lower = NA, upper = NA) %>%
-            dplyr::select(t, n, lower, upper) %>%
+            dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0) %>%
+            dplyr::select(t, n, lower, upper, mean, var) %>%
             dplyr::bind_rows(dplyr::tibble(t = t0, n = r0,
-                                           lower = NA, upper = NA))
+                                           lower = NA, upper = NA,
+                                           mean = r0, var = 0))
 
           # time zero
-          df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA)
+          df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA,
+                               mean = 0, var = 0)
 
 
           # add time zero and concatenate events before and after data cut
@@ -2075,8 +2095,8 @@ server <- function(input, output, session) {
             dplyr::arrange(randdt) %>%
             dplyr::mutate(t = as.numeric(randdt - trialsdt + 1),
                           n = dplyr::row_number()) %>%
-            dplyr::mutate(lower = NA, upper = NA) %>%
-            dplyr::select(treatment, t, n, lower, upper) %>%
+            dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0) %>%
+            dplyr::select(treatment, t, n, lower, upper, mean, var) %>%
             dplyr::group_by(treatment, t) %>%
             dplyr::slice(dplyr::n()) %>%
             dplyr::group_by(treatment)
@@ -2093,7 +2113,7 @@ server <- function(input, output, session) {
 
           # add predicted from data cut to specified years after data cut
           dfb1 <- dfa1 %>%
-            dplyr::mutate(lower = .data$n, upper = .data$n)
+            dplyr::mutate(lower = n, upper = n, mean = n, var = 0)
 
           dfb2 <- dfb1 %>%
             dplyr::mutate(t = t0 + 365*nyears())
@@ -2198,13 +2218,17 @@ server <- function(input, output, session) {
           dfb = df1 %>%
             dplyr::summarise(n = quantile(nevents, probs = 0.5),
                              lower = quantile(nevents, probs = plower),
-                             upper = quantile(nevents, probs = pupper))
+                             upper = quantile(nevents, probs = pupper),
+                             mean = mean(nevents),
+                             var = var(nevents))
 
           # predicted number of subjects at risk after data cut
           dff = df1 %>%
             dplyr::summarise(n = quantile(natrisk, probs = 0.5),
                              lower = quantile(natrisk, probs = plower),
-                             upper = quantile(natrisk, probs = pupper))
+                             upper = quantile(natrisk, probs = pupper),
+                             mean = mean(natrisk),
+                             var = var(natrisk))
 
           # observed number of events before data cut
           dfa <- df %>%
@@ -2213,7 +2237,8 @@ server <- function(input, output, session) {
                           n = cumsum(event),
                           lower = NA,
                           upper = NA) %>%
-            dplyr::select(t, n, lower, upper) %>%
+            dplyr::mutate(mean = n, var = 0) %>%
+            dplyr::select(t, n, lower, upper, mean, var) %>%
             dplyr::group_by(t) %>%
             dplyr::slice(dplyr::n()) %>%
             dplyr::ungroup()
@@ -2228,13 +2253,15 @@ server <- function(input, output, session) {
             dplyr::summarise(n = sum(arrivalTime <= t &
                                        totalTime > t),
                              .groups = "drop_last") %>%
-            dplyr::mutate(lower = NA, upper = NA) %>%
-            dplyr::select(t, n, lower, upper) %>%
+            dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0) %>%
+            dplyr::select(t, n, lower, upper, mean, var) %>%
             dplyr::bind_rows(dplyr::tibble(t = t0, n = r0,
-                                           lower = NA, upper = NA))
+                                           lower = NA, upper = NA,
+                                           mean = r0, var = 0))
 
           # time zero
-          df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA)
+          df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA,
+                               mean = 0, var = 0)
 
 
           # add time zero and concatenate events before and after data cut
@@ -2327,11 +2354,12 @@ server <- function(input, output, session) {
       w = dosing_schedule()[,1]
       N = dosing_schedule()[,2]
 
-      df0 <- dplyr::tibble(drug = 1:l(),
-                           t = 0, n = 0, lower = 0, upper = 0,
-                           mean = 0, var = 0)
 
       if (input$stage == 'Design stage') {
+        df0 <- dplyr::tibble(drug = 1:l(),
+                             t = 0, n = 0, lower = 0, upper = 0,
+                             mean = 0, var = 0)
+
         newEvents <- pred()$event_pred$newEvents
 
         t = pred()$event_pred$event_pred_df$t
@@ -2369,6 +2397,10 @@ server <- function(input, output, session) {
         pred$event_pred$dosing_pred_df <- dosing_pred_df
         pred
       } else if (input$stage == 'Real-time before enrollment completion') {
+        df0 <- dplyr::tibble(drug = 1:l(),
+                             t = 0, n = 0, lower = NA, upper = NA,
+                             mean = 0, var = 0)
+
         df <- df() %>%
           dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
                         totalTime = arrivalTime + time)
@@ -2468,6 +2500,10 @@ server <- function(input, output, session) {
         pred$event_pred$dosing_pred_df <- dosing_pred_df
         pred
       } else if (input$stage == "Real-time after enrollment completion") {
+        df0 <- dplyr::tibble(drug = 1:l(),
+                             t = 0, n = 0, lower = NA, upper = NA,
+                             mean = 0, var = 0)
+
         df <- df() %>%
           dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
                         totalTime = arrivalTime + time)
