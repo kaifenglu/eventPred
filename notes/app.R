@@ -8,7 +8,6 @@ library(writexl)
 library(dplyr)
 library(prompter)
 library(plotly)
-library(lubridate)
 library(eventPred)
 
 
@@ -554,10 +553,46 @@ predictPanel <- tabPanel(
   uiOutput("pred_date"),
   uiOutput("pred_plot"),
 
-  downloadButton("downloadSumdata", "Download summary data")
+  downloadButton("downloadSumdata", "Download summary data"),
+  downloadButton("downloadSimdata", "Download simulated data")
 )
 
 
+# reduced style fileInput
+fileInputNoExtra<-function(inputId, label, multiple = FALSE, accept = NULL,
+                           width = NULL, buttonLabel = "Browse...",
+                           placeholder = "No file selected"){
+
+  restoredValue <- restoreInput(id = inputId, default = NULL)
+  if (!is.null(restoredValue) && !is.data.frame(restoredValue)) {
+    warning("Restored value for ", inputId, " has incorrect format.")
+    restoredValue <- NULL
+  }
+  if (!is.null(restoredValue)) {
+    restoredValue <- toJSON(restoredValue, strict_atomic = FALSE)
+  }
+  inputTag <- tags$input(id = inputId, name = inputId, type = "file",
+                         style = "display: none;",
+                         `data-restore` = restoredValue)
+  if (multiple)
+    inputTag$attribs$multiple <- "multiple"
+  if (length(accept) > 0)
+    inputTag$attribs$accept <- paste(accept, collapse = ",")
+
+  tags$label(
+    class = "input-group-btn",
+    type="button",
+    style=if (!is.null(width))
+      paste0("width: ", validateCssUnit(width),";",
+             "padding-right: 5px; padding-bottom: 0px; display:inline-block;"),
+
+    span(class = "btn btn-default btn-file",type="button",
+         buttonLabel, inputTag,
+         style=if (!is.null(width))
+           paste0("width: ", validateCssUnit(width),";",
+                  "border-radius: 4px; padding-bottom:5px;"))
+  )
+}
 
 # user interface ----------------
 ui <- fluidPage(
@@ -574,10 +609,16 @@ ui <- fluidPage(
            "predict", "Predict",
            style="color: #fff; background-color: #337ab7;
           border-color: #2e6da4"),
+
+           downloadButton("saveInputs", "Save inputs"),
+           fileInputNoExtra("loadInputs", label=NULL, accept=".rds",
+                            buttonLabel=list(icon("upload"), "Load inputs"),
+                            width="116px"),
            style="position:absolute;right:0.5em;",
            tags$style(type='text/css', "#saveInputs{margin-top: -5px;}")
          ))),
     windowTitle = "Enrollment and Event Prediction"),
+
 
   sidebarLayout(
     sidebarPanel(
@@ -1128,7 +1169,7 @@ server <- function(input, output, session) {
 
   weibull_dropout <- reactive({
     req(k())
-    param = input[[paste0("weiull_dropout_", k())]]
+    param = input[[paste0("weibull_dropout_", k())]]
     shape = as.numeric(param[1,])
     scale = as.numeric(param[2,])
 
@@ -1226,9 +1267,10 @@ server <- function(input, output, session) {
     df <- readxl::read_excel(inFile$datapath)
 
     if (to_predict() == "Enrollment only") {
-      required_columns <- c('randdt', 'cutoffdt')
+      required_columns <- c('trialsdt', 'randdt', 'cutoffdt')
     } else {
-      required_columns <- c('randdt', 'cutoffdt', 'time', 'event', 'dropout')
+      required_columns <- c('trialsdt', 'randdt', 'cutoffdt', 'time', 'event',
+                            'dropout')
     }
 
     if (input$by_treatment) {
@@ -1243,7 +1285,9 @@ server <- function(input, output, session) {
     )
 
     dplyr::tibble(df) %>%
-      dplyr::mutate(randdt = as.Date(randdt), cutoffdt = as.Date(cutoffdt))
+      dplyr::mutate(trialsdt = as.Date(trialsdt),
+                    randdt = as.Date(randdt),
+                    cutoffdt = as.Date(cutoffdt))
 
   })
 
@@ -1883,7 +1927,8 @@ server <- function(input, output, session) {
                 legend = list(x = 0, y = 1.05, yanchor = "bottom",
                               orientation = "h"),
                 annotations = list(
-                  x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
+                  x = 0.5, y = 1,
+                  text = paste0("<b>treatment=", i, "</b>"),
                   xanchor = "center", yanchor = "bottom",
                   showarrow = FALSE, xref='paper', yref='paper'))
           }
@@ -2901,7 +2946,8 @@ server <- function(input, output, session) {
               showarrow = FALSE, xref='paper', yref='paper'))
         }
 
-        plotly::subplot(event_fit_plot, nrows = k, shareX = TRUE)
+        plotly::subplot(event_fit_plot, nrows = k,
+                        titleX = TRUE, titleY = TRUE, margin = 0.1)
       }
     }
   })
@@ -2931,7 +2977,8 @@ server <- function(input, output, session) {
               showarrow = F, xref='paper', yref='paper'))
         }
 
-        plotly::subplot(dropout_fit_plot, nrows = k, shareX = TRUE)
+        plotly::subplot(dropout_fit_plot, nrows = k,
+                        titleX = TRUE, titleY = TRUE, margin = 0.1)
       }
     }
   })
@@ -3100,7 +3147,7 @@ server <- function(input, output, session) {
                  ("list" %in% class(enroll_pred_plot)) &&
                  length(enroll_pred_plot) == k() + 1) {
         p1 <- plotly::subplot(enroll_pred_plot, nrows = k() + 1,
-                              shareX = TRUE)
+                              margin = 0.05)
       } else {
         p1 <- NULL
       }
@@ -3286,13 +3333,14 @@ server <- function(input, output, session) {
                 legend = list(x = 0, y = 1.05, yanchor = "bottom",
                               orientation = 'h'),
                 annotations = list(
-                  x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
+                  x = 0.5, y = 1,
+                  text = paste0("<b>treatment=", i, "</b>"),
                   xanchor = "center", yanchor = "bottom",
                   showarrow = FALSE, xref='paper', yref='paper'))
           }
 
           p1 <- plotly::subplot(event_pred_plot, nrows = k() + 1,
-                                shareX = TRUE)
+                                margin = 0.05)
 
         } else {
           p1 = NULL
@@ -3388,13 +3436,14 @@ server <- function(input, output, session) {
                 legend = list(x = 0, y = 1.05, yanchor = "bottom",
                               orientation = 'h'),
                 annotations = list(
-                  x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
+                  x = 0.5, y = 1,
+                  text = paste0("<b>treatment=", i, "</b>"),
                   xanchor = "center", yanchor = "bottom",
                   showarrow = FALSE, xref='paper', yref='paper'))
           }
 
           p1 <- plotly::subplot(event_pred_plot, nrows = k() + 1,
-                                shareX = TRUE)
+                                margin = 0.05)
         } else {
           p1 <- NULL
         }
@@ -3433,6 +3482,20 @@ server <- function(input, output, session) {
     }
   )
 
+
+  output$downloadSimdata <- downloadHandler(
+    filename = function() {
+      paste0("simdata-", Sys.Date(), ".xlsx")
+    },
+    content = function(file) {
+      if (to_predict() == "Enrollment only") {
+        simdata <- pred()$enroll_pred$newSubjects
+      } else {
+        simdata <- pred()$event_pred$newEvents
+      }
+      writexl::write_xlsx(simdata, file)
+    }
+  )
 
 
   observeEvent(input$add_accrualTime, {
@@ -3584,6 +3647,309 @@ server <- function(input, output, session) {
     })
   })
 
+
+
+  # save inputs
+  output$saveInputs <- downloadHandler(
+    filename = function() {
+      paste0("inputs-", Sys.Date(), ".rds")
+    },
+
+    content = function(file) {
+      x <- list(
+        treatment_allocation = matrix(
+          treatment_allocation(), ncol=1,
+          dimnames = list(paste("Treatment", 1:k()), "Size")),
+        exponential_survival = matrix(
+          exponential_survival(), nrow = 1,
+          dimnames = list(NULL, paste("Treatment", 1:k()))),
+        weibull_survival = matrix(
+          weibull_survival(), nrow = 2,
+          dimnames = list(c("Shape", "Scale"), paste("Treatment", 1:k()))),
+        lnorm_survival = matrix(
+          lnorm_survival(), nrow = 2,
+          dimnames = list(c("Mean on log scale", "SD on log scale"),
+                          paste("Treatment", 1:k()))),
+        piecewise_exponential_survival = matrix(
+          piecewise_exponential_survival(), ncol = k()+1,
+          dimnames = list(paste("Interval",
+                                1:nrow(piecewise_exponential_survival())),
+                          c("Starting time", paste("Treatment", 1:k())))),
+        exponential_dropout = matrix(
+          exponential_dropout(), nrow = 1,
+          dimnames = list(NULL, paste("Treatment", 1:k()))),
+        weibull_dropout = matrix(
+          weibull_dropout(), nrow = 2,
+          dimnames = list(c("Shape", "Scale"), paste("Treatment", 1:k()))),
+        lnorm_dropout = matrix(
+          lnorm_dropout(), nrow = 2,
+          dimnames = list(c("Mean on log scale", "SD on log scale"),
+                          paste("Treatment", 1:k()))),
+        piecewise_exponential_dropout = matrix(
+          piecewise_exponential_dropout(), ncol = k()+1,
+          dimnames = list(paste("Interval",
+                                1:nrow(piecewise_exponential_dropout())),
+                          c("Starting time", paste("Treatment", 1:k())))),
+        enroll_model_parameter = input$enroll_model_parameter,
+        poisson_rate = poisson_rate(),
+        mu = mu(),
+        delta = delta(),
+        piecewise_poisson_rate = matrix(
+          piecewise_poisson_rate(), ncol = 2,
+          dimnames = list(paste("Interval", 1:nrow(piecewise_poisson_rate())),
+                          c("Starting time", "Enrollment rate"))),
+        enroll_model = input$enroll_model,
+        nknots = nknots(),
+        lags = lags(),
+        accrualTime = matrix(
+          accrualTime(), ncol = 1,
+          dimnames = list(paste("Interval", 1:length(accrualTime())),
+                          "Starting time")),
+        event_model_parameter = input$event_model_parameter,
+        event_model = input$event_model,
+        piecewiseSurvivalTime = matrix(
+          piecewiseSurvivalTime(), ncol = 1,
+          dimnames = list(paste("Interval", 1:length(piecewiseSurvivalTime())),
+                          "Starting time")),
+        dropout_model_parameter = input$dropout_model_parameter,
+        dropout_model = input$dropout_model,
+        piecewiseDropoutTime = matrix(
+          piecewiseDropoutTime(), ncol = 1,
+          dimnames = list(paste("Interval", 1:length(piecewiseDropoutTime())),
+                          "Starting time")),
+        stage = input$stage,
+        to_predict = input$to_predict,
+        to_predict2 = input$to_predict2,
+        target_n = target_n(),
+        target_d = input$target_d,
+        pilevel = pilevel(),
+        nyears = nyears(),
+        to_show = input$to_show,
+        by_treatment = input$by_treatment,
+        k = k(),
+        nreps = nreps(),
+        seed = input$seed
+      )
+
+      save(x, file = file)
+    }
+  )
+
+
+
+  # load inputs
+  observeEvent(input$loadInputs, {
+    file <- input$loadInputs
+    ext <- tools::file_ext(file$datapath)
+
+    req(file)
+
+    valid <- (ext == "rds")
+    if (!valid) showNotification("Please upload an rds file")
+    req(valid)
+
+    load(file=file$datapath)
+
+    if (x$stage == 'Design stage' ||
+        (x$by_treatment &&
+        x$stage != 'Real-time after enrollment completion')) {
+      updateMatrixInput(
+        session, paste0("treatment_allocation_", x$k),
+        value=matrix(x$treatment_allocation, ncol = 1,
+                     dimnames = list(paste("Treatment", 1:x$k),
+                                     "Size")))
+    }
+
+    if (x$stage == 'Design stage' &&
+        x$event_model_parameter == 'Exponential') {
+      updateMatrixInput(
+        session, paste0("exponential_survival_", x$k),
+        value=matrix(x$exponential_survival, ncol = x$k,
+                     dimnames = list(NULL, paste("Treatment", 1:x$k))))
+    }
+
+    if (x$stage == 'Design stage' &&
+        x$event_model_parameter == 'Weibull') {
+      updateMatrixInput(
+        session, paste0("weibull_survival_", x$k),
+        value=matrix(x$weibull_survival, ncol = x$k,
+                     dimnames = list(c("Shape", "Scale"),
+                                     paste("Treatment", 1:x$k))))
+    }
+
+    if (x$stage == 'Design stage' &&
+        x$event_model_parameter == 'Log-normal') {
+      updateMatrixInput(
+        session, paste0("lnorm_survival_", x$k),
+        value=matrix(x$lnorm_survival, ncol = x$k,
+                     dimnames = list(c("Mean on log scale",
+                                       "SD on log scale"),
+                                     paste("Treatment", 1:x$k))))
+    }
+
+    if (x$stage == 'Design stage' &&
+        x$event_model_parameter == 'Piecewise exponential') {
+      updateMatrixInput(
+        session, paste0("piecewise_exponential_survival_", x$k),
+        value=matrix(x$piecewise_exponential_survival, ncol = x$k + 1,
+                     dimnames = list(
+                       paste("Interval",
+                             1:nrow(x$piecewise_exponential_survival)),
+                       c("Starting time", paste("Treatment", 1:x$k)))))
+    }
+
+
+    if (x$stage == 'Design stage' &&
+        x$dropout_model_parameter == 'Exponential') {
+      updateMatrixInput(
+        session, paste0("exponential_dropout_", x$k),
+        value=matrix(x$exponential_dropout, ncol = x$k,
+                     dimnames = list(NULL, paste("Treatment", 1:x$k))))
+    }
+
+    if (x$stage == 'Design stage' &&
+        x$dropout_model_parameter == 'Weibull') {
+      updateMatrixInput(
+        session, paste0("weibull_dropout_", x$k),
+        value=matrix(x$weibull_dropout, ncol = x$k,
+                     dimnames = list(c("Shape", "Scale"),
+                                     paste("Treatment", 1:x$k))))
+    }
+
+    if (x$stage == 'Design stage' &&
+        x$dropout_model_parameter == 'Log-normal') {
+      updateMatrixInput(
+        session, paste0("lnorm_dropout_", x$k),
+        value=matrix(x$lnorm_dropout, ncol = x$k,
+                     dimnames = list(c("Mean on log scale",
+                                       "SD on log scale"),
+                                     paste("Treatment", 1:x$k))))
+    }
+
+    if (x$stage == 'Design stage' &&
+        x$dropout_model_parameter == 'Piecewise exponential') {
+      updateMatrixInput(
+        session, paste0("piecewise_exponential_dropout_", x$k),
+        value=matrix(x$piecewise_exponential_dropout, ncol = x$k + 1,
+                     dimnames = list(
+                       paste("Interval",
+                             1:nrow(x$piecewise_exponential_dropout)),
+                       c("Starting time", paste("Treatment", 1:x$k)))))
+    }
+
+
+
+    if (x$stage == 'Design stage') {
+      updateRadioButtons(session, "enroll_model_parameter",
+                         selected=x$enroll_model_parameter)
+
+      if (x$enroll_model_parameter == "Poisson") {
+        updateNumericInput(session, "poisson_rate", value=x$poisson_rate)
+      } else if (x$enroll_model_parameter == "Time-decay") {
+        updateNumericInput(session, "mu", value=x$mu)
+        updateNumericInput(session, "delta", value=x$delta)
+      } else if (x$enroll_model_parameter == "Piecewise Poisson") {
+        updateMatrixInput(
+          session, "piecewise_poisson_rate",
+          value=matrix(x$piecewise_poisson_rate, ncol = 2,
+                       dimnames = list(
+                         paste("Interval",
+                               1:nrow(x$piecewise_poisson_rate)),
+                         c("Starting time", "Enrollment rate"))))
+      }
+
+      if (x$to_predict == 'Enrollment and event') {
+        updateRadioButtons(session, "event_model_parameter",
+                           selected=x$event_model_parameter)
+
+        updateRadioButtons(session, "dropout_model_parameter",
+                           selected=x$dropout_model_parameter)
+      }
+
+    } else {
+
+      if (x$stage == 'Real-time before enrollment completion') {
+        updateRadioButtons(session, "enroll_model", selected=x$enroll_model)
+
+        if (x$enroll_model == "B-spline") {
+          updateNumericInput(session, "nknots", value=x$nknots)
+          updateNumericInput(session, "lags", value=x$lags)
+        } else if (x$enroll_model == "Piecewise Poisson") {
+          updateMatrixInput(
+            session, "accrualTime",
+            value=matrix(x$accrualTime, ncol = 1,
+                         dimnames = list(
+                           paste("Interval", 1:nrow(x$accrualTime)),
+                           "Starting time")))
+        }
+      }
+
+
+      if ((x$stage == 'Real-time before enrollment completion' &&
+           x$to_predict == 'Enrollment and event') ||
+          x$stage == 'Real-time after enrollment completion') {
+
+        updateRadioButtons(session, "event_model", selected=x$event_model)
+
+        if (x$event_model == "Piecewise exponential") {
+          updateMatrixInput(
+            session, "piecewiseSurvivalTime",
+            value=matrix(x$piecewiseSurvivalTime, ncol = 1,
+                         dimnames = list(
+                           paste("Interval",
+                                 1:nrow(x$piecewiseSurvivalTime)),
+                           "Starting time")))
+        }
+
+        updateRadioButtons(session, "dropout_model",
+                           selected=x$dropout_model)
+
+        if (x$dropout_model == "Piecewise exponential") {
+          updateMatrixInput(
+            session, "piecewiseDropoutTime",
+            value=matrix(x$piecewiseDropoutTime, ncol = 1,
+                         dimnames = list(
+                           paste("Interval",
+                                 1:nrow(x$piecewiseDropoutTime)),
+                           "Starting time")))
+        }
+      }
+
+
+    }
+
+
+    updateRadioButtons(session, "stage", selected=x$stage)
+
+    if (x$stage == 'Design stage' ||
+        x$stage == 'Real-time before enrollment completion') {
+      updateRadioButtons(session, "to_predict", selected=x$to_predict)
+      updateNumericInput(session, "target_n", value=x$target_n)
+    } else {
+      updateRadioButtons(session, "to_predict2", selected=x$to_predict2)
+    }
+
+    if (x$to_predict == 'Enrollment and event' ||
+        x$stage == 'Real-time after enrollment completion') {
+      updateNumericInput(session, "target_d", value=x$target_d)
+      updateCheckboxGroupInput(session, "to_show", selected=x$to_show)
+    }
+
+    updateNumericInput(session, "pilevel", value=x$pilevel)
+    updateNumericInput(session, "nyears", value=x$nyears)
+
+    updateCheckboxInput(session, "by_treatment", value=x$by_treatment)
+
+    if (x$stage == 'Design stage' ||
+        (x$by_treatment &&
+         x$stage != 'Real-time after enrollment completion')) {
+      updateSelectInput(session, "k", selected=x$k)
+    }
+
+    updateNumericInput(session, "nreps", value=x$nreps)
+    updateNumericInput(session, "seed", value=x$seed)
+
+  })
 }
 
 # Run the application
