@@ -116,8 +116,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
     # slope in the last 1/4 "active" enrollment time interval
     beta = (n0 - df1u$n[df1u$t >= 3/4*t0][1])/(1/4*t0)
-    mu0 = 2*n0/t0^2
-    delta0 = mu0/beta
+    mu0 = 2*n0/t0^2  # Taylor expansion of mu(t) to t^2
+    delta0 = mu0/beta  # beta is the asymptotic slope
     theta <- c(log(mu0), log(delta0))
     opt1 <- optim(theta, llik_td, gr = NULL, t = t0, df = df1,
                   control = c(fnscale = -1))  # maximization
