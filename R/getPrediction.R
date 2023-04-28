@@ -29,7 +29,7 @@
 #'   which can be set to one of the
 #'   following options: "exponential", "Weibull", "log-normal",
 #'   "piecewise exponential", or "model averaging". The model averaging
-#'   uses the \code{exp(-bic)} weighting and combines Weibull and
+#'   uses the \code{exp(-bic/2)} weighting and combines Weibull and
 #'   log-normal models. By default, it is set to "model
 #'   averaging".
 #' @param piecewiseSurvivalTime A vector that specifies the time
