@@ -1,7 +1,7 @@
 #' @title Summarize observed data
 #' @description Provides an overview of the observed data, including
-#' the trial start date, data cutoff date, number of subjects
-#' enrolled, enrollment duration, number of events and dropouts,
+#' the trial start date, data cutoff date, enrollment duration,
+#' number of subjects enrolled, number of events and dropouts,
 #' number of subjects at risk, cumulative enrollment and event data,
 #' daily enrollment rates, and Kaplan-Meier plots for time to event
 #' and time to dropout.
