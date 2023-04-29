@@ -1,6 +1,8 @@
 # eventPred 0.1.2
 
 - add mean and variance to prediction output
+- update the BIC weight for model averaging
+- add more details for model fit parameters 
 
 # eventPred 0.1.1
 
