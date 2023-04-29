@@ -520,7 +520,8 @@ ui <- fluidPage(
   add_busy_spinner(),
 
   titlePanel(tagList(
-    span(HTML(paste(tags$span("Enrollment and Treatment Prediction"))),
+    span(HTML(paste(tags$span(style="font-size:14pt",
+                              "Enrollment and Treatment Prediction"))),
          span(actionButton(
            "predict", "Predict",
            style="color: #fff; background-color: #337ab7;
@@ -530,6 +531,8 @@ ui <- fluidPage(
            fileInputNoExtra("loadInputs", label=NULL, accept=".rds",
                             buttonLabel=list(icon("upload"), "Load inputs"),
                             width="116px"),
+           tags$a(tags$span(icon(name = "question-circle")), target="_blank",
+                  href="simplified_manual.pdf"),
            style="position:absolute;right:0.5em;",
            tags$style(type='text/css', "#saveInputs{margin-top: -5px;}")
          ))),
@@ -3842,6 +3845,9 @@ server <- function(input, output, session) {
     updateNumericInput(session, "seed", value=x$seed)
 
   })
+
+
+
 }
 
 # Run the application
