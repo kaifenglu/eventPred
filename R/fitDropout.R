@@ -135,28 +135,29 @@ fitDropout <- function(df, dropout_model = "exponential",
 
     # maximum likelihood estimates and covariance matrix
     if (J > 1) {
-      fit3 <- list(model = "Piecewise exponential",
-                   theta = log(d/ex),
-                   vtheta = diag(1/d),
-                   bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
-                   piecewiseDropoutTime = u)
+      vtheta = diag(1/d)
     } else {
-      fit3 <- list(model = "Piecewise exponential",
-                   theta = log(d/ex),
-                   vtheta = 1/d*diag(1),
-                   bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
-                   piecewiseDropoutTime = u)
+      vtheta = 1/d*diag(1)
     }
+
+    fit3 <- list(model = "Piecewise exponential",
+                 theta = log(d/ex),
+                 vtheta = vtheta,
+                 bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
+                 piecewiseDropoutTime = u)
 
     # fitted survival curve
     time = seq(0, max(df$time))
 
-    surv = 0
-    for (j in 1:J) {
-      exj = pmax(0, pmin(time, ucut[j+1]) - ucut[j])
-      surv = surv + exp(fit3$theta[j]) * exj
+    lambda = d/ex
+    if (J>1) {
+      psum = c(0, cumsum(lambda[1:(J-1)] * diff(u)))
+    } else {
+      psum = 0
     }
-    surv = exp(-surv)
+    j = findInterval(time, u)
+    m = psum[j] + lambda[j]*(time - u[j])
+    surv = exp(-m)
 
     dffit3 <- dplyr::tibble(time, surv)
   }
