@@ -82,7 +82,13 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   df1u <- df1 %>%
     dplyr::group_by(.data$randdt) %>%
     dplyr::slice(dplyr::n()) %>%
-    dplyr::ungroup()
+    dplyr::ungroup() %>%
+    dplyr::select(.data$t, .data$n)
+
+  # add day 1
+  df0 <- dplyr::tibble(t = 1, n = 0)
+  df1u <- df0 %>%
+    dplyr::bind_rows(df1u)
 
   # fit enrollment model
   if (tolower(enroll_model) == "poisson") {
@@ -125,7 +131,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
                  theta = opt1$par,
                  vtheta = solve(-optimHess(opt1$par, llik_td, gr = NULL,
                                            t = t0, df = df1)),
-                 bic = -2*llik_td(opt1$par, t = t0, df = df1) + 2*log(n0))
+                 bic = -2*opt1$value + 2*log(n0))
 
     dffit1 <- dplyr::tibble(
       t = seq(1, t0),
@@ -199,7 +205,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     lambda = n/t
     psum = c(0, cumsum(n))  # cumulative enrollment by end of interval
     time = seq(1, t0) # find the time interval for each day
-    j = findInterval(time, u, left.open = TRUE)
+    j = findInterval(time, u)
     m = psum[j] + lambda[j]*(time - u[j]) # cumulative enrollment by day
 
     dffit1 <- dplyr::tibble(
