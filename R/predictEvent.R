@@ -298,7 +298,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     d0 = 0
     c0 = 0
     t0 = 1
-    time0 = 0
     r0 = 0
   }
   d1 = target_d - d0  # number of new events
