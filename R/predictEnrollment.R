@@ -162,7 +162,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
         # which lies beneath mu(t), and then find tmax such that
         #   v(tmax) = muTime, which implies mu(tmax) > muTime
         # so that tmax > t
-        ti = log(2)/delta  # obtained by setting lambda(ti) = mu/delta
+        ti = log(2)/delta  # obtained by setting lambda(ti) = mu/(2*delta)
         tmax = (muTime - fmu_td(ti, theta[i,]))*2*delta/mu + ti
         interval = cbind(t0, tmax)
 
@@ -216,7 +216,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     }
     u = enroll_fit$accrualTime
 
-    # mu(t[j]) - mu(t[j-1]) is standard exponential distribution, j=1,...,n1
+    # mu(t[j]) - mu(t[j-1]) is standard exponential distribution, t[0]=t0
     newEnrollment_pw <- function(t0, n1, theta, u, nreps) {
       df = dplyr::as_tibble(matrix(
         nrow = nreps*n1, ncol = 2,
@@ -312,7 +312,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
     dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
-    # plot the enrollment data with month as x-axis label
+    # plot the enrollment data with date as x-axis
     g1 <- plotly::plot_ly() %>%
       plotly::add_ribbons(data = dfb, x = ~date,
                           ymin = ~lower, ymax = ~upper,
@@ -345,6 +345,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     str3 <- paste0("Prediction interval: ", pred_day[2], ", ", pred_day[3])
     s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
 
+    # plot the enrollment data with day as x-axis
     g1 <- plotly::plot_ly(dfb, x = ~t) %>%
       plotly::add_ribbons(ymin = ~lower, ymax = ~upper,
                           name = "prediction interval",
