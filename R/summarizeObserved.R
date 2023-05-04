@@ -62,15 +62,21 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                   parameter = "Enrollment",
                   date = .data$randdt)
 
+  # remove duplicate
   adslu <- adsl %>%
     dplyr::group_by(.data$randdt) %>%
     dplyr::slice(dplyr::n()) %>%
-    dplyr::ungroup()
+    dplyr::ungroup() %>%
+    dplyr::select(.data$n, .data$parameter, .data$date)
+
+  # dummy subject to initialize time axis at trial start
+  adsl0 <- dplyr::tibble(n = 0, parameter = "Enrollment", date = trialsdt)
 
   # extend enrollment information to cutoff date
   adsl1 <- adsl %>%
     dplyr::slice(dplyr::n()) %>%
-    dplyr::mutate(date = cutoffdt)
+    dplyr::mutate(date = cutoffdt) %>%
+    dplyr::select(.data$n, .data$parameter, .data$date)
 
 
 
@@ -86,22 +92,22 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
     adtteu <- adtte %>%
       dplyr::group_by(.data$adt) %>%
       dplyr::slice(dplyr::n()) %>%
-      dplyr::ungroup()
+      dplyr::ungroup() %>%
+      dplyr::select(.data$n, .data$parameter, .data$date)
 
-    # dummy subject to initialize time to event axis at trial start
-    adtte0 <- adtte %>%
-      dplyr::slice(1) %>%
-      dplyr::mutate(randdt = trialsdt, adt = trialsdt, time = 1,
-                    event = 0, dropout = 0,
-                    n = 0, parameter = "Event", date = trialsdt)
+    # dummy subject to initialize time axis at trial start
+    adtte0 <- dplyr::tibble(n = 0, parameter = "Event", date = trialsdt)
+
 
     # combine enrollment and time to event data
-    ad <- adslu %>%
+    ad <- adsl0 %>%
+      dplyr::bind_rows(adslu) %>%
       dplyr::bind_rows(adsl1) %>%
       dplyr::bind_rows(adtte0) %>%
       dplyr::bind_rows(adtteu)
   } else {
-    ad <- adslu %>%
+    ad <- adsl0 %>%
+      dplyr::bind_rows(adslu) %>%
       dplyr::bind_rows(adsl1)
   }
 
