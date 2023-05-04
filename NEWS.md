@@ -3,6 +3,7 @@
 - add mean and variance to prediction output
 - update the BIC weight for model averaging
 - add more details for model fit parameters 
+- allow prior piecewise Poisson enrollment and piecewise exponential event or dropout models to have additional cut points beyond the observed data range
 
 # eventPred 0.1.1
 
