@@ -259,38 +259,19 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1),
                     totalTime = .data$arrivalTime + .data$time)
 
+    n0 = nrow(df)
     d0 = sum(df$event)
     c0 = sum(df$dropout)
     t0 = as.numeric(cutoffdt - trialsdt + 1)
-  } else {
-    d0 = 0
-    c0 = 0
-    t0 = 1
-  }
-  d1 = target_d - d0  # number of new events
 
-  erify::check_n(d1)
-
-  if (!is.null(df)) {
-    n0 = nrow(df)
+    # subset to extract ongoing subjects
     ongoingSubjects <- df %>%
       dplyr::filter(.data$event == 0 & .data$dropout == 0)
 
     arrivalTimeOngoing <- ongoingSubjects$arrivalTime
     time0 = t0 - arrivalTimeOngoing
     r0 = nrow(ongoingSubjects)
-  } else {
-    n0 = 0
-    time0 = t0
-    r0 = 0
-  }
 
-
-  # time zero
-  df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA,
-                       mean = 0, var = 0)
-
-  if (!is.null(df)) {
     # arrival time for subjects already enrolled before data cut
     dfa <- df %>%
       dplyr::arrange(.data$randdt) %>%
@@ -312,15 +293,29 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dfa <- dfa %>%
         dplyr::bind_rows(dfa1)
     }
+  } else {
+    n0 = 0
+    d0 = 0
+    c0 = 0
+    t0 = 1
+    time0 = 0
+    r0 = 0
   }
+  d1 = target_d - d0  # number of new events
 
+  erify::check_n(d1)
+
+
+  # time zero
+  df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
+                       mean = 0, var = 0)
+
+  # lower and upper percentages
+  plower = (1 - pilevel)/2
+  pupper = 1 - plower
 
   if (!is.null(newSubjects)) {
-
-    # lower and upper percentages
-    plower = (1 - pilevel)/2
-    pupper = 1 - plower
-
+    # predicted enrollment end day
     new1 <- newSubjects %>%
       dplyr::group_by(.data$draw) %>%
       dplyr::slice(dplyr::n())
@@ -347,7 +342,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     if (!is.null(df)) {
       # concatenate subjects enrolled before and after data cut
-      enroll_pred_df <- dfa %>%
+      enroll_pred_df <- df0 %>%
+        dplyr::bind_rows(dfa) %>%
         dplyr::bind_rows(dfb) %>%
         dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
         dplyr::mutate(parameter = "Enrollment")
@@ -549,33 +545,37 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         p1 = event_fit$w1*pweibull(time0, shape, scale, lower.tail = FALSE)
         p2 = (1-event_fit$w1)*plnorm(time0, meanlog, sdlog, lower.tail = FALSE)
         w = (runif(r0) < p1/(p1+p2))
+        nw1 = sum(w)
+        nw0 = r0 - nw1
 
         # draw from the corresponding component distribution
         survivalTimeOngoing = rep(NA, r0)
-        if (sum(w) > 0) {
-          survivalTimeOngoing[w==1] = (rexp(sum(w))*scale^shape +
+        if (nw1 > 0) {
+          survivalTimeOngoing[w==1] = (rexp(nw1)*scale^shape +
                                          time0[w==1]^shape)^(1/shape)
         }
 
-        if (sum(1-w) > 0) {
+        if (nw0 > 0) {
           survivalTimeOngoing[w==0] = exp(tmvtnsim::rtnorm(
-            mean = rep(meanlog, sum(1-w)), sd = sdlog,
-            lower = log(time0[w==0]), upper = rep(Inf, sum(1-w))))
+            mean = rep(meanlog, nw0), sd = sdlog,
+            lower = log(time0[w==0]), upper = rep(Inf, nw0)))
         }
 
         # event time for new subjects
         if (n1 > 0) {
           # draw component indicator
           w = rbinom(n1, size = 1, prob = event_fit$w1)
+          nw1 = sum(w)
+          nw0 = n1 - nw1
 
           # draw from the corresponding component distribution
           survivalTimeNew = rep(NA, n1)
-          if (sum(w) > 0) {
-            survivalTimeNew[w==1] = rweibull(sum(w), shape, scale)
+          if (nw1 > 0) {
+            survivalTimeNew[w==1] = rweibull(nw1, shape, scale)
           }
 
-          if (sum(1-w) > 0) {
-            survivalTimeNew[w==0] = rlnorm(sum(1-w), meanlog, sdlog)
+          if (nw0 > 0) {
+            survivalTimeNew[w==0] = rlnorm(nw0, meanlog, sdlog)
           }
 
           survivalTime = c(survivalTimeOngoing, survivalTimeNew)
@@ -610,10 +610,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           meanlog = theta3[i,1]
           sdlog = exp(theta3[i,2])
 
-          # first draw truncated normal on the log scale
-          y = tmvtnsim::rtnorm(mean = rep(meanlog, r0), sd = sdlog,
-                               lower = log(time0), upper = rep(Inf, r0))
-          dropoutTimeOngoing = exp(y)
+          # draw truncated normal on the log scale and exponentiate
+          dropoutTimeOngoing = exp(tmvtnsim::rtnorm(
+            mean = rep(meanlog, r0), sd = sdlog,
+            lower = log(time0), upper = rep(Inf, r0)))
 
           if (n1 > 0) {
             dropoutTimeNew = rlnorm(n1, meanlog, sdlog)
@@ -692,51 +692,57 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dimnames = list(NULL, c("draw", "arrivalTime", "treatment", "time",
                               "event", "dropout"))))
 
+    # draw treatment for each subject
     k = event_fit$ngroups # number of treatment groups
     if (k > 1) {
       alloc = event_fit$alloc # treatment allocation within a block
       blocksize = sum(alloc)
       nblocks = ceiling(n1/blocksize)
+      m = nblocks*blocksize
       treats = rep(1:k, alloc)
+      index = rep(1:n1, nreps) + rep((0:(nreps-1))*m, each=n1)
+      treatment = c(replicate(nreps*nblocks, sample(treats)))[index]
+    } else {
+      treatment = rep(1, nreps*n1)
     }
+
+    newSubjects <- newSubjects %>%
+      dplyr::bind_cols(treatment=treatment)
 
 
     for (i in 1:nreps) {
       arrivalTime = newSubjects$arrivalTime[newSubjects$draw == i]
-
-      # draw treatment for each subject
-      if (k>1) {
-        treatment = c(replicate(nblocks, sample(treats)))[1:n1]
-      } else {
-        treatment = rep(1, n1)
-      }
+      treatment = newSubjects$treatment[newSubjects$draw == i]
 
       # draw event time for new subjects
       survivalTime = rep(NA, n1)
       if (tolower(event_fit$model) == "exponential") {
         for (j in 1:k) {
           cols = which(treatment == j)
-          if (length(cols) > 0) {
+          ncols = length(cols)
+          if (ncols > 0) {
             rate = exp(theta2[[j]][i,])
-            survivalTime[cols] = rexp(length(cols), rate)
+            survivalTime[cols] = rexp(ncols, rate)
           }
         }
       } else if (tolower(event_fit$model) == "weibull") {
         for (j in 1:k) {
           cols = which(treatment == j)
-          if (length(cols) > 0) {
+          ncols = length(cols)
+          if (ncols > 0) {
             shape = exp(theta2[[j]][i,1])
             scale = exp(theta2[[j]][i,2])
-            survivalTime[cols] = rweibull(length(cols), shape, scale)
+            survivalTime[cols] = rweibull(ncols, shape, scale)
           }
         }
       } else if (tolower(event_fit$model) == "log-normal") {
         for (j in 1:k) {
           cols = which(treatment == j)
-          if (length(cols) > 0) {
+          ncols = length(cols)
+          if (ncols > 0) {
             meanlog = theta2[[j]][i,1]
             sdlog = exp(theta2[[j]][i,2])
-            survivalTime[cols] = rlnorm(length(cols), meanlog, sdlog)
+            survivalTime[cols] = rlnorm(ncols, meanlog, sdlog)
           }
         }
       } else if (tolower(event_fit$model) == "piecewise exponential") {
@@ -744,7 +750,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         J = length(u) # number of intervals
         for (j in 1:k) {
           cols = which(treatment == j)
-          if (length(cols) > 0) {
+          ncols = length(cols)
+          if (ncols > 0) {
             lambda = exp(theta2[[j]][i,]) # hazard rates in the intervals
             # partial sums of lambda*interval_width
             if (J > 1) {
@@ -752,7 +759,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             } else {
               psum = 0
             }
-            rhs = rexp(length(cols)) # cumulative hazard
+            rhs = rexp(ncols) # cumulative hazard
             j1 = findInterval(rhs, psum)
             survivalTime[cols] = u[j1] + (rhs - psum[j1])/lambda[j1]
           }
@@ -766,27 +773,30 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         if (tolower(dropout_fit$model) == "exponential") {
           for (j in 1:k) {
             cols = which(treatment == j)
-            if (length(cols) > 0) {
+            ncols = length(cols)
+            if (ncols > 0) {
               rate = exp(theta3[[j]][i,])
-              dropoutTime[cols] = rexp(length(cols), rate)
+              dropoutTime[cols] = rexp(ncols, rate)
             }
           }
         } else if (tolower(dropout_fit$model) == "weibull") {
           for (j in 1:k) {
             cols = which(treatment == j)
-            if (length(cols) > 0) {
+            ncols = length(cols)
+            if (ncols > 0) {
               shape = exp(theta3[[j]][i,1])
               scale = exp(theta3[[j]][i,2])
-              dropoutTime[cols] = rweibull(length(cols), shape, scale)
+              dropoutTime[cols] = rweibull(ncols, shape, scale)
             }
           }
         } else if (tolower(dropout_fit$model) == "log-normal") {
           for (j in 1:k) {
             cols = which(treatment == j)
-            if (length(cols) > 0) {
+            ncols = length(cols)
+            if (ncols > 0) {
               meanlog = theta3[[j]][i,1]
               sdlog = exp(theta3[[j]][i,2])
-              dropoutTime[cols] = rlnorm(length(cols), meanlog, sdlog)
+              dropoutTime[cols] = rlnorm(ncols, meanlog, sdlog)
             }
           }
         } else if (tolower(dropout_fit$model) == "piecewise exponential") {
@@ -794,7 +804,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           J = length(u) # number of intervals
           for (j in 1:k) {
             cols = which(treatment == j)
-            if (length(cols) > 0) {
+            ncols = length(cols)
+            if (ncols > 0) {
               lambda = exp(theta3[[j]][i,]) # hazard rates in the intervals
               # partial sums of lambda*interval_width
               if (J > 1) {
@@ -802,7 +813,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
               } else {
                 psum = 0
               }
-              rhs = rexp(length(cols)) # cumulative hazard
+              rhs = rexp(ncols) # cumulative hazard
               j1 = findInterval(rhs, psum)
               dropoutTime[cols] = u[j1] + (rhs - psum[j1])/lambda[j1]
             }
@@ -850,10 +861,6 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   # upper bound for time axis for plotting
   t1 = t0 + 365*nyears
-
-  # lower and upper percentages
-  plower = (1 - pilevel)/2
-  pupper = 1 - plower
 
   # A general quantile method if there are data sets not reaching target_d
   # Find t such that sum(I{D_i(t) < target_d}, {i, 1, nreps}) / nreps = q.
