@@ -23,8 +23,7 @@
 #'   Poisson model. Must start with 0, e.g., c(0, 30) breaks the
 #'   time axis into 2 accrual intervals: [0, 30) and [30, Inf).
 #'   By default, it is set to 0.
-#' @param enroll_model_parameter The enrollment model parameters for
-#'   design-stage enrollment prediction.
+#' @param enroll_prior The prior of enrollment model parameters.
 #' @param event_model The event model used to analyze the event data
 #'   which can be set to one of the
 #'   following options: "exponential", "Weibull", "log-normal",
@@ -36,8 +35,7 @@
 #'   intervals for the piecewise exponential survival distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
 #'   event intervals: [0, 60) and [60, Inf). By default, it is set to 0.
-#' @param event_model_parameter The event model parameters for
-#'   design-stage event prediction.
+#' @param event_prior The prior of event model parameters.
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
 #'   "Weibull", "log-normal", or "piecewise exponential". By default,
@@ -46,8 +44,7 @@
 #'   intervals for the piecewise exponential dropout distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
 #'   event intervals: [0, 60) and [60, Inf). By default, it is set to 0.
-#' @param dropout_model_parameter The dropout model parameters for
-#'   design-stage event prediction.
+#' @param dropout_prior The prior of dropout model parameters.
 #' @param fixedFollowup A Boolean variable indicating whether a fixed
 #'   follow-up design is used. By default, it is set to \code{FALSE}
 #'   for a variable follow-up design.
@@ -85,21 +82,19 @@
 #' \code{lambda(t) = exp(B(t)*theta)},
 #' where \code{B(t)} represents the B-spline basis functions.
 #'
-#' The \code{enroll_model_parameter} variable can be used for
-#' enrollment prediction at the design stage. A piecewise Poisson
-#' can be parameterized through the time intervals,
-#' \code{accrualTime}, which is treated as fixed, and the
-#' enrollment rates in the intervals, \code{accrualIntensity},
-#' the log of which is used as the model parameter. For the
-#' homogeneous Poisson, time-decay, and piecewise Poisson models,
-#' \code{enroll_model_parameter} is used to specify the prior
-#' distribution of model parameters, with a very small variance
-#' being used to fix the parameter values. It should be noted
-#' that the B-spline model is not appropriate for use during
-#' the design stage.
+#' The \code{enroll_prior} variable should be a list that
+#' includes \code{model} to specify the enrollment model
+#' (poisson, time-decay, piecewise poisson),
+#' \code{theta} and \code{vtheta} to indicate the parameter
+#' values and the covariance matrix. One can use a very small
+#' value of \code{vtheta} to fix the parameter values.
+#' For the piecewise Poisson enrollment model, the list
+#' should also include \code{accrualTime}. It should be noted
+#' that the B-spline model is not appropriate for use as prior.
 #'
-#' The \code{event_model_parameter} variable should be a list that
-#' includes \code{model} to specify the event process,
+#' The \code{event_prior} variable should be a list that
+#' includes \code{model} to specify the event model
+#' (exponential, weibull, log-normal, piecewise exponential),
 #' \code{ngroups} to indicate the number of treatment groups,
 #' \code{alloc} to indicate the treatment allocation within a
 #' randomization block, \code{theta} and \code{vtheta} to indicate
@@ -107,12 +102,13 @@
 #' have \code{ngroups} blocks with the \code{j}-th block specifying
 #' the prior distribution of model parameters for the \code{j}-th
 #' treatment group. For the piecewise exponential event model,
-#' this should also include \code{piecewiseSurvivalTime} to indicate
+#' the list should also include \code{piecewiseSurvivalTime} to indicate
 #' the location of knots. It should be noted that the model averaging
-#' option is not appropriate for use during the design stage.
+#' option is not appropriate for use as prior.
 #'
-#' The \code{dropout_model_parameter} should be a list that
-#' includes \code{model} to specify the dropout process,
+#' The \code{dropout_prior} should be a list that
+#' includes \code{model} to specify the dropout model,
+#' (exponential, weibull, log-normal, piecewise exponential),
 #' \code{ngroups} to indicate the number of treatment groups,
 #' \code{alloc} to indicate the treatment allocation within a
 #' randomization block, \code{theta} and \code{vtheta} to indicate
@@ -120,12 +116,12 @@
 #' have \code{ngroups} blocks with the \code{j}-th block specifying
 #' the prior distribution of model parameters for the \code{j}-th
 #' treatment group. For the piecewise exponential dropout model,
-#' this should also include \code{piecewiseDropoutTime} to indicate
+#' the list should also include \code{piecewiseDropoutTime} to indicate
 #' the location of knots.
 #'
 #' For analysis-stage enrollment and event prediction, the
-#' \code{enroll_model_parameter}, \code{event_model_parameter}, and
-#' \code{dropout_model_parameter} are either set to \code{NULL} to
+#' \code{enroll_prior}, \code{event_prior}, and
+#' \code{dropout_prior} are either set to \code{NULL} to
 #' use the observed data only, or specify the prior distribution
 #' of model parameters to be combined with observed data likelihood
 #' for enhanced modeling flexibility.
@@ -151,11 +147,11 @@ getPrediction <- function(
     df = NULL, to_predict = "enrollment and event",
     target_n = NA, target_d = NA,
     enroll_model = "b-spline", nknots = 0, lags = 30, accrualTime = 0,
-    enroll_model_parameter = NULL,
+    enroll_prior = NULL,
     event_model = "model averaging", piecewiseSurvivalTime = 0,
-    event_model_parameter = NULL,
+    event_prior = NULL,
     dropout_model = "exponential", piecewiseDropoutTime = 0,
-    dropout_model_parameter = NULL,
+    dropout_prior = NULL,
     fixedFollowup = FALSE, followupTime = 365,
     pilevel = 0.90, nyears = 4, nreps = 500,
     showEnrollment = TRUE, showEvent = TRUE,
@@ -190,23 +186,23 @@ getPrediction <- function(
     stop("accrualTime should be increasing")
   }
 
-  if (!is.null(enroll_model_parameter)) {
-    erify::check_class(enroll_model_parameter, "list")
-    erify::check_content(tolower(enroll_model_parameter$model),
+  if (!is.null(enroll_prior)) {
+    erify::check_class(enroll_prior, "list")
+    erify::check_content(tolower(enroll_prior$model),
                          c("poisson", "time-decay", "piecewise poisson"))
 
     if (!is.null(df)) {
-      if (tolower(enroll_model_parameter$model) != tolower(enroll_model)) {
+      if (tolower(enroll_prior$model) != tolower(enroll_model)) {
         stop("Prior and likelihood must use the same enrollment model.")
       }
 
-      if (tolower(enroll_model_parameter$model) == "piecewise poisson" &&
-          (length(enroll_model_parameter$accrualTime) < length(accrualTime) ||
+      if (tolower(enroll_prior$model) == "piecewise poisson" &&
+          (length(enroll_prior$accrualTime) < length(accrualTime) ||
            !all.equal(
-             enroll_model_parameter$accrualTime[1:length(accrualTime)],
+             enroll_prior$accrualTime[1:length(accrualTime)],
              accrualTime))) {
         stop(paste("accrualTime of piecewise Poisson must be a subset of",
-                   "that in enroll_model_parameter."))
+                   "that in enroll_prior."))
       }
     }
   }
@@ -224,67 +220,67 @@ getPrediction <- function(
     stop("piecewiseSurvivalTime should be increasing")
   }
 
-  if (!is.null(event_model_parameter)) {
-    erify::check_class(event_model_parameter, "list")
-    erify::check_content(tolower(event_model_parameter$model),
+  if (!is.null(event_prior)) {
+    erify::check_class(event_prior, "list")
+    erify::check_content(tolower(event_prior$model),
                          c("exponential", "weibull", "log-normal",
                            "piecewise exponential"))
 
-    if (length(event_model_parameter$alloc) !=
-        event_model_parameter$ngroups) {
+    if (length(event_prior$alloc) !=
+        event_prior$ngroups) {
       stop(paste("Number of treatments in alloc must be equal to ngroups",
-                 "in event_model_parameter"))
+                 "in event_prior"))
     }
 
-    if (nrow(event_model_parameter$vtheta) !=
-        length(event_model_parameter$theta) ||
-        ncol(event_model_parameter$vtheta) !=
-        length(event_model_parameter$theta)) {
+    if (nrow(event_prior$vtheta) !=
+        length(event_prior$theta) ||
+        ncol(event_prior$vtheta) !=
+        length(event_prior$theta)) {
       stop(paste("Dimensions of vtheta must be compatible with the length",
-                 "of theta in event_model_parameter"))
+                 "of theta in event_prior"))
     }
 
-    if ((tolower(event_model_parameter$model) == "exponential" &&
-         length(event_model_parameter$theta) !=
-         event_model_parameter$ngroups) ||
-        (tolower(event_model_parameter$model) == "weibull" &&
-         length(event_model_parameter$theta) !=
-         2*event_model_parameter$ngroups) ||
-        (tolower(event_model_parameter$model) == "log-normal" &&
-         length(event_model_parameter$theta) !=
-         2*event_model_parameter$ngroups) ||
-        (tolower(event_model_parameter$model) == "piecewise_exponential" &&
-         length(event_model_parameter$theta) !=
-         length(event_model_parameter$piecewiseSurvivalTime)*
-         event_model_parameter$ngroups)) {
+    if ((tolower(event_prior$model) == "exponential" &&
+         length(event_prior$theta) !=
+         event_prior$ngroups) ||
+        (tolower(event_prior$model) == "weibull" &&
+         length(event_prior$theta) !=
+         2*event_prior$ngroups) ||
+        (tolower(event_prior$model) == "log-normal" &&
+         length(event_prior$theta) !=
+         2*event_prior$ngroups) ||
+        (tolower(event_prior$model) == "piecewise_exponential" &&
+         length(event_prior$theta) !=
+         length(event_prior$piecewiseSurvivalTime)*
+         event_prior$ngroups)) {
       stop(paste("Length of theta must be compatible with ngroups",
-                 "in event_model_parameter"))
+                 "in event_prior"))
     }
 
-    if (tolower(event_model_parameter$model) == "piecewise_exponential") {
-      if (event_model_parameter$piecewiseSurvivalTime[1] != 0) {
+    if (tolower(event_prior$model) == "piecewise_exponential") {
+      if (event_prior$piecewiseSurvivalTime[1] != 0) {
         stop(paste("piecewiseSurvivalTime must start with 0",
-                   "in event_model_parameter"))
+                   "in event_prior"))
       }
-      if (length(event_model_parameter$piecewiseSurvivalTime) > 1 &&
-          any(diff(event_model_parameter$piecewiseSurvivalTime) <= 0)) {
+      if (length(event_prior$piecewiseSurvivalTime) > 1 &&
+          any(diff(event_prior$piecewiseSurvivalTime) <= 0)) {
         stop(paste("piecewiseSurvivalTime should be increasing",
-                   "in event_model_parameter"))
+                   "in event_prior"))
       }
     }
 
     if (!is.null(df)) {
-      if (tolower(event_model_parameter$model) != tolower(event_model)) {
+      if (tolower(event_prior$model) != tolower(event_model)) {
         stop("Prior and likelihood must use the same event model.")
       }
 
-      if (tolower(event_model_parameter$model) == "piecewise exponential" &&
-          (length(event_model_parameter$piecewiseSurvivalTime) <
+      if (tolower(event_prior$model) == "piecewise exponential" &&
+          (length(event_prior$piecewiseSurvivalTime) <
            length(piecewiseSurvivalTime) ||
-           !all.equal(event_model_parameter$piecewiseSurvivalTime[
+           !all.equal(event_prior$piecewiseSurvivalTime[
              1:length(piecewiseSurvivalTime)], piecewiseSurvivalTime))) {
         stop(paste("piecewiseSurvivalTime of piecewise exponential model",
-                   "must be a subset of that in event_model_parameter."))
+                   "must be a subset of that in event_prior."))
       }
     }
   }
@@ -302,82 +298,82 @@ getPrediction <- function(
   }
 
 
-  if (!is.null(dropout_model_parameter)) {
-    erify::check_class(dropout_model_parameter, "list")
-    erify::check_content(tolower(dropout_model_parameter$model),
+  if (!is.null(dropout_prior)) {
+    erify::check_class(dropout_prior, "list")
+    erify::check_content(tolower(dropout_prior$model),
                          c("exponential", "weibull", "log-normal",
                            "piecewise exponential"))
 
-    if (length(dropout_model_parameter$alloc) !=
-        dropout_model_parameter$ngroups) {
+    if (length(dropout_prior$alloc) !=
+        dropout_prior$ngroups) {
       stop(paste("Number of treatments in alloc must be equal to ngroups",
-                 "in dropout_model_parameter"))
+                 "in dropout_prior"))
     }
 
-    if (nrow(dropout_model_parameter$vtheta) !=
-        length(dropout_model_parameter$theta) ||
-        ncol(dropout_model_parameter$vtheta) !=
-        length(dropout_model_parameter$theta)) {
+    if (nrow(dropout_prior$vtheta) !=
+        length(dropout_prior$theta) ||
+        ncol(dropout_prior$vtheta) !=
+        length(dropout_prior$theta)) {
       stop(paste("Dimensions of vtheta must be compatible with the length",
-                 "of theta in dropout_model_parameter"))
+                 "of theta in dropout_prior"))
     }
 
-    if ((tolower(dropout_model_parameter$model) == "exponential" &&
-         length(dropout_model_parameter$theta) !=
-         dropout_model_parameter$ngroups) ||
-        (tolower(dropout_model_parameter$model) == "weibull" &&
-         length(dropout_model_parameter$theta) !=
-         2*dropout_model_parameter$ngroups) ||
-        (tolower(dropout_model_parameter$model) == "log-normal" &&
-         length(dropout_model_parameter$theta) !=
-         2*dropout_model_parameter$ngroups) ||
-        (tolower(dropout_model_parameter$model) == "piecewise_exponential" &&
-         length(dropout_model_parameter$theta) !=
-         length(dropout_model_parameter$piecewiseDropoutTime)*
-         dropout_model_parameter$ngroups)) {
+    if ((tolower(dropout_prior$model) == "exponential" &&
+         length(dropout_prior$theta) !=
+         dropout_prior$ngroups) ||
+        (tolower(dropout_prior$model) == "weibull" &&
+         length(dropout_prior$theta) !=
+         2*dropout_prior$ngroups) ||
+        (tolower(dropout_prior$model) == "log-normal" &&
+         length(dropout_prior$theta) !=
+         2*dropout_prior$ngroups) ||
+        (tolower(dropout_prior$model) == "piecewise_exponential" &&
+         length(dropout_prior$theta) !=
+         length(dropout_prior$piecewiseDropoutTime)*
+         dropout_prior$ngroups)) {
       stop(paste("Length of theta must be compatible with ngroups",
-                 "in dropout_model_parameter"))
+                 "in dropout_prior"))
     }
 
-    if (tolower(dropout_model_parameter$model) == "piecewise_exponential") {
-      if (dropout_model_parameter$piecewiseDropoutTime[1] != 0) {
+    if (tolower(dropout_prior$model) == "piecewise_exponential") {
+      if (dropout_prior$piecewiseDropoutTime[1] != 0) {
         stop(paste("piecewiseDropoutTime must start with 0",
-                   "in dropout_model_parameter"))
+                   "in dropout_prior"))
       }
-      if (length(dropout_model_parameter$piecewiseDropoutTime) > 1 &&
-          any(diff(dropout_model_parameter$piecewiseDropoutTime) <= 0)) {
+      if (length(dropout_prior$piecewiseDropoutTime) > 1 &&
+          any(diff(dropout_prior$piecewiseDropoutTime) <= 0)) {
         stop(paste("piecewiseDropoutTime should be increasing",
-                   "in dropout_model_parameter"))
+                   "in dropout_prior"))
       }
     }
 
 
     if (!is.null(df)) {
-      if (tolower(dropout_model_parameter$model) != tolower(dropout_model)) {
+      if (tolower(dropout_prior$model) != tolower(dropout_model)) {
         stop("Prior and likelihood must use the same dropout model.")
       }
 
-      if (tolower(dropout_model_parameter$model) == "piecewise exponential" &&
-          (length(dropout_model_parameter$piecewiseDropoutTime) <
+      if (tolower(dropout_prior$model) == "piecewise exponential" &&
+          (length(dropout_prior$piecewiseDropoutTime) <
            length(piecewiseDropoutTime) ||
-           !all.equal(dropout_model_parameter$piecewiseDropoutTime[
+           !all.equal(dropout_prior$piecewiseDropoutTime[
              1:length(piecewiseDropoutTime)], piecewiseDropoutTime))) {
         stop(paste("piecewiseDropoutTime of piecewise exponential model",
-                   "must be a subset of that in dropout_model_parameter."))
+                   "must be a subset of that in dropout_prior."))
       }
     }
 
 
-    if (!is.null(event_model_parameter)) {
-      if (event_model_parameter$ngroups != dropout_model_parameter$ngroups) {
+    if (!is.null(event_prior)) {
+      if (event_prior$ngroups != dropout_prior$ngroups) {
         stop(paste("Number of treatments must match between",
-                   "event_model_parameter and dropout_model_parameter"))
+                   "event_prior and dropout_prior"))
       }
 
-      if (!all.equal(event_model_parameter$alloc,
-                     dropout_model_parameter$alloc)) {
+      if (!all.equal(event_prior$alloc,
+                     dropout_prior$alloc)) {
         stop(paste("Treatment allocation must match between",
-                   "event_model_parameter and dropout_model_parameter"))
+                   "event_prior and dropout_prior"))
       }
     }
   }
@@ -423,37 +419,37 @@ getPrediction <- function(
       enroll_fit1 <- enroll_fit$enroll_fit
 
       # combine prior and likelihood to yield posterior
-      if (!is.null(enroll_model_parameter)) {
+      if (!is.null(enroll_prior)) {
         # pad additional pieces with prior parameter values
         if (tolower(enroll_model) == "piecewise poisson" &&
-            length(enroll_model_parameter$accrualTime) > length(accrualTime)) {
+            length(enroll_prior$accrualTime) > length(accrualTime)) {
           i = (length(accrualTime) + 1):
-            length(enroll_model_parameter$accrualTime)
+            length(enroll_prior$accrualTime)
           enroll_fit1$theta = c(
-            enroll_fit1$theta, enroll_model_parameter$theta[i])
+            enroll_fit1$theta, enroll_prior$theta[i])
           enroll_fit1$vtheta = as.matrix(Matrix::bdiag(
-            enroll_fit1$vtheta, enroll_model_parameter$vtheta[i,i]*1e8))
-          enroll_fit1$accrualTime = enroll_model_parameter$accrualTime
+            enroll_fit1$vtheta, enroll_prior$vtheta[i,i]*1e8))
+          enroll_fit1$accrualTime = enroll_prior$accrualTime
         }
 
         if (length(enroll_fit1$theta) == 1) {
           enroll_fit1$theta <-
             1/(1/enroll_fit1$vtheta +
-                 1/enroll_model_parameter$vtheta)*
+                 1/enroll_prior$vtheta)*
             (1/enroll_fit1$vtheta*enroll_fit1$theta +
-               1/enroll_model_parameter$vtheta*enroll_model_parameter$theta)
+               1/enroll_prior$vtheta*enroll_prior$theta)
           enroll_fit1$vtheta <-
             1/(1/enroll_fit1$vtheta +
-                 1/enroll_model_parameter$vtheta)
+                 1/enroll_prior$vtheta)
         } else {
           enroll_fit1$theta <-
             solve(solve(enroll_fit1$vtheta) +
-                    solve(enroll_model_parameter$vtheta),
+                    solve(enroll_prior$vtheta),
                   solve(enroll_fit1$vtheta, enroll_fit1$theta) +
-                    solve(enroll_model_parameter$vtheta,
-                          enroll_model_parameter$theta))
+                    solve(enroll_prior$vtheta,
+                          enroll_prior$theta))
           enroll_fit1$vtheta <- solve(solve(enroll_fit1$vtheta) +
-                                        solve(enroll_model_parameter$vtheta))
+                                        solve(enroll_prior$vtheta))
         }
       }
 
@@ -467,7 +463,7 @@ getPrediction <- function(
       # enrollment prediction at the design stage
       enroll_pred <- predictEnrollment(
         df = NULL, target_n,
-        enroll_fit = enroll_model_parameter,
+        enroll_fit = enroll_prior,
         lags, pilevel, nyears, nreps,
         showsummary, showplot = FALSE)
     }
@@ -481,14 +477,14 @@ getPrediction <- function(
                      supplement = "Event target reached.")
 
       # convert prior by treatment to prior overall
-      if (!is.null(event_model_parameter)) {
-        k = event_model_parameter$ngroups
-        alloc = event_model_parameter$alloc
+      if (!is.null(event_prior)) {
+        k = event_prior$ngroups
+        alloc = event_prior$alloc
         w = alloc/sum(alloc)
 
-        if (tolower(event_model_parameter$model) == "exponential") {
+        if (tolower(event_prior$model) == "exponential") {
           # match the overall mean
-          lambda = exp(event_model_parameter$theta)
+          lambda = exp(event_prior$theta)
           lambda1 = 1/sum(w/lambda)  # hazard rate for pooled
           theta1 = log(lambda1)
 
@@ -496,15 +492,15 @@ getPrediction <- function(
           vtheta1 = 0
           for (i in 1:k) {
             vtheta1 = vtheta1 + (w[i]/lambda[i])^2 *
-              event_model_parameter$vtheta[i,i]
+              event_prior$vtheta[i,i]
           }
           vtheta1 = vtheta1*lambda1^2
 
-          event_prior <- list(
-            model = event_model_parameter$model,
+          event_prior1 <- list(
+            model = event_prior$model,
             theta = theta1,
             vtheta = vtheta1)
-        } else if (tolower(event_model_parameter$model) == "weibull") {
+        } else if (tolower(event_prior$model) == "weibull") {
           # match the overall mean and variance
 
           # mean and variance of weibull as a function of theta
@@ -524,7 +520,7 @@ getPrediction <- function(
           }
 
           # mean and variance by treatment group
-          m1 = fmweibull(event_model_parameter$theta)
+          m1 = fmweibull(event_prior$theta)
 
           # mean and variance for pooled
           m2 = list(mean = sum(w*m1$mean),
@@ -535,8 +531,8 @@ getPrediction <- function(
           theta11 = uniroot(function(x)
             lgamma(1+2/exp(x)) - 2*lgamma(1+1/exp(x)) -
               log(m2$var/m2$mean^2 + 1),
-            c(min(event_model_parameter$theta[2*(1:k)-1]) - 1,
-              max(event_model_parameter$theta[2*(1:k)-1]) + 1),
+            c(min(event_prior$theta[2*(1:k)-1]) - 1,
+              max(event_prior$theta[2*(1:k)-1]) + 1),
             extendInt = "yes")$root
 
           theta12 = log(m2$mean) - lgamma(1+1/exp(theta11))
@@ -549,18 +545,18 @@ getPrediction <- function(
           vtheta1 = 0
           for (i in 1:k) {
             index = c(2*i-1, 2*i)
-            gi = gmweibull(event_model_parameter$theta[index])
-            vm1i = gi * event_model_parameter$vtheta[index,index] * t(gi)
+            gi = gmweibull(event_prior$theta[index])
+            vm1i = gi * event_prior$vtheta[index,index] * t(gi)
             li = w[i]*matrix(c(1, 2*(m1$mean[i] - m2$mean), 0, 1), ncol=2)
             vtheta1 = vtheta1 + li %*% vm1i %*% t(li)
           }
           vtheta1 = ig %*% vtheta1 %*% t(ig)
 
-          event_prior <- list(
-            model = event_model_parameter$model,
+          event_prior1 <- list(
+            model = event_prior$model,
             theta = theta1,
             vtheta = vtheta1)
-        } else if (tolower(event_model_parameter$model) == "log-normal") {
+        } else if (tolower(event_prior$model) == "log-normal") {
           # match the overall mean and variance
 
           # mean and variance of log-normal as a function of theta
@@ -580,7 +576,7 @@ getPrediction <- function(
           }
 
           # mean and variance by treatment group
-          m1 = fmlnorm(event_model_parameter$theta)
+          m1 = fmlnorm(event_prior$theta)
 
           # mean and variance for pooled
           m2 = list(mean = sum(w*m1$mean),
@@ -599,22 +595,22 @@ getPrediction <- function(
           vtheta1 = 0
           for (i in 1:k) {
             index = c(2*i-1, 2*i)
-            gi = gmlnorm(event_model_parameter$theta[index])
-            vm1i = gi * event_model_parameter$vtheta[index,index] * t(gi)
+            gi = gmlnorm(event_prior$theta[index])
+            vm1i = gi * event_prior$vtheta[index,index] * t(gi)
             li = w[i]*matrix(c(1, 2*(m1$mean[i] - m2$mean), 0, 1), ncol=2)
             vtheta1 = vtheta1 + li %*% vm1i %*% t(li)
           }
           vtheta1 = ig %*% vtheta1 %*% t(ig)
 
-          event_prior <- list(
-            model = event_model_parameter$model,
+          event_prior1 <- list(
+            model = event_prior$model,
             theta = theta1,
             vtheta = vtheta1)
-        } else if (tolower(event_model_parameter$model) ==
+        } else if (tolower(event_prior$model) ==
                    "piecewise exponential") {
           # match 1/lambda within each interval
-          lambda = exp(event_model_parameter$theta)
-          npieces = length(event_model_parameter$piecewiseSurvivalTime)
+          lambda = exp(event_prior$theta)
+          npieces = length(event_prior$piecewiseSurvivalTime)
 
           # construct theta and vtheta piece by piece
           theta1 = rep(NA, npieces)
@@ -625,18 +621,18 @@ getPrediction <- function(
             theta1[j] = log(lambda1j)
             for (i in 1:k) {
               vtheta1[j,j] = vtheta1[j,j] + (w[i]/lambdaj[i])^2 *
-                event_model_parameter$vtheta[(i-1)*npieces + j,
+                event_prior$vtheta[(i-1)*npieces + j,
                                              (i-1)*npieces + j]
             }
             vtheta1[j,j] = vtheta1[j,j]*lambda1j^2
           }
 
-          event_prior <- list(
-            model = event_model_parameter$model,
+          event_prior1 <- list(
+            model = event_prior$model,
             theta = theta1,
             vtheta = vtheta1,
             piecewiseSurvivalTime =
-              event_model_parameter$piecewiseSurvivalTime)
+              event_prior$piecewiseSurvivalTime)
         }
       }
 
@@ -645,43 +641,42 @@ getPrediction <- function(
                               piecewiseSurvivalTime, showplot)
         event_fit1 <- event_fit$event_fit
       } else {
-        if (is.null(event_model_parameter)) {
+        if (is.null(event_prior)) {
           stop("Prior must be specified if there is no event observed.")
         }
         event_fit <- list()
-        event_fit1 <- event_prior
-        event_fit1$vtheta = event_prior$vtheta*1e8
+        event_fit1 <- event_prior1
+        event_fit1$vtheta = event_prior1$vtheta*1e8
         event_fit1$bic = NA
       }
 
       # combine prior and likelihood to yield posterior
-      if (!is.null(event_model_parameter)) {
+      if (!is.null(event_prior1)) {
         # pad additional pieces with prior parameter values
         if (tolower(event_model) == "piecewise exponential" &&
-            length(event_model_parameter$piecewiseSurvivalTime) >
+            length(event_prior1$piecewiseSurvivalTime) >
             length(piecewiseSurvivalTime)) {
           i = (length(piecewiseSurvivalTime) + 1):
-            length(event_model_parameter$piecewiseSurvivalTime)
-          event_fit1$theta = c(
-            event_fit1$theta, event_model_parameter$theta[i])
+            length(event_prior1$piecewiseSurvivalTime)
+          event_fit1$theta = c(event_fit1$theta, event_prior1$theta[i])
           event_fit1$vtheta = as.matrix(Matrix::bdiag(
-            event_fit1$vtheta, event_model_parameter$vtheta[i,i]*1e8))
+            event_fit1$vtheta, event_prior1$vtheta[i,i]*1e8))
           event_fit1$piecewiseSurvivalTime =
-            event_model_parameter$piecewiseSurvivalTime
+            event_prior1$piecewiseSurvivalTime
         }
 
         if (length(event_fit1$theta) == 1) {
-          event_fit1$theta <- 1/(1/event_fit1$vtheta + 1/event_prior$vtheta)*
+          event_fit1$theta <- 1/(1/event_fit1$vtheta + 1/event_prior1$vtheta)*
             (1/event_fit1$vtheta*event_fit1$theta +
-               1/event_prior$vtheta*event_prior$theta)
-          event_fit1$vtheta <- 1/(1/event_fit1$vtheta + 1/event_prior$vtheta)
+               1/event_prior1$vtheta*event_prior1$theta)
+          event_fit1$vtheta <- 1/(1/event_fit1$vtheta + 1/event_prior1$vtheta)
         } else {
           event_fit1$theta <-
-            solve(solve(event_fit1$vtheta) + solve(event_prior$vtheta),
+            solve(solve(event_fit1$vtheta) + solve(event_prior1$vtheta),
                   solve(event_fit1$vtheta, event_fit1$theta) +
-                    solve(event_prior$vtheta, event_prior$theta))
+                    solve(event_prior1$vtheta, event_prior1$theta))
           event_fit1$vtheta <-
-            solve(solve(event_fit1$vtheta) + solve(event_prior$vtheta))
+            solve(solve(event_fit1$vtheta) + solve(event_prior1$vtheta))
         }
       }
 
@@ -690,15 +685,15 @@ getPrediction <- function(
       if (tolower(dropout_model) != "none") {
 
         # convert prior by treatment to prior overall
-        if (!is.null(dropout_model_parameter)) {
-          k = dropout_model_parameter$ngroups
-          alloc = dropout_model_parameter$alloc
+        if (!is.null(dropout_prior)) {
+          k = dropout_prior$ngroups
+          alloc = dropout_prior$alloc
 
           w = alloc/sum(alloc)
 
-          if (tolower(dropout_model_parameter$model) == "exponential") {
+          if (tolower(dropout_prior$model) == "exponential") {
             # match the overall mean
-            lambda = exp(dropout_model_parameter$theta)
+            lambda = exp(dropout_prior$theta)
             lambda1 = 1/sum(w/lambda)  # hazard rate for pooled
             theta1 = log(lambda1)
 
@@ -706,15 +701,15 @@ getPrediction <- function(
             vtheta1 = 0
             for (i in 1:k) {
               vtheta1 = vtheta1 + (w[i]/lambda[i])^2 *
-                dropout_model_parameter$vtheta[i,i]
+                dropout_prior$vtheta[i,i]
             }
             vtheta1 = vtheta1*lambda1^2
 
-            dropout_prior <- list(
-              model = dropout_model_parameter$model,
+            dropout_prior1 <- list(
+              model = dropout_prior$model,
               theta = theta1,
               vtheta = vtheta1)
-            } else if (tolower(dropout_model_parameter$model) == "weibull") {
+            } else if (tolower(dropout_prior$model) == "weibull") {
             # match the overall mean and variance
 
             # mean and variance of weibull as a function of theta
@@ -734,7 +729,7 @@ getPrediction <- function(
             }
 
             # mean and variance by treatment group
-            m1 = fmweibull(dropout_model_parameter$theta)
+            m1 = fmweibull(dropout_prior$theta)
 
             # mean and variance for pooled
             m2 = list(mean = sum(w*m1$mean),
@@ -745,8 +740,8 @@ getPrediction <- function(
             theta11 = uniroot(function(x)
               lgamma(1+2/exp(x)) - 2*lgamma(1+1/exp(x)) -
                 log(m2$var/m2$mean^2 + 1),
-              c(min(dropout_model_parameter$theta[2*(1:k)-1]) - 1,
-                max(dropout_model_parameter$theta[2*(1:k)-1]) + 1),
+              c(min(dropout_prior$theta[2*(1:k)-1]) - 1,
+                max(dropout_prior$theta[2*(1:k)-1]) + 1),
               extendInt = "yes")$root
 
             theta12 = log(m2$mean) - lgamma(1+1/exp(theta11))
@@ -759,18 +754,18 @@ getPrediction <- function(
             vtheta1 = 0
             for (i in 1:k) {
               index = c(2*i-1, 2*i)
-              gi = gmweibull(dropout_model_parameter$theta[index])
-              vm1i = gi * dropout_model_parameter$vtheta[index,index] * t(gi)
+              gi = gmweibull(dropout_prior$theta[index])
+              vm1i = gi * dropout_prior$vtheta[index,index] * t(gi)
               li = w[i]*matrix(c(1, 2*(m1$mean[i] - m2$mean), 0, 1), ncol=2)
               vtheta1 = vtheta1 + li %*% vm1i%*% t(li)
             }
             vtheta1 = ig %*% vtheta1 %*% t(ig)
 
-            dropout_prior <- list(
-              model = dropout_model_parameter$model,
+            dropout_prior1 <- list(
+              model = dropout_prior$model,
               theta = theta1,
               vtheta = vtheta1)
-          } else if (tolower(dropout_model_parameter$model) == "log-normal") {
+          } else if (tolower(dropout_prior$model) == "log-normal") {
             # match the overall mean and variance
 
             # mean and variance of log-normal as a function of theta
@@ -790,7 +785,7 @@ getPrediction <- function(
             }
 
             # mean and variance by treatment group
-            m1 = fmlnorm(dropout_model_parameter$theta)
+            m1 = fmlnorm(dropout_prior$theta)
 
             # mean and variance for pooled
             m2 = list(mean = sum(w*m1$mean),
@@ -809,22 +804,22 @@ getPrediction <- function(
             vtheta1 = 0
             for (i in 1:k) {
               index = c(2*i-1, 2*i)
-              gi = gmlnorm(dropout_model_parameter$theta[index])
-              vm1i = gi * dropout_model_parameter$vtheta[index,index] * t(gi)
+              gi = gmlnorm(dropout_prior$theta[index])
+              vm1i = gi * dropout_prior$vtheta[index,index] * t(gi)
               li = w[i]*matrix(c(1, 2*(m1$mean[i] - m2$mean), 0, 1), ncol=2)
               vtheta1 = vtheta1 + li %*% vm1i%*% t(li)
             }
             vtheta1 = ig %*% vtheta1 %*% t(ig)
 
-            dropout_prior <- list(
-              model = dropout_model_parameter$model,
+            dropout_prior1 <- list(
+              model = dropout_prior$model,
               theta = theta1,
               vtheta = vtheta1)
-          } else if (tolower(dropout_model_parameter$model) ==
+          } else if (tolower(dropout_prior$model) ==
                      "piecewise exponential") {
             # match the mean within each interval
-            lambda = exp(dropout_model_parameter$theta)
-            npieces = length(dropout_model_parameter$piecewiseDropoutTime)
+            lambda = exp(dropout_prior$theta)
+            npieces = length(dropout_prior$piecewiseDropoutTime)
 
             # construct theta and vtheta piece by piece
             theta1 = rep(NA, npieces)
@@ -835,18 +830,18 @@ getPrediction <- function(
               theta1[j] = log(lambda1j)
               for (i in 1:k) {
                 vtheta1[j,j] = vtheta1[j,j] + (w[i]/lambdaj[i])^2 *
-                  dropout_model_parameter$vtheta[(i-1)*npieces + j,
+                  dropout_prior$vtheta[(i-1)*npieces + j,
                                                (i-1)*npieces + j]
               }
               vtheta1[j,j] = vtheta1[j,j]*lambda1j^2
             }
 
-            dropout_prior <- list(
-              model = dropout_model_parameter$model,
+            dropout_prior1 <- list(
+              model = dropout_prior$model,
               theta = theta1,
               vtheta = vtheta1,
               piecewiseDropoutTime =
-                dropout_model_parameter$piecewiseDropoutTime)
+                dropout_prior$piecewiseDropoutTime)
           }
         }
 
@@ -856,45 +851,44 @@ getPrediction <- function(
                                     piecewiseDropoutTime, showplot)
           dropout_fit1 <- dropout_fit$dropout_fit
         } else {
-          if (is.null(dropout_model_parameter)) {
+          if (is.null(dropout_prior)) {
             stop("Prior must be specified if there is no dropout observed.")
           }
           dropout_fit <- list()
-          dropout_fit1 <- dropout_prior
-          dropout_fit1$vtheta <- dropout_prior$vtheta*1e8
+          dropout_fit1 <- dropout_prior1
+          dropout_fit1$vtheta <- dropout_prior1$vtheta*1e8
           dropout_fit1$bic = NA
         }
 
         # combine prior and likelihood to yield posterior
-        if (!is.null(dropout_model_parameter)) {
+        if (!is.null(dropout_prior1)) {
           # pad additional pieces with prior parameter values
           if (tolower(dropout_model) == "piecewise exponential" &&
-              length(dropout_model_parameter$piecewiseDropoutTime) >
+              length(dropout_prior1$piecewiseDropoutTime) >
               length(piecewiseDropoutTime)) {
             i = (length(piecewiseDropoutTime) + 1):
-              length(dropout_model_parameter$piecewiseDropoutTime)
-            dropout_fit1$theta = c(
-              dropout_fit1$theta, dropout_model_parameter$theta[i])
+              length(dropout_prior1$piecewiseDropoutTime)
+            dropout_fit1$theta = c(dropout_fit1$theta, dropout_prior1$theta[i])
             dropout_fit1$vtheta = as.matrix(Matrix::bdiag(
-              dropout_fit1$vtheta, dropout_model_parameter$vtheta[i,i]*1e8))
+              dropout_fit1$vtheta, dropout_prior1$vtheta[i,i]*1e8))
             dropout_fit1$piecewiseDropoutTime =
-              dropout_model_parameter$piecewiseDropoutTime
+              dropout_prior1$piecewiseDropoutTime
           }
 
           if (length(dropout_fit1$theta) == 1) {
             dropout_fit1$theta <-
-              1/(1/dropout_fit1$vtheta + 1/dropout_prior$vtheta)*
+              1/(1/dropout_fit1$vtheta + 1/dropout_prior1$vtheta)*
               (1/dropout_fit1$vtheta*dropout_fit1$theta +
-                 1/dropout_prior$vtheta*dropout_prior$theta)
+                 1/dropout_prior1$vtheta*dropout_prior1$theta)
             dropout_fit1$vtheta <-
-              1/(1/dropout_fit1$vtheta + 1/dropout_prior$vtheta)
+              1/(1/dropout_fit1$vtheta + 1/dropout_prior1$vtheta)
           } else {
             dropout_fit1$theta <-
-              solve(solve(dropout_fit1$vtheta) + solve(dropout_prior$vtheta),
+              solve(solve(dropout_fit1$vtheta) + solve(dropout_prior1$vtheta),
                     solve(dropout_fit1$vtheta, dropout_fit1$theta) +
-                      solve(dropout_prior$vtheta, dropout_prior$theta))
+                      solve(dropout_prior1$vtheta, dropout_prior1$theta))
             dropout_fit1$vtheta <-
-              solve(solve(dropout_fit1$vtheta) + solve(dropout_prior$vtheta))
+              solve(solve(dropout_fit1$vtheta) + solve(dropout_prior1$vtheta))
           }
         }
 
@@ -940,12 +934,12 @@ getPrediction <- function(
         }
       }
     } else { # event prediction at design stage
-      if (!is.null(dropout_model_parameter)) {
+      if (!is.null(dropout_prior)) {
         event_pred <- predictEvent(
           df = NULL, target_d,
           newSubjects = enroll_pred$newSubjects,
-          event_fit = event_model_parameter,
-          dropout_fit = dropout_model_parameter,
+          event_fit = event_prior,
+          dropout_fit = dropout_prior,
           fixedFollowup, followupTime, pilevel, nyears, nreps,
           showEnrollment, showEvent, showDropout, showOngoing,
           showsummary, showplot = FALSE)
@@ -953,7 +947,7 @@ getPrediction <- function(
         event_pred <- predictEvent(
           df = NULL, target_d,
           newSubjects = enroll_pred$newSubjects,
-          event_fit = event_model_parameter,
+          event_fit = event_prior,
           dropout_fit = NULL,
           fixedFollowup, followupTime, pilevel, nyears, nreps,
           showEnrollment, showEvent, showDropout, showOngoing,
@@ -970,21 +964,21 @@ getPrediction <- function(
 
       list(stage = "Design stage",
            to_predict = "Enrollment only",
-           enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred)
+           enroll_fit = enroll_prior, enroll_pred = enroll_pred)
     } else if (tolower(to_predict) == "enrollment and event") {
       if (showplot) print(event_pred$event_pred_plot)
 
-      if (!is.null(dropout_model_parameter)) {
+      if (!is.null(dropout_prior)) {
         list(stage = "Design stage",
              to_predict = "Enrollment and event",
-             enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred,
-             event_fit = event_model_parameter,
-             dropout_fit = dropout_model_parameter, event_pred = event_pred)
+             enroll_fit = enroll_prior, enroll_pred = enroll_pred,
+             event_fit = event_prior,
+             dropout_fit = dropout_prior, event_pred = event_pred)
       } else {
         list(stage = "Design stage",
              to_predict = "Enrollment and event",
-             enroll_fit = enroll_model_parameter, enroll_pred = enroll_pred,
-             event_fit = event_model_parameter, event_pred = event_pred)
+             enroll_fit = enroll_prior, enroll_pred = enroll_pred,
+             event_fit = event_prior, event_pred = event_pred)
       }
     }
   } else { # analysis stage prediction
