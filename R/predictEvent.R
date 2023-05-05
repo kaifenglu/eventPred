@@ -305,7 +305,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   erify::check_n(d1)
 
 
-  # time zero
+  # add day 1
   df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
                        mean = 0, var = 0)
 
@@ -348,8 +348,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         dplyr::mutate(parameter = "Enrollment")
     } else {
       # new subjects only
-      enroll_pred_df <- df0 %>%
-        dplyr::bind_rows(dfb) %>%
+      enroll_pred_df <- dfb %>%
         dplyr::mutate(parameter = "Enrollment")
     }
   } else {
@@ -361,7 +360,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     dfb2 <- dfb1 %>%
       dplyr::mutate(t = t0 + 365*nyears)
 
-    enroll_pred_df <- dfa %>%
+    enroll_pred_df <- df0 %>%
+      dplyr::bind_rows(dfa) %>%
       dplyr::bind_rows(dfb1) %>%
       dplyr::bind_rows(dfb2) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
@@ -974,37 +974,34 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                                      mean = r0, var = 0))
 
 
-    # add time zero and concatenate events before and after data cut
+    # add day 1 and concatenate events before and after data cut
     event_pred_df <- df0 %>%
       dplyr::bind_rows(dfa) %>%
       dplyr::bind_rows(dfb) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
       dplyr::mutate(parameter = "Event")
 
-    # add time zero and concatenate dropouts before and after data cut
+    # add day 1 and concatenate dropouts before and after data cut
     dropout_pred_df <- df0 %>%
       dplyr::bind_rows(dfc) %>%
       dplyr::bind_rows(dfd) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
       dplyr::mutate(parameter = "Dropout")
 
-    # add time zero and concatenate ongoing subjects before and after data cut
+    # add day 1 and concatenate ongoing subjects before and after data cut
     ongoing_pred_df <- df0 %>%
       dplyr::bind_rows(dfe) %>%
       dplyr::bind_rows(dff) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
       dplyr::mutate(parameter = "Ongoing")
   } else {
-    event_pred_df <- df0 %>%
-      dplyr::bind_rows(dfb) %>%
+    event_pred_df <- dfb %>%
       dplyr::mutate(parameter = "Event")
 
-    dropout_pred_df <- df0 %>%
-      dplyr::bind_rows(dfd) %>%
+    dropout_pred_df <- dfd %>%
       dplyr::mutate(parameter = "Dropout")
 
-    ongoing_pred_df <- df0 %>%
-      dplyr::bind_rows(dff) %>%
+    ongoing_pred_df <- dff %>%
       dplyr::mutate(parameter = "Ongoing")
   }
 
