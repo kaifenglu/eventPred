@@ -88,12 +88,12 @@ cutoff = floor(max((dfcomplete %>%
 
 # complete data with administrative censoring
 finalData <- dfcomplete %>%
-  dplyr::filter(arrivalTime <= cutoff) %>%
+  dplyr::filter(arrivalTime < cutoff) %>%
   dplyr::mutate(cutoff = cutoff,
                 followupTime = cutoff - arrivalTime,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
-                time = pmax(pmin(time, followupTime), 1),
+                time = pmin(time, followupTime),
                 randdt = as.Date(arrivalTime - 1, origin = trialsdt),
                 cutoffdt = as.Date(cutoff - 1, origin = trialsdt)) %>%
   dplyr::select(trialsdt, randdt, cutoffdt, treatment,
@@ -111,14 +111,14 @@ cutoffdt = (finalData %>%
 
 interimData1 <- finalData %>%
   dplyr::select(-cutoffdt) %>%
-  dplyr::filter(randdt <= cutoffdt) %>%
+  dplyr::filter(randdt < cutoffdt) %>%
   dplyr::mutate(cutoffdt = cutoffdt,
                 cutoff = as.numeric(cutoffdt - trialsdt + 1),
                 arrivalTime = as.numeric(randdt - trialsdt + 1),
                 followupTime = cutoff - arrivalTime,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
-                time = pmax(pmin(time, followupTime), 1)) %>%
+                time = pmin(time, followupTime)) %>%
   dplyr::select(trialsdt, randdt, cutoffdt, treatment, time, event, dropout)
 
 
@@ -134,14 +134,14 @@ cutoff = as.numeric(cutoffdt - trialsdt + 1)
 
 interimData2 <- finalData %>%
   dplyr::select(-cutoffdt) %>%
-  dplyr::filter(randdt <= cutoffdt) %>%
+  dplyr::filter(randdt < cutoffdt) %>%
   dplyr::mutate(cutoffdt = cutoffdt,
                 cutoff = as.numeric(cutoffdt - trialsdt + 1),
                 arrivalTime = as.numeric(randdt - trialsdt + 1),
                 followupTime = cutoff - arrivalTime,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
-                time = pmax(pmin(time, followupTime), 1)) %>%
+                time = pmin(time, followupTime)) %>%
   dplyr::select(trialsdt, randdt, cutoffdt, treatment, time, event, dropout)
 
 
