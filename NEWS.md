@@ -5,6 +5,7 @@
 - add more details for model fit parameters 
 - add day 1 to enrollment plot
 - allow prior piecewise Poisson enrollment and piecewise exponential event or dropout models to have additional cut points beyond the observed data range
+- update internal data sets
 
 # eventPred 0.1.1
 
