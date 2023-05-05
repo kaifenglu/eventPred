@@ -436,7 +436,7 @@ getPrediction <- function(
           enroll_fit1$accrualTime = enroll_model_parameter$accrualTime
         }
 
-        if (length(enroll_model$theta) == 1) {
+        if (length(enroll_fit1$theta) == 1) {
           enroll_fit1$theta <-
             1/(1/enroll_fit1$vtheta +
                  1/enroll_model_parameter$vtheta)*
