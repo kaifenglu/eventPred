@@ -958,7 +958,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::ungroup()
 
     # observed number of subjects at risk before (not including) data cutoff
-    t2 = setdiff(sort(unique(round(c(df$arrivalTime, df$totalTime)))), t0)
+    t2 = setdiff(sort(unique(c(df$arrivalTime, df$totalTime))), t0)
 
     dfe <- dplyr::tibble(t = t2) %>%
       dplyr::cross_join(df) %>%
