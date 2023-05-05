@@ -93,7 +93,7 @@ finalData <- dfcomplete %>%
                 followupTime = cutoff - arrivalTime,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
-                time = pmax(pmin(time, followupTime), 1e-8),
+                time = pmax(pmin(time, followupTime), 1),
                 randdt = as.Date(arrivalTime - 1, origin = trialsdt),
                 cutoffdt = as.Date(cutoff - 1, origin = trialsdt)) %>%
   dplyr::select(trialsdt, randdt, cutoffdt, treatment,
@@ -118,7 +118,7 @@ interimData1 <- finalData %>%
                 followupTime = cutoff - arrivalTime,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
-                time = pmax(pmin(time, followupTime), 1e-8)) %>%
+                time = pmax(pmin(time, followupTime), 1)) %>%
   dplyr::select(trialsdt, randdt, cutoffdt, treatment, time, event, dropout)
 
 
@@ -141,7 +141,7 @@ interimData2 <- finalData %>%
                 followupTime = cutoff - arrivalTime,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
-                time = pmax(pmin(time, followupTime), 1e-8)) %>%
+                time = pmax(pmin(time, followupTime), 1)) %>%
   dplyr::select(trialsdt, randdt, cutoffdt, treatment, time, event, dropout)
 
 
