@@ -1409,7 +1409,6 @@ server <- function(input, output, session) {
 
         } else if (to_predict() == "Enrollment and event") {
 
-
           pred1 <- getPrediction(
             to_predict = to_predict(),
             target_n = target_n(),
@@ -1424,11 +1423,6 @@ server <- function(input, output, session) {
             showOngoing = showOngoing(),
             showsummary = FALSE,
             showplot = FALSE)
-
-
-          df0 <- dplyr::tibble(treatment = 1:k,
-                               t = 0, n = 0, lower = 0, upper = 0,
-                               mean = 0, var = 0)
 
           newEvents <- pred1$event_pred$newEvents
 
@@ -1452,8 +1446,6 @@ server <- function(input, output, session) {
                              mean = mean(nenrolled),
                              var = var(nenrolled),
                              .groups = "drop_last") %>%
-            dplyr::bind_rows(df0) %>%
-            dplyr::arrange(treatment, t) %>%
             dplyr::mutate(parameter = "Enrollment") %>%
             dplyr::bind_rows(dplyr::bind_cols(
               treatment = 9999, pred1$event_pred$enroll_pred_df)) %>%
@@ -1683,9 +1675,14 @@ server <- function(input, output, session) {
               dplyr::bind_rows(dfa1)
           }
 
+          # add day 1
+          df0 <- dplyr::tibble(treatment = 1:k,
+                               t = 1, n = 0, lower = 0, upper = 0,
+                               mean = 0, var = 0)
 
           # concatenate subjects enrolled before and after data cut
-          dfs <- dfa %>%
+          dfs <- df0 %>%
+            dplyr::bind_rows(dfa) %>%
             dplyr::bind_rows(dfb) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt))
 
@@ -1863,9 +1860,14 @@ server <- function(input, output, session) {
               dplyr::bind_rows(dfa1)
           }
 
+          # add day 1
+          df0 <- dplyr::tibble(treatment = 1:k,
+                               t = 1, n = 0, lower = 0, upper = 0,
+                               mean = 0, var = 0)
 
           # concatenate subjects enrolled before and after data cut
-          enroll_pred_df <- dfa %>%
+          enroll_pred_df <- df0 %>%
+            dplyr::bind_rows(dfa) %>%
             dplyr::bind_rows(dfb) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
             dplyr::mutate(parameter = "Enrollment") %>%
@@ -1991,8 +1993,7 @@ server <- function(input, output, session) {
 
 
           # observed number of subjects at risk before cutoff
-          t2 = setdiff(sort(unique(round(c(df$arrivalTime, df$totalTime)))),
-                       t0)
+          t2 = setdiff(sort(unique(c(df$arrivalTime, df$totalTime))), t0)
 
           dfe <- dplyr::tibble(t = t2) %>%
             dplyr::cross_join(df) %>%
@@ -2006,8 +2007,8 @@ server <- function(input, output, session) {
                                            lower = NA, upper = NA,
                                            mean = r0, var = 0))
 
-          # time zero
-          df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA,
+          # add day 1
+          df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
 
@@ -2121,7 +2122,13 @@ server <- function(input, output, session) {
           dfb2 <- dfb1 %>%
             dplyr::mutate(t = t0 + 365*nyears())
 
-          enroll_pred_df <- dfa %>%
+          # add day 1
+          df0 <- dplyr::tibble(treatment = c(1:k, 9999),
+                               t = 1, n = 0, lower = 0, upper = 0,
+                               mean = 0, var = 0)
+
+          enroll_pred_df <- df0 %>%
+            dplyr::bind_rows(dfa) %>%
             dplyr::bind_rows(dfb1) %>%
             dplyr::bind_rows(dfb2) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
@@ -2247,8 +2254,7 @@ server <- function(input, output, session) {
             dplyr::ungroup()
 
           # observed number of subjects at risk before cutoff
-          t2 = setdiff(sort(unique(round(c(df$arrivalTime, df$totalTime)))),
-                       t0)
+          t2 = setdiff(sort(unique(c(df$arrivalTime, df$totalTime))), t0)
 
           dfe <- dplyr::tibble(t = t2) %>%
             dplyr::cross_join(df) %>%
@@ -2263,7 +2269,7 @@ server <- function(input, output, session) {
                                            mean = r0, var = 0))
 
           # time zero
-          df0 <- dplyr::tibble(t = 0, n = 0, lower = NA, upper = NA,
+          df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
 
@@ -2360,7 +2366,7 @@ server <- function(input, output, session) {
 
       if (input$stage == 'Design stage') {
         df0 <- dplyr::tibble(drug = 1:l(),
-                             t = 0, n = 0, lower = 0, upper = 0,
+                             t = 1, n = 0, lower = 0, upper = 0,
                              mean = 0, var = 0)
 
         newEvents <- pred()$event_pred$newEvents
@@ -2401,7 +2407,7 @@ server <- function(input, output, session) {
         pred
       } else if (input$stage == 'Real-time before enrollment completion') {
         df0 <- dplyr::tibble(drug = 1:l(),
-                             t = 0, n = 0, lower = NA, upper = NA,
+                             t = 1, n = 0, lower = NA, upper = NA,
                              mean = 0, var = 0)
 
         df <- df() %>%
@@ -2504,7 +2510,7 @@ server <- function(input, output, session) {
         pred
       } else if (input$stage == "Real-time after enrollment completion") {
         df0 <- dplyr::tibble(drug = 1:l(),
-                             t = 0, n = 0, lower = NA, upper = NA,
+                             t = 1, n = 0, lower = NA, upper = NA,
                              mean = 0, var = 0)
 
         df <- df() %>%
