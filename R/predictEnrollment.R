@@ -283,6 +283,10 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     str3 <- paste0("Prediction interval: ", pred_date[2], ", ", pred_date[3])
     s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
 
+    # add day 1
+    df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
+                         mean = 0, var = 0)
+
     # arrival time for subjects already enrolled before data cut
     dfa <- df %>%
       dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
@@ -303,7 +307,8 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     }
 
     # concatenate subjects enrolled before and after data cut
-    dfs <- dfa %>%
+    dfs <- df0 %>%
+      dplyr::bind_rows(dfa) %>%
       dplyr::bind_rows(dfb) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt))
 
