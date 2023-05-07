@@ -57,8 +57,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   # enrollment data
   adsl <- df %>%
     dplyr::arrange(.data$randdt) %>%
-    dplyr::mutate(adt = as.Date(.data$time - 1, origin = .data$randdt),
-                  n = dplyr::row_number(),
+    dplyr::mutate(n = dplyr::row_number(),
                   parameter = "Enrollment",
                   date = .data$randdt)
 

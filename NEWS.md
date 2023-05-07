@@ -1,6 +1,7 @@
 # eventPred 0.1.3
 
 - update the description of internal datasets
+- update summarizeObserved to eliminate the requirement of the time variable for enrollment summary
 
 # eventPred 0.1.2
 
