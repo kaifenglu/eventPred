@@ -1,3 +1,7 @@
+# eventPred 0.1.3
+
+- update the description of internal datasets
+
 # eventPred 0.1.2
 
 - add mean and variance to prediction output

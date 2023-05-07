@@ -7,7 +7,7 @@
 #'   \code{randdt} and \code{cutoffdt}. By default, it is set to
 #'   \code{NULL} for enrollment prediction at the design stage.
 #' @param target_n The target number of subjects to enroll in the study.
-#' @param enroll_fit the pre-fitted enrollment model used to
+#' @param enroll_fit The pre-fitted enrollment model used to
 #'   generate predictions.
 #' @param lags The day lags to compute the average enrollment rate to
 #'   carry forward for the B-spline enrollment model. By default,

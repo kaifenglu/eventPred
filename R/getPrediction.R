@@ -107,7 +107,7 @@
 #' option is not appropriate for use as prior.
 #'
 #' The \code{dropout_prior} should be a list that
-#' includes \code{model} to specify the dropout model,
+#' includes \code{model} to specify the dropout model
 #' (exponential, weibull, log-normal, piecewise exponential),
 #' \code{ngroups} to indicate the number of treatment groups,
 #' \code{alloc} to indicate the treatment allocation within a
