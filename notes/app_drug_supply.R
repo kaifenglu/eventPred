@@ -38,7 +38,7 @@ f_treatment_allocation <- function(i) {
 
 f_exponential_survival <- function(i) {
   conditionalPanel(
-    condition = paste("input.event_model_parameter == 'Exponential'",
+    condition = paste("input.event_prior == 'Exponential'",
                       "&&", "input.k ==", i),
 
     shinyMatrix::matrixInput(
@@ -59,7 +59,7 @@ f_exponential_survival <- function(i) {
 
 f_weibull_survival <- function(i) {
   conditionalPanel(
-    condition = paste("input.event_model_parameter == 'Weibull'",
+    condition = paste("input.event_prior == 'Weibull'",
                       "&&", "input.k ==", i),
 
     shinyMatrix::matrixInput(
@@ -82,7 +82,7 @@ f_weibull_survival <- function(i) {
 
 f_lnorm_survival <- function(i) {
   conditionalPanel(
-    condition = paste("input.event_model_parameter == 'Log-normal'",
+    condition = paste("input.event_prior == 'Log-normal'",
                       "&&", "input.k ==", i),
 
     shinyMatrix::matrixInput(
@@ -107,7 +107,7 @@ f_lnorm_survival <- function(i) {
 f_piecewise_exponential_survival <- function(i) {
   conditionalPanel(
     condition = paste(
-      "input.event_model_parameter == 'Piecewise exponential'",
+      "input.event_prior == 'Piecewise exponential'",
       "&&", "input.k ==", i),
 
     shinyMatrix::matrixInput(
@@ -234,7 +234,7 @@ enrollmentPanel <- tabPanel(
 
     fluidRow(
       column(6, radioButtons(
-        "enroll_model_parameter",
+        "enroll_prior",
         "Which enrollment model to use?",
         choices = c("Poisson",
                     "Time-decay",
@@ -245,7 +245,7 @@ enrollmentPanel <- tabPanel(
 
       column(6,
              conditionalPanel(
-               condition = "input.enroll_model_parameter == 'Poisson'",
+               condition = "input.enroll_prior == 'Poisson'",
 
                numericInput(
                  "poisson_rate",
@@ -255,7 +255,7 @@ enrollmentPanel <- tabPanel(
              ),
 
              conditionalPanel(
-               condition = "input.enroll_model_parameter == 'Time-decay'",
+               condition = "input.enroll_prior == 'Time-decay'",
 
                fluidRow(
                  column(6,
@@ -277,7 +277,7 @@ enrollmentPanel <- tabPanel(
              ),
 
              conditionalPanel(
-               condition = "input.enroll_model_parameter ==
+               condition = "input.enroll_prior ==
                'Piecewise Poisson'",
 
                shinyMatrix::matrixInput(
@@ -369,7 +369,7 @@ eventPanel <- tabPanel(
 
     fluidRow(
       column(4, radioButtons(
-        "event_model_parameter",
+        "event_prior",
         "Which time-to-event model to use?",
         choices = c("Exponential",
                     "Weibull",
@@ -1167,7 +1167,8 @@ server <- function(input, output, session) {
     if (to_predict() == "Enrollment only") {
       required_columns <- c('trialsdt', 'randdt', 'cutoffdt')
     } else {
-      required_columns <- c('trialsdt', 'randdt', 'cutoffdt', 'time', 'event')
+      required_columns <- c('trialsdt', 'randdt', 'cutoffdt', 'time', 'event',
+                            'dropout')
     }
 
     if (input$by_treatment) {
@@ -1240,55 +1241,50 @@ server <- function(input, output, session) {
       alloc = treatment_allocation()
 
       # enroll model specifications
-      if (input$enroll_model_parameter == "Poisson") {
+      if (input$enroll_prior == "Poisson") {
         theta = log(poisson_rate())
-        vtheta = 1e-8
-      } else if (input$enroll_model_parameter == "Time-decay") {
+      } else if (input$enroll_prior == "Time-decay") {
         theta = c(log(mu()), log(delta()))
-        vtheta = diag(2)*1e-8
-      } else if (input$enroll_model_parameter == "Piecewise Poisson") {
+      } else if (input$enroll_prior == "Piecewise Poisson") {
         theta = log(piecewise_poisson_rate()[,2])
-        vtheta = diag(length(theta))*1e-8
         accrualTime = piecewise_poisson_rate()[,1]
       }
 
-      enroll_model_parameter <- list(
-        model = input$enroll_model_parameter,
+      enroll_prior <- list(
+        model = input$enroll_prior,
         theta = theta,
-        vtheta = vtheta)
+        vtheta = diag(length(theta))*1e-8)
 
-      if (input$enroll_model_parameter == "Piecewise Poisson") {
-        enroll_model_parameter$accrualTime = accrualTime
+      if (input$enroll_prior == "Piecewise Poisson") {
+        enroll_prior$accrualTime = accrualTime
       }
 
 
       # event model specifications
       if (to_predict() == "Enrollment and event" ||
           to_predict() == "Event only") {
-        if (input$event_model_parameter == "Exponential") {
+        if (input$event_prior == "Exponential") {
           theta = log(exponential_survival())
-        } else if (input$event_model_parameter == "Weibull") {
+        } else if (input$event_prior == "Weibull") {
           theta = c(log(weibull_survival()))
-        } else if (input$event_model_parameter == "Log-normal") {
+        } else if (input$event_prior == "Log-normal") {
           theta = c(matrix(c(lnorm_survival()[1,],
                              log(lnorm_survival()[2,])),
                            nrow = 2, byrow = TRUE))
-        } else if (input$event_model_parameter ==
-                   "Piecewise exponential") {
+        } else if (input$event_prior == "Piecewise exponential") {
           theta = c(log(piecewise_exponential_survival()[,-1]))
           piecewiseSurvivalTime = piecewise_exponential_survival()[,1]
         }
 
-        event_model_parameter = list(
-          model = input$event_model_parameter,
+        event_prior = list(
+          model = input$event_prior,
           ngroups = k,
           alloc = alloc,
           theta = theta,
           vtheta = diag(length(theta))*1e-8)
 
-        if (input$event_model_parameter == "Piecewise exponential") {
-          event_model_parameter$piecewiseSurvivalTime =
-            piecewiseSurvivalTime
+        if (input$event_prior == "Piecewise exponential") {
+          event_prior$piecewiseSurvivalTime = piecewiseSurvivalTime
         }
       }
 
@@ -1299,7 +1295,7 @@ server <- function(input, output, session) {
           getPrediction(
             to_predict = to_predict(),
             target_n = target_n(),
-            enroll_model_parameter = enroll_model_parameter,
+            enroll_prior = enroll_prior,
             pilevel = pilevel(),
             nyears = nyears(),
             nreps = nreps(),
@@ -1310,8 +1306,8 @@ server <- function(input, output, session) {
             to_predict = to_predict(),
             target_n = target_n(),
             target_d = target_d(),
-            enroll_model_parameter = enroll_model_parameter,
-            event_model_parameter = event_model_parameter,
+            enroll_prior = enroll_prior,
+            event_prior = event_prior,
             pilevel = pilevel(),
             nyears = nyears(),
             nreps = nreps(),
@@ -1327,7 +1323,7 @@ server <- function(input, output, session) {
           pred1 <- getPrediction(
             to_predict = to_predict(),
             target_n = target_n(),
-            enroll_model_parameter = enroll_model_parameter,
+            enroll_prior = enroll_prior,
             pilevel = pilevel(),
             nyears = nyears(),
             nreps = nreps(),
@@ -1413,8 +1409,8 @@ server <- function(input, output, session) {
             to_predict = to_predict(),
             target_n = target_n(),
             target_d = target_d(),
-            enroll_model_parameter = enroll_model_parameter,
-            event_model_parameter = event_model_parameter,
+            enroll_prior = enroll_prior,
+            event_prior = event_prior,
             pilevel = pilevel(),
             nyears = nyears(),
             nreps = nreps(),
@@ -1549,8 +1545,8 @@ server <- function(input, output, session) {
             target_d = target_d(),
             enroll_model = input$enroll_model,
             nknots = nknots(),
-            accrualTime = accrualTime(),
             lags = lags(),
+            accrualTime = accrualTime(),
             event_model = input$event_model,
             piecewiseSurvivalTime = piecewiseSurvivalTime(),
             dropout_model = "none",
@@ -1608,7 +1604,6 @@ server <- function(input, output, session) {
             nreps = nreps(),
             showsummary = FALSE,
             showplot = FALSE)
-
 
           trialsdt = pred1$observed$trialsdt
           cutoffdt = pred1$observed$cutoffdt
@@ -1675,9 +1670,11 @@ server <- function(input, output, session) {
               dplyr::bind_rows(dfa1)
           }
 
+
+          # concatenate subjects enrolled before and after data cut
           # add day 1
           df0 <- dplyr::tibble(treatment = 1:k,
-                               t = 1, n = 0, lower = 0, upper = 0,
+                               t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
           # concatenate subjects enrolled before and after data cut
@@ -1780,7 +1777,6 @@ server <- function(input, output, session) {
             need(k() == k,
                  "Number of treatments must match observed."))
 
-
           # predict enrollment
           enroll_fit <- fitEnrollment(
             df = observed$adsl,
@@ -1862,7 +1858,7 @@ server <- function(input, output, session) {
 
           # add day 1
           df0 <- dplyr::tibble(treatment = 1:k,
-                               t = 1, n = 0, lower = 0, upper = 0,
+                               t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
           # concatenate subjects enrolled before and after data cut
@@ -2007,20 +2003,18 @@ server <- function(input, output, session) {
                                            lower = NA, upper = NA,
                                            mean = r0, var = 0))
 
-          # add day 1
+          # day 1
           df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
-
-          # add time zero and concatenate events before and after data cut
+          # add day 1 and concatenate events before and after data cut
           event_pred_df1 <- df0 %>%
             dplyr::bind_rows(dfa) %>%
             dplyr::bind_rows(dfb) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
             dplyr::mutate(treatment = 9999, parameter = "Event")
 
-          # add time zero and concatenate ongoing subjects before and after
-          # data cut
+          # add day 1 and concatenate ongoing before and after data cut
           ongoing_pred_df1 <- df0 %>%
             dplyr::bind_rows(dfe) %>%
             dplyr::bind_rows(dff) %>%
@@ -2124,7 +2118,7 @@ server <- function(input, output, session) {
 
           # add day 1
           df0 <- dplyr::tibble(treatment = c(1:k, 9999),
-                               t = 1, n = 0, lower = 0, upper = 0,
+                               t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
           enroll_pred_df <- df0 %>%
@@ -2268,20 +2262,19 @@ server <- function(input, output, session) {
                                            lower = NA, upper = NA,
                                            mean = r0, var = 0))
 
-          # time zero
+          # day 1
           df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
 
-          # add time zero and concatenate events before and after data cut
+          # add day 1 and concatenate events before and after data cut
           event_pred_df1 <- df0 %>%
             dplyr::bind_rows(dfa) %>%
             dplyr::bind_rows(dfb) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
             dplyr::mutate(treatment = 9999, parameter = "Event")
 
-          # add time zero and concatenate ongoing subjects before and after
-          # data cut
+          # add day 1 and concatenate ongoing before and after data cut
           ongoing_pred_df1 <- df0 %>%
             dplyr::bind_rows(dfe) %>%
             dplyr::bind_rows(dff) %>%
@@ -2365,9 +2358,6 @@ server <- function(input, output, session) {
 
 
       if (input$stage == 'Design stage') {
-        df0 <- dplyr::tibble(drug = 1:l(),
-                             t = 1, n = 0, lower = 0, upper = 0,
-                             mean = 0, var = 0)
 
         newEvents <- pred()$event_pred$newEvents
 
@@ -2390,7 +2380,7 @@ server <- function(input, output, session) {
                 .groups = "drop_last")
           }))
 
-        # predicted number of subjects at risk after data cut
+        # predicted number of doses dispensed
         dosing_pred_df <- dfb %>%
           dplyr::group_by(drug, t) %>%
           dplyr::summarise(n = quantile(cum_dose, probs = 0.5),
@@ -2398,9 +2388,7 @@ server <- function(input, output, session) {
                            upper = quantile(cum_dose, probs = pupper),
                            mean = mean(cum_dose),
                            var = var(cum_dose),
-                           .groups = "drop_last") %>%
-          dplyr::bind_rows(df0) %>%
-          dplyr::arrange(drug, t)
+                           .groups = "drop_last")
 
         pred <- pred()
         pred$event_pred$dosing_pred_df <- dosing_pred_df
@@ -2633,7 +2621,8 @@ server <- function(input, output, session) {
           sumall <- sum_by_trt %>%
             dplyr::bind_rows(dplyr::bind_cols(treatment = 9999, sum_overall))
 
-          table <- t(sumall %>% dplyr::select(n0, d0, r0))
+          table <- t(sumall %>%
+                       dplyr::select(n0, d0, r0))
           colnames(table) <- paste("Treatment", sumall$treatment)
           colnames(table)[ncol(table)] <- "Overall"
           rownames(table) <- c("Current number of subjects",
@@ -2697,13 +2686,28 @@ server <- function(input, output, session) {
                         parameter = "Enrollment",
                         date = randdt)
 
+        # remove duplicate
+        adslu <- adsl %>%
+          dplyr::group_by(treatment, randdt) %>%
+          dplyr::slice(dplyr::n()) %>%
+          dplyr::ungroup() %>%
+          dplyr::select(treatment, n, parameter, date)
+
+        # dummy subject to initialize time axis at trial start
+        adsl0 <- dplyr::tibble(treatment = 1:k(),
+                               n = 0,
+                               parameter = "Enrollment",
+                               date = trialsdt)
+
         # extend enrollment information to cutoff date
         adsl1 <- adsl %>%
           dplyr::group_by(treatment) %>%
           dplyr::slice(dplyr::n()) %>%
-          dplyr::mutate(date = cutoffdt)
+          dplyr::mutate(date = cutoffdt) %>%
+          dplyr::select(treatment, n, parameter, date)
 
         if (grepl("event", to_predict(), ignore.case = TRUE)) {
+          # time to event data
           adtte <- df() %>%
             dplyr::group_by(treatment) %>%
             dplyr::mutate(adt = as.Date(time - 1,
@@ -2713,21 +2717,28 @@ server <- function(input, output, session) {
                           parameter = "Event",
                           date = adt)
 
-          # dummy subject to initialize time to event axis at trial start
-          adtte0 <- df() %>%
-            dplyr::group_by(treatment) %>%
-            dplyr::slice(1) %>%
-            dplyr::mutate(randdt = trialsdt, adt = trialsdt, time = 1,
-                          event = 0,
-                          n = 0, parameter = "Event", date = trialsdt)
+          # remove duplicate
+          adtteu <- adtte %>%
+            dplyr::group_by(treatment, adt) %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::ungroup() %>%
+            dplyr::select(treatment, n, parameter, date)
+
+          # dummy subject to initialize time axis at trial start
+          adtte0 <- dplyr::tibble(treatment = 1:k(),
+                                  n = 0,
+                                  parameter = "Event",
+                                  date = trialsdt)
 
           # combine enrollment and time to event data
-          ad <- adsl %>%
+          ad <- adsl0 %>%
+            dplyr::bind_rows(adslu) %>%
             dplyr::bind_rows(adsl1) %>%
             dplyr::bind_rows(adtte0) %>%
-            dplyr::bind_rows(adtte)
+            dplyr::bind_rows(adtteu)
         } else {
-          ad <- adsl %>%
+          ad <- adsl0 %>%
+            dplyr::bind_rows(adslu) %>%
             dplyr::bind_rows(adsl1)
         }
 
@@ -2747,8 +2758,8 @@ server <- function(input, output, session) {
               legend = list(x = 0, y = 1.05, yanchor = "bottom",
                             orientation = 'h'))
         } else {
-          cum_accrual_plot <- plotly::plot_ly(ad, x=~date, y=~n,
-                                              linetype=~treatmentc) %>%
+          cum_accrual_plot <- plotly::plot_ly(
+            ad, x=~date, y=~n, linetype=~treatmentc) %>%
             plotly::add_lines(line = list(shape = "hv")) %>%
             plotly::layout(
               xaxis = list(title = ""),
@@ -3404,7 +3415,7 @@ server <- function(input, output, session) {
         }
 
         p1 <- plotly::subplot(dosing_pred_plot, nrows = l(),
-                              titleX = TRUE, titleY = TRUE, margin = 0.1)
+                              titleX = TRUE, titleY = TRUE, margin = 0.05)
       } else {
         dosing_pred_plot <- list()
 
@@ -3412,10 +3423,12 @@ server <- function(input, output, session) {
           dosing_pred_plot[[j]] <- df %>%
             dplyr::filter(drug == j) %>%
             plotly::plot_ly() %>%
-            plotly::add_ribbons(name = "prediction interval",
-                                x = ~t, ymin = ~lower, ymax = ~upper,
-                                fill = "tonexty", line = list(width=0)) %>%
-            plotly::add_lines(x = ~t, y = ~n, name = "median prediction") %>%
+            plotly::add_ribbons(
+              name = "prediction interval",
+              x = ~t, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0)) %>%
+            plotly::add_lines(
+              x = ~t, y = ~n, name = "median prediction") %>%
             plotly::layout(
               xaxis = list(title = "Days since trial start",
                            zeroline = FALSE),
@@ -3430,7 +3443,7 @@ server <- function(input, output, session) {
         }
 
         p1 <- plotly::subplot(dosing_pred_plot, nrows = l(),
-                              titleX = TRUE, titleY = TRUE, margin = 0.1)
+                              titleX = TRUE, titleY = TRUE, margin = 0.05)
       }
 
     } else {
@@ -3590,8 +3603,6 @@ server <- function(input, output, session) {
 
 
 
-
-
   # save inputs
   output$saveInputs <- downloadHandler(
     filename = function() {
@@ -3628,7 +3639,7 @@ server <- function(input, output, session) {
                           c("Frequency in weeks",
                             "Number of cycles",
                             paste("Drug", 1:l(), "dose")))),
-        enroll_model_parameter = input$enroll_model_parameter,
+        enroll_prior = input$enroll_prior,
         poisson_rate = poisson_rate(),
         mu = mu(),
         delta = delta(),
@@ -3643,7 +3654,7 @@ server <- function(input, output, session) {
           accrualTime(), ncol = 1,
           dimnames = list(paste("Interval", 1:length(accrualTime())),
                           "Starting time")),
-        event_model_parameter = input$event_model_parameter,
+        event_prior = input$event_prior,
         event_model = input$event_model,
         piecewiseSurvivalTime = matrix(
           piecewiseSurvivalTime(), ncol = 1,
@@ -3693,16 +3704,14 @@ server <- function(input, output, session) {
                                      "Size")))
     }
 
-    if (x$stage == 'Design stage' &&
-        x$event_model_parameter == 'Exponential') {
+    if (x$stage == 'Design stage' && x$event_prior == 'Exponential') {
       updateMatrixInput(
         session, paste0("exponential_survival_", x$k),
         value=matrix(x$exponential_survival, ncol = x$k,
                      dimnames = list(NULL, paste("Treatment", 1:x$k))))
     }
 
-    if (x$stage == 'Design stage' &&
-        x$event_model_parameter == 'Weibull') {
+    if (x$stage == 'Design stage' && x$event_prior == 'Weibull') {
       updateMatrixInput(
         session, paste0("weibull_survival_", x$k),
         value=matrix(x$weibull_survival, ncol = x$k,
@@ -3710,8 +3719,7 @@ server <- function(input, output, session) {
                                      paste("Treatment", 1:x$k))))
     }
 
-    if (x$stage == 'Design stage' &&
-        x$event_model_parameter == 'Log-normal') {
+    if (x$stage == 'Design stage' && x$event_prior == 'Log-normal') {
       updateMatrixInput(
         session, paste0("lnorm_survival_", x$k),
         value=matrix(x$lnorm_survival, ncol = x$k,
@@ -3721,7 +3729,7 @@ server <- function(input, output, session) {
     }
 
     if (x$stage == 'Design stage' &&
-        x$event_model_parameter == 'Piecewise exponential') {
+        x$event_prior == 'Piecewise exponential') {
       updateMatrixInput(
         session, paste0("piecewise_exponential_survival_", x$k),
         value=matrix(x$piecewise_exponential_survival, ncol = x$k + 1,
@@ -3750,15 +3758,14 @@ server <- function(input, output, session) {
     }
 
     if (x$stage == 'Design stage') {
-      updateRadioButtons(session, "enroll_model_parameter",
-                         selected=x$enroll_model_parameter)
+      updateRadioButtons(session, "enroll_prior", selected=x$enroll_prior)
 
-      if (x$enroll_model_parameter == "Poisson") {
+      if (x$enroll_prior == "Poisson") {
         updateNumericInput(session, "poisson_rate", value=x$poisson_rate)
-      } else if (x$enroll_model_parameter == "Time-decay") {
+      } else if (x$enroll_prior == "Time-decay") {
         updateNumericInput(session, "mu", value=x$mu)
         updateNumericInput(session, "delta", value=x$delta)
-      } else if (x$enroll_model_parameter == "Piecewise Poisson") {
+      } else if (x$enroll_prior == "Piecewise Poisson") {
         updateMatrixInput(
           session, "piecewise_poisson_rate",
           value=matrix(x$piecewise_poisson_rate, ncol = 2,
@@ -3769,8 +3776,7 @@ server <- function(input, output, session) {
       }
 
       if (x$to_predict == 'Enrollment and event') {
-        updateRadioButtons(session, "event_model_parameter",
-                           selected=x$event_model_parameter)
+        updateRadioButtons(session, "event_prior", selected=x$event_prior)
       }
 
     } else {
@@ -3851,9 +3857,6 @@ server <- function(input, output, session) {
     updateNumericInput(session, "seed", value=x$seed)
 
   })
-
-
-
 }
 
 # Run the application
