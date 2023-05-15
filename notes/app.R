@@ -438,7 +438,8 @@ eventPanel <- tabPanel(
                     "Weibull",
                     "Log-normal",
                     "Piecewise exponential",
-                    "Model averaging"),
+                    "Model averaging",
+                    "Spline"),
         selected = "Model averaging",
         inline = FALSE)
       ),
@@ -461,6 +462,23 @@ eventPanel <- tabPanel(
                             label=NULL, icon=icon("plus")),
                actionButton("del_piecewiseSurvivalTime",
                             label=NULL, icon=icon("minus"))
+             ),
+
+             conditionalPanel(
+               condition = "input.event_model == 'Spline'",
+
+               numericInput(
+                 "spline_k",
+                 "How many inner knots to use?",
+                 value = 0,
+                 min = 0, max = 10, step = 1),
+
+               radioButtons(
+                 "spline_scale",
+                 "Which scale to model as a spline function?",
+                 choices = c("hazard", "odds", "normal"),
+                 selected = "hazard",
+                 inline = TRUE)
              )
       )
     ),
@@ -710,7 +728,7 @@ ui <- fluidPage(
           "Prediction interval",
 
           choices = c("95%" = "0.95", "90%" = "0.90", "80%" = "0.80"),
-          selected = "0.90",
+          selected = "0.95",
           inline = TRUE)
         ),
 
@@ -772,7 +790,7 @@ ui <- fluidPage(
           "nreps",
           label = "Simulation runs",
           value = 200,
-          min = 100, max = 2000, step = 1)
+          min = 100, max = 10000, step = 1)
         ),
 
         column(5, numericInput(
@@ -1151,6 +1169,18 @@ server <- function(input, output, session) {
   })
 
 
+  spline_k <- reactive({
+    req(input$spline_k)
+    valid = (input$spline_k >= 0 && input$spline_k == round(input$spline_k))
+    shinyFeedback::feedbackWarning(
+      "spline_k", !valid,
+      "Number of inner knots must be a nonnegative integer")
+    req(valid)
+    as.numeric(input$spline_k)
+  })
+
+
+
   exponential_dropout <- reactive({
     req(k())
     param = input[[paste0("exponential_dropout_", k())]]
@@ -1311,12 +1341,14 @@ server <- function(input, output, session) {
     if (!is.null(df())) {
       if (!input$by_treatment) {
         event_fit <- fitEvent(
-          df(), input$event_model, piecewiseSurvivalTime(), showplot = FALSE)
+          df(), input$event_model, piecewiseSurvivalTime(),
+          spline_k(), input$spline_scale, showplot = FALSE)
       } else {
         df_list <- split(df(), df()$treatment)
 
         event_fit <- lapply(df_list, function(df) fitEvent(
-          df, input$event_model, piecewiseSurvivalTime(), showplot = FALSE))
+          df, input$event_model, piecewiseSurvivalTime(),
+          spline_k(), input$spline_scale, showplot = FALSE))
       }
 
       event_fit
@@ -1738,6 +1770,8 @@ server <- function(input, output, session) {
             accrualTime = accrualTime(),
             event_model = input$event_model,
             piecewiseSurvivalTime = piecewiseSurvivalTime(),
+            k = spline_k(),
+            scale = input$spline_scale,
             dropout_model = input$dropout_model,
             piecewiseDropoutTime = piecewiseDropoutTime(),
             pilevel = pilevel(),
@@ -1766,6 +1800,8 @@ server <- function(input, output, session) {
             target_d = target_d(),
             event_model = input$event_model,
             piecewiseSurvivalTime = piecewiseSurvivalTime(),
+            k = spline_k(),
+            scale = input$spline_scale,
             dropout_model = input$dropout_model,
             piecewiseDropoutTime = piecewiseDropoutTime(),
             pilevel = pilevel(),
@@ -1860,11 +1896,11 @@ server <- function(input, output, session) {
             dplyr::group_by(treatment)
 
           # extend observed to cutoff date
-          if (max(dfa$t) < t0) {
-            dfa1 <- dfa %>%
-              dplyr::slice(dplyr::n()) %>%
-              dplyr::mutate(t = t0)
+          dfa1 <- dfa %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::mutate(t = t0)
 
+          if (max(dfa$t) < t0) {
             dfa <- dfa %>%
               dplyr::bind_rows(dfa1)
           }
@@ -2055,11 +2091,11 @@ server <- function(input, output, session) {
             dplyr::group_by(treatment)
 
           # extend observed to cutoff date
-          if (max(dfa$t) < t0) {
-            dfa1 <- dfa %>%
-              dplyr::slice(dplyr::n()) %>%
-              dplyr::mutate(t = t0)
+          dfa1 <- dfa %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::mutate(t = t0)
 
+          if (max(dfa$t) < t0) {
             dfa <- dfa %>%
               dplyr::bind_rows(dfa1)
           }
@@ -2088,6 +2124,7 @@ server <- function(input, output, session) {
               df = dplyr::filter(observed$adtte, treatment == i),
               event_model = input$event_model,
               piecewiseSurvivalTime = piecewiseSurvivalTime(),
+              k = spline_k(), scale = input$spline_scale,
               showplot = FALSE)
           }
 
@@ -2433,6 +2470,7 @@ server <- function(input, output, session) {
               df = dplyr::filter(observed$adtte, treatment == i),
               event_model = input$event_model,
               piecewiseSurvivalTime = piecewiseSurvivalTime(),
+              k = spline_k(), scale = input$spline_scale,
               showplot = FALSE)
           }
 
@@ -3763,6 +3801,8 @@ server <- function(input, output, session) {
           piecewiseSurvivalTime(), ncol = 1,
           dimnames = list(paste("Interval", 1:length(piecewiseSurvivalTime())),
                           "Starting time")),
+        spline_k = spline_k(),
+        spline_scale = input$spline_scale,
         dropout_prior = input$dropout_prior,
         dropout_model = input$dropout_model,
         piecewiseDropoutTime = matrix(
@@ -3940,6 +3980,9 @@ server <- function(input, output, session) {
                            paste("Interval",
                                  1:nrow(x$piecewiseSurvivalTime)),
                            "Starting time")))
+        } else if (x$event_model == "Spline") {
+          updateNumericInput(session, "spline_k", value=x$spline_k)
+          updateRadioButtons(session, "spline_scale", value=x$spline_scale)
         }
 
         updateRadioButtons(session, "dropout_model", selected=x$dropout_model)
