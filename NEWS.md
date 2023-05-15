@@ -2,6 +2,7 @@
 
 - update the description of internal datasets
 - update summarizeObserved to remove adt from adsl
+- add Royston and Parmar (2002) spline event model
 
 # eventPred 0.1.2
 
