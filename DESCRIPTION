@@ -1,7 +1,7 @@
 Package: eventPred
 Title: Event Prediction
 Version: 0.1.3
-Date: 2023-05-07
+Date: 2023-05-15
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6160-7119"))
@@ -21,6 +21,7 @@ Imports:
     rstpm2 (>= 1.6.1),
     numDeriv (>= 2016.8-1.1),
     tmvtnsim (>= 0.1.3),
+    flexsurv (>= 2.2.2),
     erify (>= 0.4.0),
     stats (>= 3.5.0)
 Depends: 
