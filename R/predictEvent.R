@@ -63,8 +63,8 @@
 #' parameters for the \code{j}-th treatment group. For the
 #' piecewise exponential event model, \code{piecewiseSurvivalTime}
 #' should also be included to indicate the location of knots.
-#' It should be noted that the model averaging option is not
-#' appropriate for use during the design stage.
+#' It should be noted that the model averaging option and the spline
+#' option are not appropriate for use during the design stage.
 #'
 #' To specify the dropout model used during the design stage
 #' event prediction, the \code{dropout_fit} list should include
@@ -128,7 +128,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   if (!is.null(df)) {
     erify::check_content(tolower(event_fit$model),
                          c("exponential", "weibull", "log-normal",
-                           "piecewise exponential", "model averaging"))
+                           "piecewise exponential", "model averaging",
+                           "spline"))
   } else { # design stage
     erify::check_content(tolower(event_fit$model),
                          c("exponential", "weibull", "log-normal",
@@ -577,6 +578,24 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             survivalTimeNew[w==0] = rlnorm(nw0, meanlog, sdlog)
           }
 
+          survivalTime = c(survivalTimeOngoing, survivalTimeNew)
+        } else {
+          survivalTime = survivalTimeOngoing
+        }
+      } else if (tolower(event_fit$model) == "spline") {
+        gamma = theta2[i,]
+        knots = event_fit$knots
+        scale = event_fit$scale
+
+        st0 = flexsurv::psurvspline(
+          time0, gamma, knots=knots, scale=scale, lower.tail = FALSE)
+
+        survivalTimeOngoing = flexsurv::qsurvspline(
+          runif(r0)*st0, gamma, knots=knots, scale=scale, lower.tail = FALSE)
+
+        if (n1 > 0) {
+          survivalTimeNew = flexsurv::rsurvspline(n1, gamma, knots=knots,
+                                                  scale=scale)
           survivalTime = c(survivalTimeOngoing, survivalTimeNew)
         } else {
           survivalTime = survivalTimeOngoing
