@@ -35,6 +35,17 @@
 #'   intervals for the piecewise exponential survival distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
 #'   event intervals: [0, 60) and [60, Inf). By default, it is set to 0.
+#' @param k The number of inner knots in the spline event model of
+#'   Royston and Parmar (2002). The default
+#'   \code{k=0} gives a Weibull, log-logistic or log-normal model,
+#'   if \code{scale} is "hazard", "odds", or "normal", respectively.
+#'   The knots are chosen as equally-spaced quantiles of the log
+#'   uncensored survival times. The boundary knots are chosen as the
+#'   minimum and maximum log uncensored survival times.
+#' @param scale If "hazard", the log cumulative hazard is modeled
+#'   as a spline function. If "odds", the log cumulative odds is
+#'   modeled as a spline function. If "normal", -qnorm(S(t)) is
+#'   modeled as a spline function.
 #' @param event_prior The prior of event model parameters.
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
@@ -149,6 +160,7 @@ getPrediction <- function(
     enroll_model = "b-spline", nknots = 0, lags = 30, accrualTime = 0,
     enroll_prior = NULL,
     event_model = "model averaging", piecewiseSurvivalTime = 0,
+    k = 0, scale = "hazard",
     event_prior = NULL,
     dropout_model = "exponential", piecewiseDropoutTime = 0,
     dropout_prior = NULL,
@@ -209,7 +221,8 @@ getPrediction <- function(
 
   erify::check_content(tolower(event_model),
                        c("exponential", "weibull", "log-normal",
-                         "piecewise exponential", "model averaging"))
+                         "piecewise exponential", "model averaging",
+                         "spline"))
 
   if (piecewiseSurvivalTime[1] != 0) {
     stop("piecewiseSurvivalTime must start with 0")
@@ -218,6 +231,10 @@ getPrediction <- function(
       any(diff(piecewiseSurvivalTime) <= 0)) {
     stop("piecewiseSurvivalTime should be increasing")
   }
+
+  erify::check_n(k, zero = TRUE)
+  erify::check_content(tolower(scale), c("hazard", "odds", "normal"))
+
 
   if (!is.null(event_prior)) {
     erify::check_class(event_prior, "list")
@@ -456,7 +473,7 @@ getPrediction <- function(
 
       # convert prior by treatment to prior overall
       if (!is.null(event_prior)) {
-        k = event_prior$ngroups
+        ngroups = event_prior$ngroups
         alloc = event_prior$alloc
         w = alloc/sum(alloc)
 
@@ -468,7 +485,7 @@ getPrediction <- function(
 
           # use delta-method to obtain the variance
           vtheta1 = 0
-          for (i in 1:k) {
+          for (i in 1:ngroups) {
             vtheta1 = vtheta1 + (w[i]/lambda[i])^2 *
               event_prior$vtheta[i,i]
           }
@@ -483,9 +500,9 @@ getPrediction <- function(
 
           # mean and variance of weibull as a function of theta
           fmweibull <- function(theta) {
-            k = length(theta)/2
-            shape = exp(theta[2*(1:k)-1])
-            scale = exp(theta[2*(1:k)])
+            ngroups = length(theta)/2
+            shape = exp(theta[2*(1:ngroups)-1])
+            scale = exp(theta[2*(1:ngroups)])
             list(mean = scale*gamma(1+1/shape),
                  var = scale^2*(gamma(1+2/shape) - (gamma(1+1/shape))^2))
           }
@@ -509,8 +526,8 @@ getPrediction <- function(
           theta11 = uniroot(function(x)
             lgamma(1+2/exp(x)) - 2*lgamma(1+1/exp(x)) -
               log(m2$var/m2$mean^2 + 1),
-            c(min(event_prior$theta[2*(1:k)-1]) - 1,
-              max(event_prior$theta[2*(1:k)-1]) + 1),
+            c(min(event_prior$theta[2*(1:ngroups)-1]) - 1,
+              max(event_prior$theta[2*(1:ngroups)-1]) + 1),
             extendInt = "yes")$root
 
           theta12 = log(m2$mean) - lgamma(1+1/exp(theta11))
@@ -521,7 +538,7 @@ getPrediction <- function(
 
           # variance of theta for pooled
           vtheta1 = 0
-          for (i in 1:k) {
+          for (i in 1:ngroups) {
             index = c(2*i-1, 2*i)
             gi = gmweibull(event_prior$theta[index])
             vm1i = gi * event_prior$vtheta[index,index] * t(gi)
@@ -539,9 +556,9 @@ getPrediction <- function(
 
           # mean and variance of log-normal as a function of theta
           fmlnorm <- function(theta) {
-            k = length(theta)/2
-            meanlog = theta[2*(1:k)-1]
-            sdlog = exp(theta[2*(1:k)])
+            ngroups = length(theta)/2
+            meanlog = theta[2*(1:ngroups)-1]
+            sdlog = exp(theta[2*(1:ngroups)])
             list(mean = exp(meanlog + sdlog^2/2),
                  var = (exp(sdlog^2) - 1)*exp(2*meanlog + sdlog^2))
           }
@@ -571,7 +588,7 @@ getPrediction <- function(
 
           # variance of theta for pooled
           vtheta1 = 0
-          for (i in 1:k) {
+          for (i in 1:ngroups) {
             index = c(2*i-1, 2*i)
             gi = gmlnorm(event_prior$theta[index])
             vm1i = gi * event_prior$vtheta[index,index] * t(gi)
@@ -593,10 +610,10 @@ getPrediction <- function(
           theta1 = rep(NA, npieces)
           vtheta1 = 0*diag(npieces)
           for (j in 1:npieces) {
-            lambdaj = lambda[seq(0, k-1)*npieces + j]
+            lambdaj = lambda[seq(0, ngroups-1)*npieces + j]
             lambda1j = 1/sum(w/lambdaj)
             theta1[j] = log(lambda1j)
-            for (i in 1:k) {
+            for (i in 1:ngroups) {
               vtheta1[j,j] = vtheta1[j,j] + (w[i]/lambdaj[i])^2 *
                 event_prior$vtheta[(i-1)*npieces + j, (i-1)*npieces + j]
             }
@@ -614,7 +631,7 @@ getPrediction <- function(
 
       if (sum(observed$adtte$event == 1) > 0) {
         event_fit <- fitEvent(df = observed$adtte, event_model,
-                              piecewiseSurvivalTime, showplot)
+                              piecewiseSurvivalTime, k, scale, showplot)
         event_fit1 <- event_fit$event_fit
       } else {
         if (is.null(event_prior)) {
@@ -661,7 +678,7 @@ getPrediction <- function(
 
         # convert prior by treatment to prior overall
         if (!is.null(dropout_prior)) {
-          k = dropout_prior$ngroups
+          ngroups = dropout_prior$ngroups
           alloc = dropout_prior$alloc
 
           w = alloc/sum(alloc)
@@ -674,7 +691,7 @@ getPrediction <- function(
 
             # use delta-method to obtain the variance
             vtheta1 = 0
-            for (i in 1:k) {
+            for (i in 1:ngroups) {
               vtheta1 = vtheta1 + (w[i]/lambda[i])^2*dropout_prior$vtheta[i,i]
             }
             vtheta1 = vtheta1*lambda1^2
@@ -688,9 +705,9 @@ getPrediction <- function(
 
             # mean and variance of weibull as a function of theta
             fmweibull <- function(theta) {
-              k = length(theta)/2
-              shape = exp(theta[2*(1:k)-1])
-              scale = exp(theta[2*(1:k)])
+              ngroups = length(theta)/2
+              shape = exp(theta[2*(1:ngroups)-1])
+              scale = exp(theta[2*(1:ngroups)])
               list(mean = scale*gamma(1+1/shape),
                    var = scale^2*(gamma(1+2/shape) - (gamma(1+1/shape))^2))
             }
@@ -714,8 +731,8 @@ getPrediction <- function(
             theta11 = uniroot(function(x)
               lgamma(1+2/exp(x)) - 2*lgamma(1+1/exp(x)) -
                 log(m2$var/m2$mean^2 + 1),
-              c(min(dropout_prior$theta[2*(1:k)-1]) - 1,
-                max(dropout_prior$theta[2*(1:k)-1]) + 1),
+              c(min(dropout_prior$theta[2*(1:ngroups)-1]) - 1,
+                max(dropout_prior$theta[2*(1:ngroups)-1]) + 1),
               extendInt = "yes")$root
 
             theta12 = log(m2$mean) - lgamma(1+1/exp(theta11))
@@ -726,7 +743,7 @@ getPrediction <- function(
 
             # variance of theta for pooled
             vtheta1 = 0
-            for (i in 1:k) {
+            for (i in 1:ngroups) {
               index = c(2*i-1, 2*i)
               gi = gmweibull(dropout_prior$theta[index])
               vm1i = gi * dropout_prior$vtheta[index,index] * t(gi)
@@ -744,9 +761,9 @@ getPrediction <- function(
 
             # mean and variance of log-normal as a function of theta
             fmlnorm <- function(theta) {
-              k = length(theta)/2
-              meanlog = theta[2*(1:k)-1]
-              sdlog = exp(theta[2*(1:k)])
+              ngroups = length(theta)/2
+              meanlog = theta[2*(1:ngroups)-1]
+              sdlog = exp(theta[2*(1:ngroups)])
               list(mean = exp(meanlog + sdlog^2/2),
                    var = (exp(sdlog^2) - 1)*exp(2*meanlog + sdlog^2))
             }
@@ -776,7 +793,7 @@ getPrediction <- function(
 
             # variance of theta for pooled
             vtheta1 = 0
-            for (i in 1:k) {
+            for (i in 1:ngroups) {
               index = c(2*i-1, 2*i)
               gi = gmlnorm(dropout_prior$theta[index])
               vm1i = gi * dropout_prior$vtheta[index,index] * t(gi)
@@ -799,10 +816,10 @@ getPrediction <- function(
             theta1 = rep(NA, npieces)
             vtheta1 = 0*diag(npieces)
             for (j in 1:npieces) {
-              lambdaj = lambda[seq(0, k-1)*npieces + j]
+              lambdaj = lambda[seq(0, ngroups-1)*npieces + j]
               lambda1j = 1/sum(w/lambdaj)
               theta1[j] = log(lambda1j)
-              for (i in 1:k) {
+              for (i in 1:ngroups) {
                 vtheta1[j,j] = vtheta1[j,j] + (w[i]/lambdaj[i])^2 *
                   dropout_prior$vtheta[(i-1)*npieces + j, (i-1)*npieces + j]
               }
