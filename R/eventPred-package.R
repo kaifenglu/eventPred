@@ -97,7 +97,7 @@
 #'     The weight assigned to the Weibull component, denoted as
 #'     \code{w1}, is considered fixed.
 #'     \item Spline: \code{theta} corresponds to the coefficients
-#'     of the basis vectors. The \code{knots} and \code{scale}
+#'     of basis vectors. The \code{knots} and \code{scale}
 #'     are considered fixed.
 #'   }
 #' }
