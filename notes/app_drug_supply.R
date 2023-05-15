@@ -401,7 +401,8 @@ eventPanel <- tabPanel(
                     "Weibull",
                     "Log-normal",
                     "Piecewise exponential",
-                    "Model averaging"),
+                    "Model averaging",
+                    "Spline"),
         selected = "Model averaging",
         inline = FALSE)
       ),
@@ -424,6 +425,23 @@ eventPanel <- tabPanel(
                             label=NULL, icon=icon("plus")),
                actionButton("del_piecewiseSurvivalTime",
                             label=NULL, icon=icon("minus"))
+             ),
+
+             conditionalPanel(
+               condition = "input.event_model == 'Spline'",
+
+               numericInput(
+                 "spline_k",
+                 "How many inner knots to use?",
+                 value = 0,
+                 min = 0, max = 10, step = 1),
+
+               radioButtons(
+                 "spline_scale",
+                 "Which scale to model as a spline function?",
+                 choices = c("hazard", "odds", "normal"),
+                 selected = "hazard",
+                 inline = TRUE)
              )
       )
     ),
@@ -470,7 +488,6 @@ dosingPredictPanel <- tabPanel(
   uiOutput("dosing_plot"),
   downloadButton("downloadDosingdata", "Download dosing data")
 )
-
 
 
 
@@ -626,7 +643,7 @@ ui <- fluidPage(
           "Prediction interval",
 
           choices = c("95%" = "0.95", "90%" = "0.90", "80%" = "0.80"),
-          selected = "0.90",
+          selected = "0.95",
           inline = TRUE)
         ),
 
@@ -699,8 +716,8 @@ ui <- fluidPage(
         column(7, numericInput(
           "nreps",
           label = "Simulation runs",
-          value = 200,
-          min = 100, max = 2000, step = 1)
+          value = 500,
+          min = 100, max = 10000, step = 1)
         ),
 
         column(5, numericInput(
@@ -1097,6 +1114,19 @@ server <- function(input, output, session) {
   })
 
 
+  spline_k <- reactive({
+    req(input$spline_k)
+    valid = (input$spline_k >= 0 && input$spline_k == round(input$spline_k))
+    shinyFeedback::feedbackWarning(
+      "spline_k", !valid,
+      "Number of inner knots must be a nonnegative integer")
+    req(valid)
+    as.numeric(input$spline_k)
+  })
+
+
+
+
   l <- reactive(as.numeric(input$l))
 
   treatment_by_drug <- reactive({
@@ -1210,12 +1240,14 @@ server <- function(input, output, session) {
     if (!is.null(df())) {
       if (!input$by_treatment) {
         event_fit <- fitEvent(
-          df(), input$event_model, piecewiseSurvivalTime(), showplot = FALSE)
+          df(), input$event_model, piecewiseSurvivalTime(),
+          spline_k(), input$spline_scale, showplot = FALSE)
       } else {
         df_list <- split(df(), df()$treatment)
 
         event_fit <- lapply(df_list, function(df) fitEvent(
-          df, input$event_model, piecewiseSurvivalTime(), showplot = FALSE))
+          df, input$event_model, piecewiseSurvivalTime(),
+          spline_k(), input$spline_scale, showplot = FALSE))
       }
 
       event_fit
@@ -1549,6 +1581,8 @@ server <- function(input, output, session) {
             accrualTime = accrualTime(),
             event_model = input$event_model,
             piecewiseSurvivalTime = piecewiseSurvivalTime(),
+            k = spline_k(),
+            scale = input$spline_scale,
             dropout_model = "none",
             pilevel = pilevel(),
             nyears = nyears(),
@@ -1569,6 +1603,8 @@ server <- function(input, output, session) {
             target_d = target_d(),
             event_model = input$event_model,
             piecewiseSurvivalTime = piecewiseSurvivalTime(),
+            k = spline_k(),
+            scale = input$spline_scale,
             dropout_model = "none",
             pilevel = pilevel(),
             nyears = nyears(),
@@ -1661,11 +1697,11 @@ server <- function(input, output, session) {
             dplyr::group_by(treatment)
 
           # extend observed to cutoff date
-          if (max(dfa$t) < t0) {
-            dfa1 <- dfa %>%
-              dplyr::slice(dplyr::n()) %>%
-              dplyr::mutate(t = t0)
+          dfa1 <- dfa %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::mutate(t = t0)
 
+          if (max(dfa$t) < t0) {
             dfa <- dfa %>%
               dplyr::bind_rows(dfa1)
           }
@@ -1847,11 +1883,11 @@ server <- function(input, output, session) {
             dplyr::group_by(treatment)
 
           # extend observed to cutoff date
-          if (max(dfa$t) < t0) {
-            dfa1 <- dfa %>%
-              dplyr::slice(dplyr::n()) %>%
-              dplyr::mutate(t = t0)
+          dfa1 <- dfa %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::mutate(t = t0)
 
+          if (max(dfa$t) < t0) {
             dfa <- dfa %>%
               dplyr::bind_rows(dfa1)
           }
@@ -1880,6 +1916,7 @@ server <- function(input, output, session) {
               df = dplyr::filter(observed$adtte, treatment == i),
               event_model = input$event_model,
               piecewiseSurvivalTime = piecewiseSurvivalTime(),
+              k = spline_k(), scale = input$spline_scale,
               showplot = FALSE)
           }
 
@@ -2137,6 +2174,7 @@ server <- function(input, output, session) {
               df = dplyr::filter(observed$adtte, treatment == i),
               event_model = input$event_model,
               piecewiseSurvivalTime = piecewiseSurvivalTime(),
+              k = spline_k(), scale = input$spline_scale,
               showplot = FALSE)
           }
 
@@ -2364,16 +2402,17 @@ server <- function(input, output, session) {
         t = pred()$event_pred$event_pred_df$t
 
         df1 = dplyr::tibble(t = t) %>%
-          dplyr::cross_join(newEvents) %>%
-          dplyr::left_join(treatment_by_drug(), by = "treatment",
-                           multiple = "all") %>%
-          dplyr::group_by(drug, t, draw)
+          dplyr::cross_join(newEvents)
+
 
         dfb <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
             d = dosing_schedule()[,2+j]
             df1 %>%
-              dplyr::filter(drug == j & arrivalTime <= t) %>%
+              dplyr::right_join(treatment_by_drug() %>%
+                                  dplyr::filter(drug == j),
+                                by = "treatment") %>%
+              dplyr::filter(arrivalTime <= t) %>%
               dplyr::group_by(drug, t, draw) %>%
               dplyr::summarise(cum_dose = sum(
                 f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
@@ -2409,16 +2448,16 @@ server <- function(input, output, session) {
         t = unique(c(seq(0, t0, 30), t0))
 
         df1 <- dplyr::tibble(t = t) %>%
-          dplyr::cross_join(df) %>%
-          dplyr::left_join(treatment_by_drug(), by = "treatment",
-                           multiple = "all") %>%
-          dplyr::group_by(drug, t)
+          dplyr::cross_join(df)
 
         dosing_pred_obs_df <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
             d = dosing_schedule()[,2+j]
             df1 %>%
-              dplyr::filter(drug == j & arrivalTime <= t) %>%
+              dplyr::right_join(treatment_by_drug() %>%
+                                  dplyr::filter(drug == j),
+                                by = "treatment") %>%
+              dplyr::filter(arrivalTime <= t) %>%
               dplyr::group_by(drug, t) %>%
               dplyr::summarise(n = sum(
                 f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
@@ -2440,18 +2479,17 @@ server <- function(input, output, session) {
         t = unique(t[t >= t0])
 
         df2 = dplyr::tibble(t = t) %>%
-          dplyr::cross_join(newEvents) %>%
-          dplyr::left_join(treatment_by_drug(), by = "treatment",
-                           multiple = "all") %>%
-          dplyr::group_by(drug, t, draw)
+          dplyr::cross_join(newEvents)
 
         # from ongoing subjects
         dfa <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
             d = dosing_schedule()[,2+j]
             df2 %>%
-              dplyr::filter(drug == j & arrivalTime <= t0 &
-                              totalTime > t0) %>%
+              dplyr::right_join(treatment_by_drug() %>%
+                                  dplyr::filter(drug == j),
+                                by = "treatment") %>%
+              dplyr::filter(arrivalTime <= t0 & totalTime > t0) %>%
               dplyr::group_by(drug, t, draw) %>%
               dplyr::summarise(cum_dose_a = sum(
                 (f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d) -
@@ -2464,8 +2502,10 @@ server <- function(input, output, session) {
           lapply(1:l(), function(j) {
             d = dosing_schedule()[,2+j]
             df2 %>%
-              dplyr::filter(drug == j & arrivalTime > t0 &
-                              arrivalTime <= t) %>%
+              dplyr::right_join(treatment_by_drug() %>%
+                                  dplyr::filter(drug == j),
+                                by = "treatment") %>%
+              dplyr::filter(arrivalTime > t0 & arrivalTime <= t) %>%
               dplyr::group_by(drug, t, draw) %>%
               dplyr::summarise(cum_dose_b = sum(
                 f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
@@ -2512,16 +2552,16 @@ server <- function(input, output, session) {
         t = unique(c(seq(0, t0, 30), t0))
 
         df1 <- dplyr::tibble(t = t) %>%
-          dplyr::cross_join(df) %>%
-          dplyr::left_join(treatment_by_drug(), by = "treatment",
-                           multiple = "all") %>%
-          dplyr::group_by(drug, t)
+          dplyr::cross_join(df)
 
         dosing_pred_obs_df <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
             d = dosing_schedule()[,2+j]
             df1 %>%
-              dplyr::filter(drug == j & arrivalTime <= t) %>%
+              dplyr::right_join(treatment_by_drug() %>%
+                                  dplyr::filter(drug == j),
+                                by = "treatment") %>%
+              dplyr::filter(arrivalTime <= t) %>%
               dplyr::group_by(drug, t) %>%
               dplyr::summarise(n = sum(
                 f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
@@ -2545,18 +2585,16 @@ server <- function(input, output, session) {
         t = unique(t[t >= t0])
 
         df2 = dplyr::tibble(t = t) %>%
-          dplyr::cross_join(newEvents) %>%
-          dplyr::left_join(treatment_by_drug(), by = "treatment",
-                           multiple = "all") %>%
-          dplyr::group_by(drug, t, draw)
-
+          dplyr::cross_join(newEvents)
 
         dfa <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
             d = dosing_schedule()[,2+j]
             df2 %>%
-              dplyr::filter(drug == j & arrivalTime <= t0 &
-                              totalTime > t0) %>%
+              dplyr::right_join(treatment_by_drug() %>%
+                                  dplyr::filter(drug == j),
+                                by = "treatment") %>%
+              dplyr::filter(arrivalTime <= t0 & totalTime > t0) %>%
               dplyr::group_by(drug, t, draw) %>%
               dplyr::summarise(cum_dose_a = sum(
                 (f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d) -
@@ -3008,8 +3046,7 @@ server <- function(input, output, session) {
       } else if ((input$by_treatment && k() > 1) &&
                  ("list" %in% class(enroll_pred_plot)) &&
                  length(enroll_pred_plot) == k() + 1) {
-        p1 <- plotly::subplot(enroll_pred_plot, nrows = k() + 1,
-                              margin = 0.05)
+        p1 <- plotly::subplot(enroll_pred_plot, nrows = k()+1, margin = 0.05)
       } else {
         p1 <- NULL
       }
@@ -3191,8 +3228,7 @@ server <- function(input, output, session) {
                   showarrow = FALSE, xref='paper', yref='paper'))
           }
 
-          p1 <- plotly::subplot(event_pred_plot, nrows = k() + 1,
-                                margin = 0.05)
+          p1 <- plotly::subplot(event_pred_plot, nrows = k()+1, margin = 0.05)
 
         } else {
           p1 = NULL
@@ -3294,8 +3330,7 @@ server <- function(input, output, session) {
                   showarrow = FALSE, xref='paper', yref='paper'))
           }
 
-          p1 <- plotly::subplot(event_pred_plot, nrows = k() + 1,
-                                margin = 0.05)
+          p1 <- plotly::subplot(event_pred_plot, nrows = k()+1, margin = 0.05)
         } else {
           p1 <- NULL
         }
@@ -3415,7 +3450,7 @@ server <- function(input, output, session) {
         }
 
         p1 <- plotly::subplot(dosing_pred_plot, nrows = l(),
-                              titleX = TRUE, titleY = TRUE, margin = 0.05)
+                              titleX = TRUE, titleY = TRUE, margin = 0.1)
       } else {
         dosing_pred_plot <- list()
 
@@ -3443,7 +3478,7 @@ server <- function(input, output, session) {
         }
 
         p1 <- plotly::subplot(dosing_pred_plot, nrows = l(),
-                              titleX = TRUE, titleY = TRUE, margin = 0.05)
+                              titleX = TRUE, titleY = TRUE, margin = 0.1)
       }
 
     } else {
@@ -3660,6 +3695,8 @@ server <- function(input, output, session) {
           piecewiseSurvivalTime(), ncol = 1,
           dimnames = list(paste("Interval", 1:length(piecewiseSurvivalTime())),
                           "Starting time")),
+        spline_k = spline_k(),
+        spline_scale = input$spline_scale,
         l = l(),
         stage = input$stage,
         to_predict = input$to_predict,
@@ -3812,6 +3849,9 @@ server <- function(input, output, session) {
                            paste("Interval",
                                  1:nrow(x$piecewiseSurvivalTime)),
                            "Starting time")))
+        } else if (x$event_model == "Spline") {
+          updateNumericInput(session, "spline_k", value=x$spline_k)
+          updateRadioButtons(session, "spline_scale", value=x$spline_scale)
         }
       }
 
