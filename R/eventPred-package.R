@@ -125,6 +125,7 @@
 #' @importFrom stats dlnorm dnorm dweibull loess.smooth optim
 #'   optimHess pexp plnorm plogis pnorm pweibull qlogis qnorm quantile
 #'   rbinom rexp rlnorm rmultinom rnorm runif rweibull uniroot var
+#' @importFrom flexsurv flexsurvspline psurvspline qsurvspline rsurvspline
 #' @importFrom erify check_bool check_class check_content check_n
 #'   check_positive
 #' @importFrom rlang .data
