@@ -91,6 +91,15 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     cutoffdt = df$cutoffdt[1]
     n0 = nrow(df)
     t0 = as.numeric(cutoffdt - trialsdt + 1)
+
+    if (any(df$randdt < trialsdt)) {
+      stop("randdt must be greater than or equal to trialsdt.")
+    }
+
+    if (any(df$randdt > cutoffdt)) {
+      stop("randdt must be less than or equal to cutoffdt.")
+    }
+
     df <- df %>%
       dplyr::arrange(.data$randdt) %>%
       dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
@@ -271,7 +280,8 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                      lower = quantile(.data$nenrolled, probs = plower),
                      upper = quantile(.data$nenrolled, probs = pupper),
                      mean = mean(.data$nenrolled),
-                     var = var(.data$nenrolled))
+                     var = var(.data$nenrolled)) %>%
+    dplyr::ungroup()
 
 
   if (!is.null(df)) {
@@ -283,7 +293,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     str3 <- paste0("Prediction interval: ", pred_date[2], ", ", pred_date[3])
     s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
 
-    # add day 1
+    # day 1
     df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
                          mean = 0, var = 0)
 
@@ -296,6 +306,12 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       dplyr::slice(dplyr::n()) %>%
       dplyr::ungroup()
 
+    # add day 1
+    if (min(dfa$t) > 1) {
+      dfa <- df0 %>%
+        dplyr::bind_rows(dfa)
+    }
+
     # extend observed to cutoff date
     dfa1 <- dfa %>%
       dplyr::slice(dplyr::n()) %>%
@@ -307,8 +323,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     }
 
     # concatenate subjects enrolled before and after data cut
-    dfs <- df0 %>%
-      dplyr::bind_rows(dfa) %>%
+    dfs <- dfa %>%
       dplyr::bind_rows(dfb) %>%
       dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt))
 

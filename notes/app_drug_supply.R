@@ -691,9 +691,7 @@ ui <- fluidPage(
 
 
         column(5, conditionalPanel(
-          condition = "input.stage == 'Design stage' ||
-                   (input.by_treatment &&
-                   input.stage != 'Real-time after enrollment completion')",
+          condition = "input.stage == 'Design stage' || input.by_treatment",
 
           selectInput(
             "k", "Treatments",
@@ -764,6 +762,12 @@ server <- function(input, output, session) {
     } else {
       hideTab(inputId = "results", target = "observed_data_panel")
     }
+  })
+
+
+  # whether to allow the user to specify the number of treatments
+  observeEvent(input$stage, {
+    shinyjs::toggleState("k", input$stage == "Design stage")
   })
 
 
@@ -893,7 +897,17 @@ server <- function(input, output, session) {
   })
 
 
-  k <- reactive(as.numeric(input$k))
+  k <- reactive({
+    if (!input$by_treatment) {
+      k = 1
+    } else if (input$stage != "Design stage" && !is.null(df())) {
+      k = length(table(df()$treatment))
+      updateSelectInput(session, "k", selected=k)
+    } else {
+      k = as.numeric(input$k)
+    }
+    k
+  })
 
 
   treatment_allocation <- reactive({
@@ -1238,7 +1252,7 @@ server <- function(input, output, session) {
   # event fit
   event_fit <- reactive({
     if (!is.null(df())) {
-      if (!input$by_treatment) {
+      if (!input$by_treatment || k() == 1) {
         event_fit <- fitEvent(
           df(), input$event_model, piecewiseSurvivalTime(),
           spline_k(), input$spline_scale, showplot = FALSE)
@@ -1535,11 +1549,7 @@ server <- function(input, output, session) {
         need(!is.null(df()),
              "Please upload data for real-time prediction."))
 
-      if (input$by_treatment) {
-        k = length(unique(df()$treatment))
-      } else {
-        k = 1
-      }
+      k = k()
 
       if (!input$by_treatment || k == 1) {
         if (to_predict() == "Enrollment only") {
@@ -1621,10 +1631,6 @@ server <- function(input, output, session) {
             need(target_n() > observed()$n0,
                  "Target enrollment has been reached."))
 
-          shiny::validate(
-            need(k() == k,
-                 "Number of treatments must match observed."))
-
           alloc = treatment_allocation()
 
           pred1 <- getPrediction(
@@ -1696,26 +1702,26 @@ server <- function(input, output, session) {
             dplyr::slice(dplyr::n()) %>%
             dplyr::group_by(treatment)
 
-          # extend observed to cutoff date
-          dfa1 <- dfa %>%
-            dplyr::slice(dplyr::n()) %>%
-            dplyr::mutate(t = t0)
-
-          if (max(dfa$t) < t0) {
-            dfa <- dfa %>%
-              dplyr::bind_rows(dfa1)
-          }
-
-
-          # concatenate subjects enrolled before and after data cut
-          # add day 1
+          # add day 1 and extend observed to cutoff date
           df0 <- dplyr::tibble(treatment = 1:k,
                                t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
-          # concatenate subjects enrolled before and after data cut
-          dfs <- df0 %>%
+          dfa1 <- dfa %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::mutate(t = t0)
+
+          dfa <- df0 %>%
             dplyr::bind_rows(dfa) %>%
+            dplyr::bind_rows(dfa1) %>%
+            dplyr::group_by(treatment, t) %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::group_by(treatment)
+
+
+          # concatenate subjects enrolled before and after data cut
+          dfs <- dfa %>%
+            dplyr::bind_rows(dfb) %>%
             dplyr::bind_rows(dfb) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt))
 
@@ -1793,7 +1799,7 @@ server <- function(input, output, session) {
 
           df <- df() %>%
             dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
-                          totalTime = arrivalTime + time)
+                          totalTime = arrivalTime + time - 1)
 
           shiny::validate(
             need(target_n() > n0,
@@ -1808,10 +1814,6 @@ server <- function(input, output, session) {
             dplyr::summarise(n0 = n(),
                              d0 = sum(event),
                              r0 = sum(!event))
-
-          shiny::validate(
-            need(k() == k,
-                 "Number of treatments must match observed."))
 
           # predict enrollment
           enroll_fit <- fitEnrollment(
@@ -1882,24 +1884,25 @@ server <- function(input, output, session) {
             dplyr::slice(dplyr::n()) %>%
             dplyr::group_by(treatment)
 
-          # extend observed to cutoff date
-          dfa1 <- dfa %>%
-            dplyr::slice(dplyr::n()) %>%
-            dplyr::mutate(t = t0)
-
-          if (max(dfa$t) < t0) {
-            dfa <- dfa %>%
-              dplyr::bind_rows(dfa1)
-          }
-
-          # add day 1
+          # add day 1 and extend observed to cutoff date
           df0 <- dplyr::tibble(treatment = 1:k,
                                t = 1, n = 0, lower = NA, upper = NA,
                                mean = 0, var = 0)
 
-          # concatenate subjects enrolled before and after data cut
-          enroll_pred_df <- df0 %>%
+          dfa1 <- dfa %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::mutate(t = t0)
+
+          dfa <- df0 %>%
             dplyr::bind_rows(dfa) %>%
+            dplyr::bind_rows(dfa1) %>%
+            dplyr::group_by(treatment, t) %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::group_by(treatment)
+
+
+          # concatenate subjects enrolled before and after data cut
+          dfs <- dfa %>%
             dplyr::bind_rows(dfb) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
             dplyr::mutate(parameter = "Enrollment") %>%
@@ -2010,6 +2013,10 @@ server <- function(input, output, session) {
                              mean = mean(natrisk),
                              var = var(natrisk))
 
+          # day 1
+          df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
+                               mean = 0, var = 0)
+
           # observed number of events before data cut
           dfa <- df %>%
             dplyr::arrange(totalTime) %>%
@@ -2023,6 +2030,11 @@ server <- function(input, output, session) {
             dplyr::slice(dplyr::n()) %>%
             dplyr::ungroup()
 
+          # add day 1
+          if (min(dfa$t) > 1) {
+            dfa <- df0 %>%
+              dplyr::bind_rows(dfa)
+          }
 
 
           # observed number of subjects at risk before cutoff
@@ -2040,20 +2052,21 @@ server <- function(input, output, session) {
                                            lower = NA, upper = NA,
                                            mean = r0, var = 0))
 
-          # day 1
-          df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
-                               mean = 0, var = 0)
+          # add day 1
+          if (min(dfe$t) > 1) {
+            dfe <- df0 %>%
+              dplyr::bind_rows(dfe)
+          }
+
 
           # add day 1 and concatenate events before and after data cut
-          event_pred_df1 <- df0 %>%
-            dplyr::bind_rows(dfa) %>%
+          event_pred_df1 <- dfa %>%
             dplyr::bind_rows(dfb) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
             dplyr::mutate(treatment = 9999, parameter = "Event")
 
           # add day 1 and concatenate ongoing before and after data cut
-          ongoing_pred_df1 <- df0 %>%
-            dplyr::bind_rows(dfe) %>%
+          ongoing_pred_df1 <- dfe %>%
             dplyr::bind_rows(dff) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
             dplyr::mutate(treatment = 9999, parameter = "Ongoing")
@@ -2108,7 +2121,6 @@ server <- function(input, output, session) {
                              d0 = sum(event),
                              r0 = sum(!event))
 
-
           observed <- observed()
           trialsdt = observed$trialsdt
           cutoffdt = observed$cutoffdt
@@ -2119,7 +2131,7 @@ server <- function(input, output, session) {
 
           df <- df() %>%
             dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
-                          totalTime = arrivalTime + time)
+                          totalTime = arrivalTime + time - 1)
 
           # enrollment by treatment and overall
           dfpooled <- df %>% dplyr::mutate(treatment = 9999)
@@ -2136,15 +2148,22 @@ server <- function(input, output, session) {
             dplyr::slice(dplyr::n()) %>%
             dplyr::group_by(treatment)
 
-          # extend observed to cutoff date
+          # add day 1 and extend observed to cutoff date
+          df0 <- dplyr::tibble(treatment = c(1:k, 9999),
+                               t = 1, n = 0, lower = NA, upper = NA,
+                               mean = 0, var = 0)
+
           dfa1 <- dfa %>%
             dplyr::slice(dplyr::n()) %>%
             dplyr::mutate(t = t0)
 
-          if (max(dfa$t) < t0) {
-            dfa <- dfa %>%
-              dplyr::bind_rows(dfa1)
-          }
+          dfa <- df0 %>%
+            dplyr::bind_rows(dfa) %>%
+            dplyr::bind_rows(dfa1) %>%
+            dplyr::group_by(treatment, t) %>%
+            dplyr::slice(dplyr::n()) %>%
+            dplyr::group_by(treatment)
+
 
           # add predicted from data cut to specified years after data cut
           dfb1 <- dfa1 %>%
@@ -2153,13 +2172,8 @@ server <- function(input, output, session) {
           dfb2 <- dfb1 %>%
             dplyr::mutate(t = t0 + 365*nyears())
 
-          # add day 1
-          df0 <- dplyr::tibble(treatment = c(1:k, 9999),
-                               t = 1, n = 0, lower = NA, upper = NA,
-                               mean = 0, var = 0)
 
-          enroll_pred_df <- df0 %>%
-            dplyr::bind_rows(dfa) %>%
+          enroll_pred_df <- dfa %>%
             dplyr::bind_rows(dfb1) %>%
             dplyr::bind_rows(dfb2) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
@@ -2272,6 +2286,10 @@ server <- function(input, output, session) {
                              mean = mean(natrisk),
                              var = var(natrisk))
 
+          # day 1
+          df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
+                               mean = 0, var = 0)
+
           # observed number of events before data cut
           dfa <- df %>%
             dplyr::arrange(totalTime) %>%
@@ -2284,6 +2302,13 @@ server <- function(input, output, session) {
             dplyr::group_by(t) %>%
             dplyr::slice(dplyr::n()) %>%
             dplyr::ungroup()
+
+          # add day 1
+          if (min(dfa$t) > 1) {
+            dfa <- df0 %>%
+              dplyr::bind_rows(dfa)
+          }
+
 
           # observed number of subjects at risk before cutoff
           t2 = setdiff(sort(unique(c(df$arrivalTime, df$totalTime))), t0)
@@ -2300,24 +2325,25 @@ server <- function(input, output, session) {
                                            lower = NA, upper = NA,
                                            mean = r0, var = 0))
 
-          # day 1
-          df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
-                               mean = 0, var = 0)
+          # add day 1
+          if (min(dfe$t) > 1) {
+            dfe <- df0 %>%
+              dplyr::bind_rows(dfe)
+          }
 
 
           # add day 1 and concatenate events before and after data cut
-          event_pred_df1 <- df0 %>%
-            dplyr::bind_rows(dfa) %>%
+          event_pred_df1 <- dfa %>%
             dplyr::bind_rows(dfb) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
             dplyr::mutate(treatment = 9999, parameter = "Event")
 
           # add day 1 and concatenate ongoing before and after data cut
-          ongoing_pred_df1 <- df0 %>%
-            dplyr::bind_rows(dfe) %>%
+          ongoing_pred_df1 <- dfe %>%
             dplyr::bind_rows(dff) %>%
             dplyr::mutate(date = as.Date(t - 1, origin = trialsdt)) %>%
             dplyr::mutate(treatment = 9999, parameter = "Ongoing")
+
 
           # add by treatment summary
           event_pred_df <- tibble()
@@ -2398,6 +2424,9 @@ server <- function(input, output, session) {
       if (input$stage == 'Design stage') {
 
         newEvents <- pred()$event_pred$newEvents
+        if (!("treatment" %in% colnames(newEvents))) {
+          newEvents$treatment = 1
+        }
 
         t = pred()$event_pred$event_pred_df$t
 
@@ -2439,7 +2468,7 @@ server <- function(input, output, session) {
 
         df <- df() %>%
           dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
-                        totalTime = arrivalTime + time)
+                        totalTime = arrivalTime + time - 1)
 
         trialsdt = pred()$observed$trialsdt
         t0 = pred()$observed$t0
@@ -2465,7 +2494,9 @@ server <- function(input, output, session) {
               dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0)
           })) %>%
           dplyr::bind_rows(df0) %>%
-          dplyr::arrange(drug, t)
+          dplyr::group_by(drug, t) %>%
+          dplyr::slice(dplyr::n()) %>%
+          dplyr::group_by(drug)
 
         dosing_pred_t0 <- dosing_pred_obs_df %>%
           dplyr::slice(dplyr::n()) %>%
@@ -2475,6 +2506,10 @@ server <- function(input, output, session) {
 
         # predicted dosing after data cut
         newEvents <- pred()$event_pred$newEvents
+        if (!("treatment" %in% colnames(newEvents))) {
+          newEvents$treatment = 1
+        }
+
         t = pred()$event_pred$event_pred_df$t
         t = unique(t[t >= t0])
 
@@ -2543,7 +2578,7 @@ server <- function(input, output, session) {
 
         df <- df() %>%
           dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
-                        totalTime = arrivalTime + time)
+                        totalTime = arrivalTime + time - 1)
 
         trialsdt = pred()$observed$trialsdt
         t0 = pred()$observed$t0
@@ -2569,7 +2604,9 @@ server <- function(input, output, session) {
               dplyr::mutate(lower = NA, upper = NA)
           })) %>%
           dplyr::bind_rows(df0) %>%
-          dplyr::arrange(drug, t)
+          dplyr::group_by(drug, t) %>%
+          dplyr::slice(dplyr::n()) %>%
+          dplyr::group_by(drug)
 
         dosing_pred_t0 <- dosing_pred_obs_df %>%
           dplyr::slice(dplyr::n()) %>%
@@ -2579,6 +2616,9 @@ server <- function(input, output, session) {
 
         # predicted dosing after data cut
         newEvents <- pred()$event_pred$newEvents
+        if (!("treatment" %in% colnames(newEvents))) {
+          newEvents$treatment = 1
+        }
 
         t0 = pred()$observed$t0
         t = pred()$event_pred$event_pred_df$t
@@ -2642,7 +2682,7 @@ server <- function(input, output, session) {
   output$statistics <- renderPrint({
     if (!is.null(df())) {
 
-      if (input$by_treatment) {
+      if (input$by_treatment && k() > 1) {
         if (to_predict() == "Enrollment and event" ||
             to_predict() == "Event only") {
           sum_by_trt <- df() %>%
@@ -2709,7 +2749,7 @@ server <- function(input, output, session) {
   output$cum_accrual_plot <- renderPlotly({
     cum_accrual_plot <- observed()$cum_accrual_plot
     if (!is.null(cum_accrual_plot)) {
-      if (!input$by_treatment) {
+      if (!input$by_treatment || k() == 1) {
         cum_accrual_plot
       } else {
         trialsdt = observed()$trialsdt
@@ -2822,7 +2862,7 @@ server <- function(input, output, session) {
   output$event_km_plot <- renderPlotly({
     event_km_plot <- observed()$event_km_plot
     if (!is.null(event_km_plot)) {
-      if (!input$by_treatment) {
+      if (!input$by_treatment || k() == 1) {
         event_km_plot
       } else {
         adtte <- observed()$adtte
@@ -2830,13 +2870,16 @@ server <- function(input, output, session) {
                                             treatment, data = adtte)
         treatment <- attr(event_km_fit$strata, "names")
 
-        event_km_df <- dplyr:: tibble(
+        event_km_df <- dplyr::tibble(
           treatment = treatment,
-          time = 0, surv = 1) %>%
+          time = 1, surv = 1) %>%
           dplyr::bind_rows(dplyr::tibble(
             treatment = rep(treatment, event_km_fit$strata),
             time = event_km_fit$time,
-            surv = event_km_fit$surv))
+            surv = event_km_fit$surv)) %>%
+          dplyr::group_by(treatment, time) %>%
+          dplyr::slice(dplyr::n()) %>%
+          dplyr::ungroup()
 
         event_km_plot <- plotly::plot_ly(event_km_df, x=~time, y=~surv,
                                          linetype=~treatment) %>%
@@ -2870,7 +2913,7 @@ server <- function(input, output, session) {
 
   output$event_fit1 <- renderPlotly({
     if (!is.null(event_fit())) {
-      if (!input$by_treatment) {
+      if (!input$by_treatment || k() == 1) {
         event_fit()$event_fit_plot
       } else {
         k = length(event_fit())
@@ -3731,9 +3774,9 @@ server <- function(input, output, session) {
 
     load(file=file$datapath)
 
-    if (x$stage == 'Design stage' ||
-        (x$by_treatment &&
-         x$stage != 'Real-time after enrollment completion')) {
+    if ((x$stage == 'Design stage' ||
+         (x$by_treatment &&
+          x$stage != 'Real-time after enrollment completion')) && x$k > 1) {
       updateMatrixInput(
         session, paste0("treatment_allocation_", x$k),
         value=matrix(x$treatment_allocation, ncol = 1,
@@ -3851,7 +3894,7 @@ server <- function(input, output, session) {
                            "Starting time")))
         } else if (x$event_model == "Spline") {
           updateNumericInput(session, "spline_k", value=x$spline_k)
-          updateRadioButtons(session, "spline_scale", value=x$spline_scale)
+          updateRadioButtons(session, "spline_scale", selected=x$spline_scale)
         }
       }
 
@@ -3887,9 +3930,7 @@ server <- function(input, output, session) {
     }
 
 
-    if (x$stage == 'Design stage' ||
-        (x$by_treatment &&
-         x$stage != 'Real-time after enrollment completion')) {
+    if (x$stage == 'Design stage' || x$by_treatment) {
       updateSelectInput(session, "k", selected=x$k)
     }
 

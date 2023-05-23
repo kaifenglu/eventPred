@@ -241,7 +241,8 @@ fitEvent <- function(df, event_model = "model averaging",
     # g(S(t)) = gamma_0 + gamma_1*x + gamma_2*v_1(x) + ... + gamma_{m+1}*v_m(x)
 
     spl <- flexsurv::flexsurvspline(survival::Surv(time, event) ~ 1,
-                                    data = df, k = k, scale = scale)
+                                    data = df, k = k, scale = scale,
+                                    method = "Nelder-Mead")
 
     fit2 <- list(model = "Spline",
                  theta = spl$coefficients,

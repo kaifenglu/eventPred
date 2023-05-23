@@ -1,15 +1,15 @@
 library(magrittr)
 
 uniroot(function(t) lrstat::accrual(
-  time = t, accrualTime = seq(0, 9),
-  accrualIntensity = c(26/9*seq(1, 9), 26),
+  time = t, accrualTime = seq(0, 8),
+  accrualIntensity = c(26/9*seq(1, 9)),
   accrualDuration = 22) - 300,
   c(1, 22))
 
 lrstat::lrsamplesize(
   beta = 0.2, kMax = 1,
-  accrualTime = seq(0, 9),
-  accrualIntensity = c(26/9*seq(1, 9), 26),
+  accrualTime = seq(0, 8),
+  accrualIntensity = c(26/9*seq(1, 9)),
   piecewiseSurvivalTime = c(0, 6),
   lambda1 = c(0.0533, 0.0309),
   lambda2 = c(0.0533, 0.0533),
@@ -49,7 +49,7 @@ n2 = sum(treatment == 2)
 # piecewise exponential distributions for time to event
 u = c(0, 6)*30.4375 # left end points of time intervals
 lambda1 = c(0.0533, 0.0309)/30.4375 # hazard rates for the treatment group
-lambda0 = c(0.0533, 0.0533)/30.4375 # hazard rates for the control group
+lambda2 = c(0.0533, 0.0533)/30.4375 # hazard rates for the control group
 
 # function to generate the survival time for each treatment group
 fsurvtime <- function(n, u, lambda) {
@@ -63,7 +63,7 @@ fsurvtime <- function(n, u, lambda) {
 
 survivalTime = rep(NA, n)
 survivalTime[treatment == 1] = fsurvtime(n1, u, lambda1)
-survivalTime[treatment == 2] = fsurvtime(n2, u, lambda0)
+survivalTime[treatment == 2] = fsurvtime(n2, u, lambda2)
 survivalTime = ceiling(survivalTime)
 
 # exponential distribution for time to dropout
@@ -82,15 +82,14 @@ dfcomplete <- dplyr::tibble(trialsdt, arrivalTime, treatment,
   dplyr::mutate(n = cumsum(event))
 
 # end the study when the target number of events is reached
-cutoff = floor(max((dfcomplete %>%
-                      dplyr::filter(n == 244))$totalTime))
+cutoff = max((dfcomplete %>% dplyr::filter(n == 244))$totalTime)
 
 
 # complete data with administrative censoring
 finalData <- dfcomplete %>%
   dplyr::filter(arrivalTime < cutoff) %>%
   dplyr::mutate(cutoff = cutoff,
-                followupTime = cutoff - arrivalTime,
+                followupTime = cutoff - arrivalTime + 1,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
                 time = pmin(time, followupTime),
@@ -105,8 +104,7 @@ trialsdt = min(finalData$randdt)
 # partial data before enrollment completion
 
 # time when 75% subjects are enrolled
-cutoffdt = (finalData %>%
-              dplyr::filter(dplyr::row_number() == 225))$randdt
+cutoffdt = (finalData %>% dplyr::filter(dplyr::row_number() == 225))$randdt
 
 
 interimData1 <- finalData %>%
@@ -115,7 +113,7 @@ interimData1 <- finalData %>%
   dplyr::mutate(cutoffdt = cutoffdt,
                 cutoff = as.numeric(cutoffdt - trialsdt + 1),
                 arrivalTime = as.numeric(randdt - trialsdt + 1),
-                followupTime = cutoff - arrivalTime,
+                followupTime = cutoff - arrivalTime + 1,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
                 time = pmin(time, followupTime)) %>%
@@ -126,7 +124,7 @@ interimData1 <- finalData %>%
 
 # time when about 85% events are observed
 cutoffdt = max((finalData %>%
-                  dplyr::mutate(adt = as.Date(time, origin = randdt)) %>%
+                  dplyr::mutate(adt = as.Date(time - 1, origin = randdt)) %>%
                   dplyr::arrange(adt) %>%
                   dplyr::mutate(n = cumsum(event)) %>%
                   dplyr::filter(n == 183))$adt)
@@ -138,7 +136,7 @@ interimData2 <- finalData %>%
   dplyr::mutate(cutoffdt = cutoffdt,
                 cutoff = as.numeric(cutoffdt - trialsdt + 1),
                 arrivalTime = as.numeric(randdt - trialsdt + 1),
-                followupTime = cutoff - arrivalTime,
+                followupTime = cutoff - arrivalTime + 1,
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
                 time = pmin(time, followupTime)) %>%

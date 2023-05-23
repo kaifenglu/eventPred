@@ -36,6 +36,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   erify::check_content(tolower(to_predict),
                        c("enrollment only", "event only",
                          "enrollment and event"))
+  erify::check_bool(showplot)
 
   df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
@@ -48,10 +49,34 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
   t0 = as.numeric(cutoffdt - trialsdt + 1)
   n0 = nrow(df)  # current number of subjects enrolled
 
+  if (any(df$randdt < trialsdt)) {
+    stop("randdt must be greater than or equal to trialsdt.")
+  }
+
+  if (any(df$randdt > cutoffdt)) {
+    stop("randdt must be less than or equal to cutoffdt.")
+  }
+
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     d0 = sum(df$event)  # current number of events
     c0 = sum(df$dropout) # current number of dropouts
     r0 = sum(!(df$event | df$dropout)) # number of subjects at risk
+
+    if (any(df$event == 1 & df$dropout == 1)) {
+      stop("event and dropout cannot both be equal to 1 simultaneously.")
+    }
+
+    if (any(df$time > as.numeric(df$cutoffdt - df$randdt + 1))) {
+      stop("time must be less than or equal to cutoffdt - randdt + 1.")
+    }
+
+    ongoingSubjects <- df %>%
+      dplyr::filter(.data$event == 0 & .data$dropout == 0)
+
+    if (any(ongoingSubjects$time !=
+            as.numeric(cutoffdt - ongoingSubjects$randdt + 1))) {
+      stop("time must be equal to cutoffdt - randdt + 1 for ongoing subjects.")
+    }
   }
 
   # enrollment data
@@ -88,6 +113,7 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
                     parameter = "Event",
                     date = .data$adt)
 
+    # remove duplicate
     adtteu <- adtte %>%
       dplyr::group_by(.data$adt) %>%
       dplyr::slice(dplyr::n()) %>%
@@ -160,9 +186,13 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
     kmfitEvent <- survival::survfit(survival::Surv(time, event) ~ 1,
                                     data = adtte)
 
-    kmdfEvent <- dplyr:: tibble(time = 0, surv = 1) %>%
-      dplyr::bind_rows(dplyr::tibble(time = kmfitEvent$time,
-                                     surv = kmfitEvent$surv))
+    kmdfEvent <- dplyr::tibble(time = kmfitEvent$time,
+                               surv = kmfitEvent$surv)
+    # add day 1
+    if (min(kmdfEvent$time) > 1) {
+      kmdfEvent <- dplyr::tibble(time = 1, surv = 1) %>%
+        dplyr::bind_rows(kmdfEvent)
+    }
 
     kmEvent <- plotly::plot_ly(kmdfEvent, x=~time, y=~surv) %>%
       plotly::add_lines(line = list(shape = "hv")) %>%
@@ -178,9 +208,13 @@ summarizeObserved <- function(df, to_predict = "enrollment and event",
     # time to dropout
     kmfitDropout <- survival::survfit(survival::Surv(time, dropout) ~ 1,
                                       data = adtte)
-    kmdfDropout <- dplyr::tibble(time = 0, surv = 1) %>%
-      dplyr::bind_rows(dplyr::tibble(time = kmfitDropout$time,
-                                     surv = kmfitDropout$surv))
+
+    kmdfDropout <- dplyr::tibble(time = kmfitDropout$time,
+                                 surv = kmfitDropout$surv)
+    if (min(kmdfDropout$time) > 1) {
+      kmdfDropout <- dplyr::tibble(time = 1, surv = 1) %>%
+        dplyr::bind_rows(kmdfDropout)
+    }
 
     kmDropout <- plotly::plot_ly(kmdfDropout, x=~time, y=~surv) %>%
       plotly::add_lines(line = list(shape = "hv")) %>%
