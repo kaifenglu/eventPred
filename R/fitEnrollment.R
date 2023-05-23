@@ -74,6 +74,14 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   erify::check_positive(n0, supplement = paste(
     "The number of subjects must be positive to fit an enrollment model."))
 
+  if (any(df$randdt < trialsdt)) {
+    stop("randdt must be greater than or equal to trialsdt.")
+  }
+
+  if (any(df$randdt > cutoffdt)) {
+    stop("randdt must be less than or equal to cutoffdt.")
+  }
+
   df1 <- df %>%
     dplyr::arrange(.data$randdt) %>%
     dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
