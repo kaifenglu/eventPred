@@ -6,8 +6,8 @@
 #'
 #' @description Predicts enrollment and events at the design stage
 #' using assumed enrollment and treatment-specific time-to-event models,
-#' or at the analysis stage using blinded data and specified enrollment
-#' and time-to-event models through simulations.
+#' or at the analysis stage using blinded or unblinded data and
+#' specified enrollment and time-to-event models through simulations.
 #'
 #' @details Accurately predicting the date at which a target number
 #' of subjects or events will be achieved is critical for the planning,
@@ -65,27 +65,25 @@
 #'   \item Enrollment models
 #'   \itemize{
 #'     \item Poisson: \code{theta = log(rate)}
-#'     \item Time-decay: \code{theta = (log(mu), log(delta))}
+#'     \item Time-decay: \code{theta = c(log(mu), log(delta))}
 #'     \item B-spline: no reparametrization is needed. The
 #'     knots as considered fixed.
 #'     \item Piecewise Poisson: \code{theta = log(rates)}.
 #'     The left endpoints of time intervals, denoted as
 #'     \code{accrualTime}, are considered fixed.
-#'
-#'
 #'   }
 #'
 #'   \item Event or dropout models
 #'   \itemize{
 #'     \item Exponential: \code{theta = log(rate)}
-#'     \item Weibull: \code{theta = (log(shape), log(scale))}
-#'     \item Log-normal: \code{theta = (meanlog, log(sdlog))}
+#'     \item Weibull: \code{theta = c(log(shape), log(scale))}
+#'     \item Log-normal: \code{theta = c(meanlog, log(sdlog))}
 #'     \item Piecewise exponential: \code{theta = log(rates)}.
 #'     The left endpoints of time intervals, denoted as
 #'     \code{piecewiseSurvivalTime} for event model and
 #'     \code{piecewiseDropoutTime} for dropout model, are
 #'     considered fixed.
-#'     \item Model averaging: \code{theta = (log(weibull$shape),
+#'     \item Model averaging: \code{theta = c(log(weibull$shape),
 #'     log(weibull$scale), lnorm$meanlog, log(lnorm$sdlog))}.
 #'     The covariance matrix for \code{theta} is structured
 #'     as a block diagonal matrix, with the upper-left block
@@ -98,7 +96,9 @@
 #'     \code{w1}, is considered fixed.
 #'     \item Spline: \code{theta} corresponds to the coefficients
 #'     of basis vectors. The \code{knots} and \code{scale}
-#'     are considered fixed.
+#'     are considered fixed. The \code{scale} can be hazard,
+#'     odds, or normal, corresponding to extensions of Weibull,
+#'     log-logistic, and log-normal distributions, respectively.
 #'   }
 #' }
 #'
