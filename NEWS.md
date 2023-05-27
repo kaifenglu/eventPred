@@ -1,9 +1,9 @@
 # eventPred 0.1.4
 
-- add check for time for ongoing subjects in summarizeObserved
+- add validity checks for input dataset variables
 - update totalTime calculation for observed data
-- update internal data so that time = adt - randdt + 1
 - use method="Nelder-Mead" as the default optimization algorithm for flexsurvspline
+- add by-treatment prediction
 
 # eventPred 0.1.3
 
