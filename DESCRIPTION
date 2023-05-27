@@ -1,11 +1,11 @@
 Package: eventPred
 Title: Event Prediction
 Version: 0.1.4
-Date: 2023-05-22
+Date: 2023-05-26
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6160-7119"))
-Description: Predicts enrollment and events at the design stage using assumed enrollment and treatment-specific time-to-event models, or at the analysis stage using blinded data and specified enrollment and time-to-event models through simulations.
+Description: Predicts enrollment and events at the design or analysis stage using specified enrollment and time-to-event models through simulations.
 License: GPL (>= 2)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
