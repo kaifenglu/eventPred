@@ -4,8 +4,10 @@
 #'   interval for the expected time to reach the enrollment target.
 #'
 #' @param df The subject-level enrollment data, including \code{trialsdt},
-#'   \code{randdt} and \code{cutoffdt}. By default, it is set to
-#'   \code{NULL} for enrollment prediction at the design stage.
+#'   \code{randdt} and \code{cutoffdt}. The data should also include
+#'   \code{treatment} for prediction by treatment group.
+#'   By default, it is set to \code{NULL} for enrollment prediction
+#'   at the design stage.
 #' @param target_n The target number of subjects to enroll in the study.
 #' @param enroll_fit The pre-fitted enrollment model used to
 #'   generate predictions.
@@ -22,9 +24,18 @@
 #'   show the prediction summary. By default, it is set to \code{TRUE}.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the prediction plot. By default, it is set to \code{TRUE}.
+#' @param by_treatment A Boolean variable to control whether or not to
+#'   predict enrollment by treatment group. By default,
+#'   it is set to \code{FALSE}.
+#' @param ngroups The number of treatment groups for enrollment prediction
+#'   at the design stage. By default, it is set to 1.
+#'   It is replaced with the actual number of
+#'   treatment groups in the observed data if \code{df} is not \code{NULL}.
+#' @param alloc The treatment allocation in a randomization block.
+#'   By default, it is set to \code{NULL}, which yields equal allocation
+#'   among the treatment groups.
 #'
 #' @details
-#'
 #' The \code{enroll_fit} variable can be used for enrollment prediction
 #' at the design stage. A piecewise Poisson model can be parameterized
 #' through the time intervals, \code{accrualTime}, which is
@@ -49,7 +60,6 @@
 #' prediction plot is also included within the list.
 #'
 #' @examples
-#'
 #' # Enrollment prediction at the design stage
 #'
 #' enroll_pred <- predictEnrollment(
@@ -60,12 +70,13 @@
 #'                     accrualTime = seq(0, 8)*30.4375),
 #'   pilevel = 0.90, nreps = 100)
 #'
-#'
 #' @export
 #'
 predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                               pilevel = 0.90, nyears = 4, nreps = 500,
-                              showsummary = TRUE, showplot = TRUE) {
+                              showsummary = TRUE, showplot = TRUE,
+                              by_treatment = FALSE, ngroups = 1,
+                              alloc = NULL) {
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_n)
 
@@ -73,12 +84,72 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   erify::check_content(tolower(enroll_fit$model), c(
     "poisson", "time-decay", "b-spline", "piecewise poisson"))
 
+  model = tolower(enroll_fit$model)
+  p = length(enroll_fit$theta)
+  vtheta = enroll_fit$vtheta
+
+  if ((p > 1 && (!is.matrix(vtheta) || nrow(vtheta) != p ||
+                 ncol(vtheta) != p)) ||
+      (p == 1 && length(c(vtheta)) != 1)) {
+    stop(paste("Dimensions of vtheta must be compatible with the length",
+               "of theta in enroll_fit"))
+  }
+
+  if ((model == "poisson" && p != 1) ||
+      (model == "time-decay" && p != 2) ||
+      (model == "piecewise poisson" &&
+       p != length(enroll_fit$accrualTime))) {
+    stop(paste("Length of theta must be compatible with model",
+               "in enroll_fit"))
+  }
+
+  if (model == "piecewise poisson") {
+    if (enroll_fit$accrualTime[1] != 0) {
+      stop("accrualTime must start with 0 in enroll_fit")
+    }
+    if (length(enroll_fit$accrualTime) > 1 &&
+        any(diff(enroll_fit$accrualTime) <= 0)) {
+      stop("accrualTime should be increasing in enroll_fit")
+    }
+  }
+
+
+
   erify::check_n(lags, zero = TRUE)
   erify::check_positive(pilevel)
   erify::check_positive(1-pilevel)
   erify::check_n(nreps)
   erify::check_bool(showsummary)
   erify::check_bool(showplot)
+  erify::check_bool(by_treatment)
+  erify::check_n(ngroups)
+
+  if (is.null(df)) by_treatment = TRUE
+
+  if (by_treatment) {
+    if (!is.null(df)) {
+      ngroups = length(table(df$treatment))
+    }
+
+    if (is.null(alloc)) {
+      alloc = rep(1, ngroups)
+    } else {
+      if (length(alloc) != ngroups) {
+        stop("length of alloc must be equal to the number of treatments.")
+      }
+
+      if (any(alloc <= 0 | alloc != round(alloc))) {
+        stop("elements of alloc must be positive integers.")
+      }
+    }
+  } else {
+    ngroups = 1
+  }
+
+  if (ngroups == 1) {
+    by_treatment = FALSE
+  }
+
 
   if (!is.null(df)) {
     df <- dplyr::as_tibble(df)
@@ -151,7 +222,6 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     fenroll <- function(t, theta, muTime) {
       fmu_td(t, theta) - muTime
     }
-
 
     # draw arrival time for new subjects
     newEnrollment_td <- function(t0, n1, theta, nreps) {
@@ -253,6 +323,34 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   }
 
 
+  if (by_treatment) {
+    # add treatment group information
+    blocksize = sum(alloc)
+    nblocks = ceiling(n1/blocksize)
+    m = nblocks*blocksize
+    treats = rep(1:ngroups, alloc)
+    index = rep(1:n1, nreps) + rep((0:(nreps-1))*m, each=n1)
+    newSubjects$treatment = c(replicate(nreps*nblocks, sample(treats)))[index]
+
+    # summary of observed data by treatment
+    if (!is.null(df)) {
+      # add overall treatment
+      df2 <- df %>%
+        dplyr::bind_rows(df %>% dplyr::mutate(treatment = 9999))
+
+      sum_by_trt <- df2 %>%
+        dplyr::group_by(.data$treatment) %>%
+        dplyr::summarise(n0 = dplyr::n(),
+                         d0 = sum(.data$event),
+                         c0 = sum(.data$dropout),
+                         r0 = sum(!(.data$event | .data$dropout)))
+    } else {
+      sum_by_trt <- dplyr::tibble(treatment = c(1:ngroups, 9999),
+                                  n0 = 0, d0 = 0, c0 = 0, r0 = 0)
+    }
+  }
+
+
   # lower and upper percentages
   plower = (1 - pilevel)/2
   pupper = 1 - plower
@@ -270,20 +368,6 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   t = sort(unique(c(seq(t0, t1, 30), t1, pred_day)))
   t = t[t <= t1] # restrict range of x-axis
 
-  # predicted number of subjects enrolled after data cut
-  dfb <- dplyr::tibble(t = t) %>%
-    dplyr::cross_join(newSubjects) %>%
-    dplyr::group_by(.data$t, .data$draw) %>%
-    dplyr::summarise(nenrolled = sum(.data$arrivalTime <= .data$t) + n0,
-                     .groups = "drop_last") %>%
-    dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
-                     lower = quantile(.data$nenrolled, probs = plower),
-                     upper = quantile(.data$nenrolled, probs = pupper),
-                     mean = mean(.data$nenrolled),
-                     var = var(.data$nenrolled)) %>%
-    dplyr::ungroup()
-
-
   if (!is.null(df)) {
     pred_date <- as.Date(pred_day - 1, origin = trialsdt)
 
@@ -292,92 +376,235 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     str2 <- paste0("Median prediction date: ", pred_date[1])
     str3 <- paste0("Prediction interval: ", pred_date[2], ", ", pred_date[3])
     s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
-
-    # day 1
-    df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
-                         mean = 0, var = 0)
-
-    # arrival time for subjects already enrolled before data cut
-    dfa <- df %>%
-      dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
-      dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
-                    .data$mean, .data$var) %>%
-      dplyr::group_by(.data$t) %>%
-      dplyr::slice(dplyr::n()) %>%
-      dplyr::ungroup()
-
-    # add day 1
-    if (min(dfa$t) > 1) {
-      dfa <- df0 %>%
-        dplyr::bind_rows(dfa)
-    }
-
-    # extend observed to cutoff date
-    dfa1 <- dfa %>%
-      dplyr::slice(dplyr::n()) %>%
-      dplyr::mutate(t = t0)
-
-    if (max(dfa$t) < t0) {
-      dfa <- dfa %>%
-        dplyr::bind_rows(dfa1)
-    }
-
-    # concatenate subjects enrolled before and after data cut
-    dfs <- dfa %>%
-      dplyr::bind_rows(dfb) %>%
-      dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt))
-
-
-    # separate data into observed and predicted
-    dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
-    dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
-
-    # plot the enrollment data with date as x-axis
-    g1 <- plotly::plot_ly() %>%
-      plotly::add_ribbons(data = dfb, x = ~date,
-                          ymin = ~lower, ymax = ~upper,
-                          name = "prediction interval",
-                          fill = "tonexty",
-                          line = list(width=0)) %>%
-      plotly::add_lines(data = dfb, x = ~date, y = ~n,
-                        name = "median prediction",
-                        line = list(width=1)) %>%
-      plotly::add_lines(data = dfa, x = ~date, y = ~n,
-                        name = "observed",
-                        line = list(shape="hv", width=1)) %>%
-      plotly::add_lines(x = rep(cutoffdt, 2), y = range(dfs$n),
-                        name = "cutoff",
-                        line = list(dash="dash"),
-                        showlegend = FALSE) %>%
-      plotly::layout(
-        annotations = list(x = cutoffdt, y = 0,
-                           text = 'cutoff', xanchor = "left",
-                           yanchor = "bottom",
-                           font = list(size=12),
-                           showarrow = FALSE),
-        xaxis = list(title = "", zeroline = FALSE),
-        yaxis = list(title = "Subjects", zeroline = FALSE),
-        legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                      orientation = "h"))
   } else {
     str1 <- paste0("Time from trial start until ", target_n, " subjects")
     str2 <- paste0("Median prediction day: ", pred_day[1])
     str3 <- paste0("Prediction interval: ", pred_day[2], ", ", pred_day[3])
     s1 <- paste0(str1, "\n", str2, "\n", str3, "\n")
+  }
 
-    # plot the enrollment data with day as x-axis
-    g1 <- plotly::plot_ly(dfb, x = ~t) %>%
-      plotly::add_ribbons(ymin = ~lower, ymax = ~upper,
-                          name = "prediction interval",
-                          fill = "tonexty",
-                          line = list(width=0)) %>%
-      plotly::add_lines(y = ~n, name = "median prediction",
-                        line = list(width=1)) %>%
-      plotly::layout(xaxis = list(title = "Days since trial start",
-                                  zeroline = FALSE),
-                     yaxis = list(title = "Subjects", zeroline = FALSE),
-                     legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                                   orientation = "h"))
+
+  if (!by_treatment) {
+    # predicted number of subjects enrolled after data cut
+    dfb1 <- dplyr::tibble(t = t) %>%
+      dplyr::cross_join(newSubjects) %>%
+      dplyr::group_by(.data$t, .data$draw) %>%
+      dplyr::summarise(nenrolled = sum(.data$arrivalTime <= .data$t) + n0,
+                       .groups = "drop_last") %>%
+      dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
+                       lower = quantile(.data$nenrolled, probs = plower),
+                       upper = quantile(.data$nenrolled, probs = pupper),
+                       mean = mean(.data$nenrolled),
+                       var = var(.data$nenrolled)) %>%
+      dplyr::ungroup()
+
+    if (!is.null(df)) {
+      # day 1
+      df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
+                           mean = 0, var = 0)
+
+      # arrival time for subjects already enrolled before data cut
+      dfa1 <- df %>%
+        dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
+        dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
+                      .data$mean, .data$var) %>%
+        dplyr::bind_rows(df0) %>%
+        dplyr::bind_rows(dplyr::tibble(t = t0, n = n0, lower = NA,
+                                       upper = NA, mean = n0, var= 0)) %>%
+        dplyr::group_by(.data$t) %>%
+        dplyr::slice(dplyr::n()) %>%
+        dplyr::ungroup()
+
+
+      # concatenate subjects enrolled before and after data cut
+      dfs <- dfa1 %>%
+        dplyr::bind_rows(dfb1) %>%
+        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt))
+
+
+      # separate data into observed and predicted
+      dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
+      dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
+
+      # plot the enrollment data with date as x-axis
+      g1 <- plotly::plot_ly() %>%
+        plotly::add_ribbons(
+          data = dfb, x = ~date, ymin = ~lower, ymax = ~upper,
+          name = "prediction interval",
+          fill = "tonexty", line = list(width=0)) %>%
+        plotly::add_lines(
+          data = dfb, x = ~date, y = ~n, name = "median prediction",
+          line = list(width=2)) %>%
+        plotly::add_lines(
+          data = dfa, x = ~date, y = ~n, name = "observed",
+          line = list(shape="hv", width=2)) %>%
+        plotly::add_lines(
+          x = rep(cutoffdt, 2), y = range(dfs$n), name = "cutoff",
+          line = list(dash="dash"), showlegend = FALSE) %>%
+        plotly::layout(
+          annotations = list(
+            x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
+            yanchor = "bottom", font = list(size=12), showarrow = FALSE),
+          xaxis = list(title = "", zeroline = FALSE),
+          yaxis = list(title = "Subjects", zeroline = FALSE),
+          legend = list(x = 0, y = 1.05, yanchor = "bottom",
+                        orientation = "h"))
+    } else {
+      # plot the enrollment data with day as x-axis
+      g1 <- plotly::plot_ly(dfb1, x = ~t) %>%
+        plotly::add_ribbons(
+          ymin = ~lower, ymax = ~upper, name = "prediction interval",
+          fill = "tonexty", line = list(width=0)) %>%
+        plotly::add_lines(
+          y = ~n, name = "median prediction", line = list(width=2)) %>%
+        plotly::layout(
+          xaxis = list(title = "Days since trial start", zeroline = FALSE),
+          yaxis = list(title = "Subjects", zeroline = FALSE),
+          legend = list(x = 0, y = 1.05, yanchor = "bottom",
+                        orientation = "h"))
+    }
+
+  } else {
+    # add overall treatment
+    newSubjects2 <- newSubjects %>%
+      dplyr::bind_rows(newSubjects %>% dplyr::mutate(treatment = 9999))
+
+    # predicted number of subjects enrolled by treatment after cutoff
+    dfb1 <- dplyr::tibble(t = t) %>%
+      dplyr::cross_join(newSubjects2) %>%
+      dplyr::group_by(.data$treatment, .data$t, .data$draw) %>%
+      dplyr::summarise(nenrolled = sum(.data$arrivalTime <= .data$t),
+                       .groups = "drop_last") %>%
+      dplyr::left_join(sum_by_trt, by = "treatment") %>%
+      dplyr::mutate(nenrolled = .data$nenrolled + .data$n0) %>%
+      dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
+                       lower = quantile(.data$nenrolled, probs = plower),
+                       upper = quantile(.data$nenrolled, probs = pupper),
+                       mean = mean(.data$nenrolled),
+                       var = var(.data$nenrolled),
+                       .groups = "drop_last") %>%
+      dplyr::ungroup()
+
+    if (!is.null(df)) {
+      # day 1
+      df0 <- dplyr::tibble(treatment = c(1:ngroups, 9999),
+                           t = 1, n = 0, lower = NA, upper = NA,
+                           mean = 0, var = 0)
+
+      # arrival time for subjects already enrolled before data cut
+      dfa1 <- df2 %>%
+        dplyr::group_by(.data$treatment) %>%
+        dplyr::arrange(.data$randdt) %>%
+        dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
+                      n = dplyr::row_number()) %>%
+        dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
+        dplyr::select(.data$treatment, .data$t, .data$n, .data$lower,
+                      .data$upper, .data$mean, .data$var) %>%
+        dplyr::bind_rows(df0) %>%
+        dplyr::bind_rows(sum_by_trt %>%
+                           dplyr::mutate(t = t0, n = n0, lower = NA,
+                                         upper = NA, mean = n0, var = 0)) %>%
+        dplyr::group_by(.data$treatment, .data$t) %>%
+        dplyr::slice(dplyr::n()) %>%
+        dplyr::ungroup()
+
+      # concatenate subjects enrolled before and after data cut
+      dfs <- dfa1 %>%
+        dplyr::bind_rows(dfb1) %>%
+        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
+        dplyr::mutate(parameter = "Enrollment") %>%
+        dplyr::arrange(.data$treatment, .data$t)
+
+      # separate data into observed and predicted
+      dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
+      dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
+
+      g <- list()
+      for (i in c(9999, 1:ngroups)) {
+        dfsi <- dfs %>%
+          dplyr::filter(.data$treatment == i)
+        dfbi <- dfb %>%
+          dplyr::filter(.data$treatment == i)
+        dfai <- dfa %>%
+          dplyr::filter(.data$treatment == i)
+
+        g0 <- plotly::plot_ly() %>%
+          plotly::add_ribbons(
+            data = dfbi, x = ~date, ymin = ~lower, ymax = ~upper,
+            name = "prediction interval", fill = "tonexty",
+            line = list(width=0)) %>%
+          plotly::add_lines(
+            data = dfbi, x = ~date, y = ~n, name = "median prediction",
+            line = list(width=2)) %>%
+          plotly::add_lines(
+            data = dfai, x = ~date, y = ~n, name = "observed",
+            line = list(shape="hv", width=2)) %>%
+          plotly::add_lines(
+            x = rep(cutoffdt, 2), y = range(dfsi$n), name = "cutoff",
+            line = list(dash="dash"), showlegend = FALSE) %>%
+          plotly::layout(
+            xaxis = list(title = "", zeroline = FALSE),
+            yaxis = list(title = "Subjects", zeroline = FALSE),
+            legend = list(x = 0, y = 1.05, yanchor = "bottom",
+                          orientation = "h"))
+
+        if (i == 9999) {
+          g[[1]] <- g0 %>%
+            plotly::layout(
+              annotations = list(
+                x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
+                yanchor = "bottom", font = list(size=12),
+                showarrow = FALSE)) %>%
+            plotly::layout(
+              annotations = list(
+                x = 0.5, y = 1, text = "<b>Overall</b>",
+                xanchor = "center", yanchor = "bottom",
+                showarrow = FALSE, xref='paper', yref='paper'))
+        } else {
+          g[[i+1]] <- g0 %>%
+            plotly::layout(
+              annotations = list(
+                x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
+                xanchor = "center", yanchor = "bottom",
+                showarrow = FALSE, xref='paper', yref='paper'))
+        }
+      }
+    } else { # prediction at design stage
+      g <- list()
+      for (i in c(9999, 1:ngroups)) {
+        g0 <- dfb1 %>%
+          dplyr::filter(.data$treatment == i) %>%
+          plotly::plot_ly(x = ~t) %>%
+          plotly::add_ribbons(
+            ymin = ~lower, ymax = ~upper, name = "prediction interval",
+            fill = "tonexty", line = list(width=0)) %>%
+          plotly::add_lines(
+            y = ~n, name = "median prediction", line = list(width=2)) %>%
+          plotly::layout(
+            xaxis = list(title = "Days since trial start", zeroline = FALSE),
+            yaxis = list(title = "Subjects", zeroline = FALSE),
+            legend = list(x = 0, y = 1.05, yanchor = "bottom",
+                          orientation = "h"))
+
+        if (i == 9999) {
+          g[[1]] <- g0 %>%
+            plotly::layout(
+              annotations = list(
+                x = 0.5, y = 1, text = "<b>Overall</b>",
+                xanchor = "center", yanchor = "bottom",
+                showarrow = FALSE, xref='paper', yref='paper'))
+        } else {
+          g[[i+1]] <- g0 %>%
+            plotly::layout(
+              annotations = list(
+                x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
+                xanchor = "center", yanchor = "bottom",
+                showarrow = FALSE, xref='paper', yref='paper'))
+        }
+      }
+    }
+
+    g1 <- plotly::subplot(g, nrows = ngroups + 1, margin = 0.05)
   }
 
 
@@ -393,7 +620,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   } else {
     list(target_n = target_n, enroll_pred_day = pred_day,
          pilevel = pilevel, newSubjects = newSubjects,
-         enroll_pred_df = dfb,
+         enroll_pred_df = dfb1,
          enroll_pred_summary = s1, enroll_pred_plot = g1)
   }
 
