@@ -1,6 +1,6 @@
 #' Interim enrollment and event data before enrollment completion
 #'
-#' A data frame with 225 rows and 5 columns:
+#' A data frame with 225 rows and 7 columns:
 #' \describe{
 #'   \item{\code{trialsdt}}{The trial start date}
 #'   \item{\code{randdt}}{The randomization date}
@@ -17,7 +17,7 @@
 
 #' Interim enrollment and event data after enrollment completion
 #'
-#' A data frame with 300 rows and 5 columns:
+#' A data frame with 300 rows and 7 columns:
 #' \describe{
 #'   \item{\code{trialsdt}}{The trial start date}
 #'   \item{\code{randdt}}{The randomization date}
@@ -34,7 +34,7 @@
 
 #' Final enrollment and event data after achieving the target number of events
 #'
-#' A data frame with 300 rows and 5 columns:
+#' A data frame with 300 rows and 7 columns:
 #' \describe{
 #'   \item{\code{trialsdt}}{The trial start date}
 #'   \item{\code{randdt}}{The randomization date}
