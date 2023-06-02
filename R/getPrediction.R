@@ -461,7 +461,7 @@ getPrediction <- function(
       }
 
 
-      if (!is.null(event_prior)) {
+      if (!is.null(event_prior) && "w" %in% names(event_prior2[[j]])) {
         if (event_prior2[[j]]$w != dropout_prior2[[j]]$w) {
           stop("w must be equal between event prior and dropout prior.")
         }
