@@ -1,3 +1,7 @@
+# eventPred 0.1.5
+
+- update design stage prediction with one treatment arm
+
 # eventPred 0.1.4
 
 - add validity checks for input dataset variables
