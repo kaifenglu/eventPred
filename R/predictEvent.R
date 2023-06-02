@@ -132,7 +132,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   erify::check_bool(by_treatment)
 
-  if (is.null(df)) by_treatment = TRUE
+  if (is.null(df) && "treatment" %in% names(newSubjects))
+    by_treatment = TRUE
 
   # number of treatment groups
   if (by_treatment) {
