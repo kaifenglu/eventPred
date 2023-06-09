@@ -67,6 +67,10 @@ summarizeObserved <- function(df, to_predict = "event only",
     c0 = sum(df$dropout) # current number of dropouts
     r0 = sum(!(df$event | df$dropout)) # number of subjects at risk
 
+    # number of ongoing subjects with the last known date before cutoff
+    rp = sum((df$time < as.numeric(cutoffdt - df$randdt + 1)) &
+               !(df$event | df$dropout))
+
     if (any(df$time < 1)) {
       stop("time must be greater than or equal to 1.")
     }
@@ -82,10 +86,10 @@ summarizeObserved <- function(df, to_predict = "event only",
     ongoingSubjects <- df %>%
       dplyr::filter(.data$event == 0 & .data$dropout == 0)
 
-    if (any(ongoingSubjects$time !=
-            as.numeric(cutoffdt - ongoingSubjects$randdt + 1))) {
-      stop("time must be equal to cutoffdt - randdt + 1 for ongoing subjects.")
-    }
+    # minimum calendar time for event prediction
+    tp = min(as.numeric(ongoingSubjects$randdt - trialsdt + 1) +
+               ongoingSubjects$time - 1)
+    cutofftpdt = as.Date(tp - 1, origin = trialsdt)
   }
 
   if (by_treatment) {
@@ -400,8 +404,10 @@ summarizeObserved <- function(df, to_predict = "event only",
     if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
       # enrollment and event
       list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
-           n0 = n0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
-           adtte = adtte, event_km_df = kmdfEvent,
+           n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
+           tp = tp, cutofftpdt = cutofftpdt,
+           adsl = adsl, adtte = adtte,
+           event_km_df = kmdfEvent,
            dropout_km_df = kmdfDropout,
            cum_accrual_plot = cumAccrual,
            daily_accrual_plot = dailyAccrual,
@@ -409,7 +415,9 @@ summarizeObserved <- function(df, to_predict = "event only",
            dropout_km_plot = kmDropout)
     } else { # event only
       list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
-           n0 = n0, d0 = d0, c0 = c0, r0 = r0, adsl = adsl,
+           n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
+           tp = tp, cutofftpdt = cutofftpdt,
+           adsl = adsl,
            adtte = adtte, event_km_df = kmdfEvent,
            dropout_km_df = kmdfDropout,
            cum_accrual_plot = cumAccrual,
