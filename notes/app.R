@@ -1,12 +1,14 @@
+library(shiny)
 library(shinyMatrix)
 library(shinyFeedback)
-library(shinyjs)
+library(shinyjs, warn.conflicts = FALSE)
 library(shinybusy)
 library(readxl)
 library(writexl)
-library(dplyr)
+library(dplyr, warn.conflicts = FALSE)
 library(prompter)
-library(plotly)
+library(ggplot2)
+library(plotly, warn.conflicts = FALSE)
 library(eventPred)
 
 
@@ -298,7 +300,7 @@ enrollmentPanel <- tabPanel(
                         numericInput(
                           "mu",
                           "Base rate, mu",
-                          value = 1,
+                          value = 1.5,
                           min = 0, max = 100, step = 1)
                  ),
 
@@ -306,7 +308,7 @@ enrollmentPanel <- tabPanel(
                         numericInput(
                           "delta",
                           "Decay rate, delta",
-                          value = 1,
+                          value = 2,
                           min = 0, max = 100, step = 1)
                  )
                )
@@ -952,7 +954,7 @@ server <- function(input, output, session) {
 
 
   k <- reactive({
-    if (!input$by_treatment) {
+    if (!input$by_treatment && input$stage != "Design stage") {
       k = 1
     } else if (input$stage != "Design stage" && !is.null(df())) {
       k = length(table(df()$treatment))
@@ -962,8 +964,6 @@ server <- function(input, output, session) {
     }
     k
   })
-
-
 
 
   treatment_allocation <- reactive({
@@ -982,7 +982,6 @@ server <- function(input, output, session) {
       1
     }
   })
-
 
 
   poisson_rate <- reactive({
@@ -1452,6 +1451,8 @@ server <- function(input, output, session) {
           }
         }
 
+        if (k() == 1) event_prior <- event_prior[[1]]
+
         # dropout model specifications
         if (input$dropout_prior != "None") {
           model = input$dropout_prior
@@ -1484,6 +1485,9 @@ server <- function(input, output, session) {
                 w = w[i])
             }
           }
+
+          if (k() == 1) dropout_prior <- dropout_prior[[1]]
+
         } else {
           dropout_prior = NULL
         }
@@ -1650,15 +1654,29 @@ server <- function(input, output, session) {
             dplyr::summarise(n0 = n(),
                              d0 = sum(event),
                              c0 = sum(dropout),
-                             r0 = sum(!(event | dropout)))
+                             r0 = sum(!(event | dropout)),
+                             rp = sum((time < as.numeric(
+                               cutoffdt - randdt + 1)) & !(event | dropout)))
 
-          table <- t(sum_by_trt %>% dplyr::select(n0, d0, c0, r0))
-          colnames(table) <- paste("Treatment", sum_by_trt$treatment)
-          colnames(table)[ncol(table)] <- "Overall"
-          rownames(table) <- c("Current number of subjects",
-                               "Current number of events",
-                               "Current number of dropouts",
-                               "Number of ongoing subjects")
+          if (any(sum_by_trt$rp) > 0) {
+            table <- t(sum_by_trt %>% dplyr::select(n0, d0, c0, r0, rp))
+            colnames(table) <- paste("Treatment", sum_by_trt$treatment)
+            colnames(table)[ncol(table)] <- "Overall"
+            rownames(table) <- c("Current number of subjects",
+                                 "Current number of events",
+                                 "Current number of dropouts",
+                                 "Number of ongoing subjects",
+                                 "  With ongoing date before cutoff")
+          } else {
+            table <- t(sum_by_trt %>% dplyr::select(n0, d0, c0, r0))
+            colnames(table) <- paste("Treatment", sum_by_trt$treatment)
+            colnames(table)[ncol(table)] <- "Overall"
+            rownames(table) <- c("Current number of subjects",
+                                 "Current number of events",
+                                 "Current number of dropouts",
+                                 "Number of ongoing subjects")
+          }
+
         } else {
           sum_by_trt <- df() %>%
             dplyr::bind_rows(df() %>% dplyr::mutate(treatment = 9999)) %>%
@@ -1673,15 +1691,28 @@ server <- function(input, output, session) {
       } else {
         if (to_predict() == "Enrollment and event" ||
             to_predict() == "Event only") {
-          table <- t(dplyr::tibble(n0 = observed()$n0,
-                                   d0 = observed()$d0,
-                                   c0 = observed()$c0,
-                                   r0 = observed()$r0))
-          colnames(table) <- "Overall"
-          rownames(table) <- c("Current number of subjects",
-                               "Current number of events",
-                               "Current number of dropouts",
-                               "Number of ongoing subjects")
+          sum_overall <- dplyr::tibble(n0 = observed()$n0,
+                                       d0 = observed()$d0,
+                                       c0 = observed()$c0,
+                                       r0 = observed()$r0,
+                                       rp = observed()$rp)
+
+          if (sum_overall$rp > 0) {
+            table <- t(sum_overall %>% dplyr::select(n0, d0, c0, r0, rp))
+            colnames(table) <- "Overall"
+            rownames(table) <- c("Current number of subjects",
+                                 "Current number of events",
+                                 "Current number of dropouts",
+                                 "Number of ongoing subjects",
+                                 "  With ongoing date before cutoff")
+          } else {
+            table <- t(sum_overall %>% dplyr::select(n0, d0, c0, r0))
+            colnames(table) <- "Overall"
+            rownames(table) <- c("Current number of subjects",
+                                 "Current number of events",
+                                 "Current number of dropouts",
+                                 "Number of ongoing subjects")
+          }
         } else {
           table <- t(dplyr::tibble(n0 = observed()$n0))
           colnames(table) <- "Overall"
@@ -1898,9 +1929,11 @@ server <- function(input, output, session) {
       }
 
       enroll_pred_plot <- pred()$enroll_pred$enroll_pred_plot
+      enroll_pred_df <- pred()$enroll_pred$enroll_pred_df
       if ((!input$by_treatment || k() == 1) ||
-          (input$by_treatment && k() > 1 &&
-           length(enroll_pred_plot$x$data) == k() + 1)) {
+          ((input$by_treatment || input$stage == 'Design stage') &&
+           k() > 1 &&
+           length(table(enroll_pred_df$treatment)) == k() + 1)) {
         g1 <- enroll_pred_plot
       } else {
         g1 <- NULL
@@ -1985,6 +2018,21 @@ server <- function(input, output, session) {
               legend = list(x = 0, y = 1.05, yanchor = "bottom",
                             orientation = 'h'))
 
+          if (observed()$tp < observed()$t0) {
+            g1 <- g1 %>%
+              plotly::add_lines(
+                x = rep(observed()$cutofftpdt, 2), y = range(dfs$n),
+                name = "prediction start",
+                line = list(dash="dash", color="grey"),
+                showlegend = FALSE) %>%
+              plotly::layout(
+                annotations = list(
+                  x = observed()$cutofftpdt, y = 0,
+                  text = 'prediction start',
+                  xanchor = "left", yanchor = "bottom",
+                  font = list(size=12), showarrow = FALSE))
+          }
+
           if (showEvent()) {
             g1 <- g1 %>%
               plotly::add_lines(
@@ -2027,9 +2075,10 @@ server <- function(input, output, session) {
                   showarrow = FALSE))
           }
         }
-      } else if ((input$by_treatment && k() > 1) &&
+      } else if (((input$by_treatment || input$stage == 'Design stage') &&
+                  k() > 1) &&
                  ("treatment" %in% names(dfs)) &&
-                 (length(unique(dfs$treatment)) == k() + 1)) { # by treatment
+                 (length(table(dfs$treatment)) == k() + 1)) { # by treatment
         if (input$stage != 'Design stage') {
           dfa <- dfs %>% dplyr::filter(is.na(lower))
           dfb <- dfs %>% dplyr::filter(!is.na(lower))
@@ -2061,6 +2110,16 @@ server <- function(input, output, session) {
                 legend = list(x = 0, y = 1.05, yanchor = "bottom",
                               orientation = 'h'))
 
+            if (observed()$tp < observed()$t0) {
+              g0 <- g0 %>%
+                plotly::add_lines(
+                  x = rep(observed()$cutofftpdt, 2), y = range(dfsi$n),
+                  name = "prediction start",
+                  line = list(dash="dash", color="grey"),
+                  showlegend = FALSE)
+            }
+
+
             if (i == 9999) {
               g[[1]] <- g0 %>%
                 plotly::layout(
@@ -2073,6 +2132,16 @@ server <- function(input, output, session) {
                     x = 0.5, y = 1, text = "<b>Overall</b>",
                     xanchor = "center", yanchor = "bottom",
                     showarrow = FALSE, xref='paper', yref='paper'))
+
+              if (observed()$tp < observed()$t0) {
+                g[[1]] <- g[[1]] %>%
+                  plotly::layout(
+                    annotations = list(
+                      x = observed()$cutofftpdt, y = 0,
+                      text = 'prediction start',
+                      xanchor = "left", yanchor = "bottom",
+                      font = list(size=12), showarrow = FALSE))
+              }
 
               if (showEvent()) {
                 g[[1]] <- g[[1]] %>%
