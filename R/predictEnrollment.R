@@ -340,13 +340,10 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
       sum_by_trt <- df2 %>%
         dplyr::group_by(.data$treatment) %>%
-        dplyr::summarise(n0 = dplyr::n(),
-                         d0 = sum(.data$event),
-                         c0 = sum(.data$dropout),
-                         r0 = sum(!(.data$event | .data$dropout)))
+        dplyr::summarise(n0 = dplyr::n())
     } else {
       sum_by_trt <- dplyr::tibble(treatment = c(1:ngroups, 9999),
-                                  n0 = 0, d0 = 0, c0 = 0, r0 = 0)
+                                  n0 = 0)
     }
   }
 
@@ -406,11 +403,11 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       # arrival time for subjects already enrolled before data cut
       dfa1 <- df %>%
         dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
-        dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
-                      .data$mean, .data$var) %>%
         dplyr::bind_rows(df0) %>%
         dplyr::bind_rows(dplyr::tibble(t = t0, n = n0, lower = NA,
                                        upper = NA, mean = n0, var= 0)) %>%
+        dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
+                      .data$mean, .data$var) %>%
         dplyr::group_by(.data$t) %>%
         dplyr::slice(dplyr::n()) %>%
         dplyr::ungroup()
@@ -419,8 +416,8 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       # concatenate subjects enrolled before and after data cut
       dfs <- dfa1 %>%
         dplyr::bind_rows(dfb1) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt))
-
+        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
+        dplyr::arrange(.data$t)
 
       # separate data into observed and predicted
       dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
@@ -498,12 +495,12 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
         dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
                       n = dplyr::row_number()) %>%
         dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
-        dplyr::select(.data$treatment, .data$t, .data$n, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
         dplyr::bind_rows(df0) %>%
         dplyr::bind_rows(sum_by_trt %>%
                            dplyr::mutate(t = t0, n = n0, lower = NA,
                                          upper = NA, mean = n0, var = 0)) %>%
+        dplyr::select(.data$treatment, .data$t, .data$n, .data$lower,
+                      .data$upper, .data$mean, .data$var) %>%
         dplyr::group_by(.data$treatment, .data$t) %>%
         dplyr::slice(dplyr::n()) %>%
         dplyr::ungroup()
@@ -614,12 +611,14 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   if (!is.null(df)) {
     list(target_n = target_n, enroll_pred_day = pred_day,
          enroll_pred_date = pred_date,
-         pilevel = pilevel, newSubjects = newSubjects,
+         pilevel = pilevel, nyears = nyears, nreps = nreps,
+         newSubjects = newSubjects,
          enroll_pred_df = dfs,
          enroll_pred_summary = s1, enroll_pred_plot = g1)
   } else {
     list(target_n = target_n, enroll_pred_day = pred_day,
-         pilevel = pilevel, newSubjects = newSubjects,
+         pilevel = pilevel, nyears = nyears, nreps = nreps,
+         newSubjects = newSubjects,
          enroll_pred_df = dfb1,
          enroll_pred_summary = s1, enroll_pred_plot = g1)
   }
