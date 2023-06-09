@@ -1,6 +1,12 @@
 # eventPred 0.1.5
 
 - update design stage prediction with one treatment arm
+- allow ongoing subjects with last known date before data cutoff
+- update the calculation of ongoing subjects to accommodate ongoing subjects with last known date before data cutoff
+- update time for new subjects to start with day 1 and update totalTime calculation for newEvents to remove double count of day 1
+- update predictEnrollment to remove calculation of d0, c0, and r0
+- add names to event_pred_day
+- add nyears and nreps to prediction results
 
 # eventPred 0.1.4
 
