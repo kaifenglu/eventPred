@@ -12,26 +12,23 @@ library(plotly, warn.conflicts = FALSE)
 library(eventPred)
 
 
-# conditional panels for number of treatments
+# conditional panels for treatment allocation
 f_treatment_allocation <- function(i) {
   conditionalPanel(
     condition = paste0("input.k == ", i),
 
     shinyMatrix::matrixInput(
-      paste0("treatment_allocation_",i),
+      paste0("treatment_allocation_", i),
       label = tags$span(
         "Treatment allocation",
         tags$span(icon(name = "question-circle")) %>%
           add_prompt(message = "in a randomization block",
-                     position = "right")
-      ),
+                     position = "right")),
 
-      value = matrix(rep(1,i),
-                     ncol = 1,
-                     dimnames = list(paste0("Treatment ", seq_len(i)),
-                                     "Size")),
+      value = matrix(rep(1,i), ncol = 1,
+                     dimnames = list(paste("Treatment", 1:i), "Size")),
       inputClass = "numeric",
-      rows = list(names=TRUE, extend=FALSE),
+      rows = list(names=TRUE, extend=FALSE, editableNames=TRUE),
       cols = list(names=TRUE, extend=FALSE))
   )
 }
@@ -39,17 +36,13 @@ f_treatment_allocation <- function(i) {
 
 f_exponential_survival <- function(i) {
   conditionalPanel(
-    condition = paste("input.event_prior == 'Exponential'",
-                      "&&", "input.k ==", i),
+    condition = paste("input.event_prior == 'Exponential' && input.k ==", i),
 
     shinyMatrix::matrixInput(
       paste0("exponential_survival_", i),
-      "Hazard rate for each treatment",
-      value = matrix(rep(0.0030, i),
-                     nrow = 1,
-                     dimnames = list(
-                       NULL, paste("Treatment", 1:i))
-      ),
+      label = "Hazard rate for each treatment",
+      value = matrix(rep(0.0030, i), nrow = 1,
+                     dimnames = list(NULL, paste("Treatment", 1:i))),
       inputClass = "numeric",
       rows = list(names=FALSE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE)
@@ -60,19 +53,14 @@ f_exponential_survival <- function(i) {
 
 f_weibull_survival <- function(i) {
   conditionalPanel(
-    condition = paste("input.event_prior == 'Weibull'",
-                      "&&", "input.k ==", i),
+    condition = paste("input.event_prior == 'Weibull' && input.k ==", i),
 
     shinyMatrix::matrixInput(
       paste0("weibull_survival_", i),
-      "Weibull parameters",
-      value = matrix(rep(c(1.42, 392), i),
-                     nrow = 2,
-                     byrow = FALSE,
-                     dimnames = list(
-                       c("Shape", "Scale"),
-                       paste("Treatment", 1:i))
-      ),
+      label = "Weibull parameters",
+      value = matrix(rep(c(1.42, 392), i), nrow = 2, byrow = FALSE,
+                     dimnames = list(c("Shape", "Scale"),
+                                     paste("Treatment", 1:i))),
       inputClass = "numeric",
       rows = list(names=TRUE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE)
@@ -83,19 +71,15 @@ f_weibull_survival <- function(i) {
 
 f_lnorm_survival <- function(i) {
   conditionalPanel(
-    condition = paste("input.event_prior == 'Log-normal'",
-                      "&&", "input.k ==", i),
+    condition = paste("input.event_prior == 'Log-normal' && input.k ==", i),
 
     shinyMatrix::matrixInput(
       paste0("lnorm_survival_", i),
-      "Log-normal parameters",
-      value = matrix(rep(c(5.4, 1), i),
-                     nrow = 2,
-                     byrow = FALSE,
-                     dimnames = list(
-                       c("Mean on log scale", "SD on log scale"),
-                       paste("Treatment", 1:i))
-      ),
+      label = "Log-normal parameters",
+      value = matrix(rep(c(5.4, 1), i), nrow = 2, byrow = FALSE,
+                     dimnames = list(c("Mean on log scale",
+                                       "SD on log scale"),
+                                     paste("Treatment", 1:i))),
       inputClass = "numeric",
       rows = list(names=TRUE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE)
@@ -104,22 +88,18 @@ f_lnorm_survival <- function(i) {
 }
 
 
-
 f_piecewise_exponential_survival <- function(i) {
   conditionalPanel(
     condition = paste(
-      "input.event_prior == 'Piecewise exponential'",
-      "&&", "input.k ==", i),
+      "input.event_prior == 'Piecewise exponential' && input.k ==", i),
 
     shinyMatrix::matrixInput(
       paste0("piecewise_exponential_survival_", i),
-      "Hazard rate by time interval for each treatment",
-      value = matrix(c(0, rep(0.0030, i)),
-                     nrow = 1,
+      label = "Hazard rate by time interval for each treatment",
+      value = matrix(c(0, rep(0.0030, i)), nrow = 1,
                      dimnames = list(
                        "Interval 1",
-                       c("Starting time", paste("Treatment", 1:i)))
-      ),
+                       c("Starting time", paste("Treatment", 1:i)))),
       inputClass = "numeric",
       rows = list(names=TRUE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE)
@@ -133,21 +113,16 @@ f_piecewise_exponential_survival <- function(i) {
 }
 
 
-
-
 f_exponential_dropout <- function(i) {
   conditionalPanel(
-    condition = paste("input.dropout_prior == 'Exponential'",
-                      "&&", "input.k ==", i),
+    condition = paste("input.dropout_prior == 'Exponential' && input.k ==",
+                      i),
 
     shinyMatrix::matrixInput(
       paste0("exponential_dropout_", i),
-      "Hazard rate for each treatment",
-      value = matrix(rep(0.0003, i),
-                     nrow = 1,
-                     dimnames = list(
-                       NULL, paste("Treatment", 1:i))
-      ),
+      label = "Hazard rate for each treatment",
+      value = matrix(rep(0.0003, i), nrow = 1,
+                     dimnames = list(NULL, paste("Treatment", 1:i))),
       inputClass = "numeric",
       rows = list(names=FALSE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE)
@@ -158,19 +133,14 @@ f_exponential_dropout <- function(i) {
 
 f_weibull_dropout <- function(i) {
   conditionalPanel(
-    condition = paste("input.dropout_prior == 'Weibull'",
-                      "&&", "input.k ==", i),
+    condition = paste("input.dropout_prior == 'Weibull' && input.k ==", i),
 
     shinyMatrix::matrixInput(
       paste0("weibull_dropout_", i),
-      "Weibull parameters",
-      value = matrix(rep(c(1.25, 1000), i),
-                     nrow = 2,
-                     byrow = FALSE,
-                     dimnames = list(
-                       c("Shape", "Scale"),
-                       paste("Treatment", 1:i))
-      ),
+      label = "Weibull parameters",
+      value = matrix(rep(c(1.25, 1000), i), nrow = 2, byrow = FALSE,
+                     dimnames = list(c("Shape", "Scale"),
+                                     paste("Treatment", 1:i))),
       inputClass = "numeric",
       rows = list(names=TRUE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE)
@@ -181,19 +151,15 @@ f_weibull_dropout <- function(i) {
 
 f_lnorm_dropout <- function(i) {
   conditionalPanel(
-    condition = paste("input.dropout_prior == 'Log-normal'",
-                      "&&", "input.k ==", i),
+    condition = paste("input.dropout_prior == 'Log-normal' && input.k ==", i),
 
     shinyMatrix::matrixInput(
       paste0("lnorm_dropout_", i),
-      "Log-normal parameters",
-      value = matrix(rep(c(8, 2.64), i),
-                     nrow = 2,
-                     byrow = FALSE,
-                     dimnames = list(
-                       c("Mean on log scale", "SD on log scale"),
-                       paste("Treatment", 1:i))
-      ),
+      label = "Log-normal parameters",
+      value = matrix(rep(c(8, 2.64), i), nrow = 2, byrow = FALSE,
+                     dimnames = list(c("Mean on log scale",
+                                       "SD on log scale"),
+                                     paste("Treatment", 1:i))),
       inputClass = "numeric",
       rows = list(names=TRUE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE)
@@ -202,22 +168,18 @@ f_lnorm_dropout <- function(i) {
 }
 
 
-
 f_piecewise_exponential_dropout <- function(i) {
   conditionalPanel(
     condition = paste(
-      "input.dropout_prior == 'Piecewise exponential'",
-      "&&", "input.k ==", i),
+      "input.dropout_prior == 'Piecewise exponential' && input.k ==", i),
 
     shinyMatrix::matrixInput(
       paste0("piecewise_exponential_dropout_", i),
-      "Hazard rate by time interval for each treatment",
-      value = matrix(c(0, rep(0.0003, i)),
-                     nrow = 1,
+      label = "Hazard rate by time interval for each treatment",
+      value = matrix(c(0, rep(0.0003, i)), nrow = 1,
                      dimnames = list(
                        "Interval 1",
-                       c("Starting time", paste("Treatment", 1:i)))
-      ),
+                       c("Starting time", paste("Treatment", 1:i)))),
       inputClass = "numeric",
       rows = list(names=TRUE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE)
@@ -231,11 +193,9 @@ f_piecewise_exponential_dropout <- function(i) {
 }
 
 
-
 observedPanel <- tabPanel(
   title = "Observed Data",
   value = "observed_data_panel",
-
 
   htmlOutput("dates"),
   verbatimTextOutput("statistics"),
@@ -262,7 +222,6 @@ observedPanel <- tabPanel(
 )
 
 
-
 enrollmentPanel <- tabPanel(
   title = "Enrollment Model",
   value = "enroll_model_panel",
@@ -273,7 +232,7 @@ enrollmentPanel <- tabPanel(
     fluidRow(
       column(6, radioButtons(
         "enroll_prior",
-        "Which enrollment model to use?",
+        label = "Which enrollment model to use?",
         choices = c("Poisson",
                     "Time-decay",
                     "Piecewise Poisson"),
@@ -287,7 +246,7 @@ enrollmentPanel <- tabPanel(
 
                numericInput(
                  "poisson_rate",
-                 "Daily enrollment rate",
+                 label = "Daily enrollment rate",
                  value = 1,
                  min = 0, max = 100, step = 1)
              ),
@@ -296,31 +255,28 @@ enrollmentPanel <- tabPanel(
                condition = "input.enroll_prior == 'Time-decay'",
 
                fluidRow(
-                 column(6,
-                        numericInput(
-                          "mu",
-                          "Base rate, mu",
-                          value = 1.5,
-                          min = 0, max = 100, step = 1)
+                 column(6, numericInput(
+                   "mu",
+                   label = "Base rate, mu",
+                   value = 1.5,
+                   min = 0, max = 100, step = 1)
                  ),
 
-                 column(6,
-                        numericInput(
-                          "delta",
-                          "Decay rate, delta",
-                          value = 2,
-                          min = 0, max = 100, step = 1)
+                 column(6, numericInput(
+                   "delta",
+                   label = "Decay rate, delta",
+                   value = 2,
+                   min = 0, max = 100, step = 1)
                  )
                )
              ),
 
              conditionalPanel(
-               condition = "input.enroll_prior ==
-               'Piecewise Poisson'",
+               condition = "input.enroll_prior == 'Piecewise Poisson'",
 
                shinyMatrix::matrixInput(
                  "piecewise_poisson_rate",
-                 "Daily enrollment rate by time interval",
+                 label = "Daily enrollment rate by time interval",
                  value = matrix(c(0,1), ncol = 2,
                                 dimnames = list("Interval 1",
                                                 c("Starting time",
@@ -344,7 +300,7 @@ enrollmentPanel <- tabPanel(
     fluidRow(
       column(6, radioButtons(
         "enroll_model",
-        "Which enrollment model to use?",
+        label = "Which enrollment model to use?",
         choices = c("Poisson",
                     "Time-decay",
                     "B-spline",
@@ -359,14 +315,14 @@ enrollmentPanel <- tabPanel(
 
                numericInput(
                  "nknots",
-                 "How many inner knots to use?",
+                 label = "How many inner knots to use?",
                  value = 0,
                  min = 0, max = 10, step = 1),
 
                numericInput(
                  "lags",
-                 paste("How many days before cutoff to",
-                       "average the enrollment rate over for prediction?"),
+                 label = paste("How many days before cutoff to average",
+                               "the enrollment rate over for prediction?"),
                  value = 30,
                  min = 0, max = 365, step = 1)
              ),
@@ -376,7 +332,7 @@ enrollmentPanel <- tabPanel(
 
                shinyMatrix::matrixInput(
                  "accrualTime",
-                 "What is the starting time of each time interval?",
+                 label = "What is the starting time of each time interval?",
                  value = matrix(0, ncol = 1,
                                 dimnames = list("Interval 1",
                                                 "Starting time")),
@@ -408,7 +364,7 @@ eventPanel <- tabPanel(
     fluidRow(
       column(4, radioButtons(
         "event_prior",
-        "Which time-to-event model to use?",
+        label = "Which time-to-event model to use?",
         choices = c("Exponential",
                     "Weibull",
                     "Log-normal",
@@ -434,7 +390,7 @@ eventPanel <- tabPanel(
     fluidRow(
       column(6, radioButtons(
         "event_model",
-        "Which time-to-event model to use?",
+        label = "Which time-to-event model to use?",
         choices = c("Exponential",
                     "Weibull",
                     "Log-normal",
@@ -451,7 +407,7 @@ eventPanel <- tabPanel(
 
                shinyMatrix::matrixInput(
                  "piecewiseSurvivalTime",
-                 "What is the starting time of each time interval?",
+                 label = "What is the starting time of each time interval?",
                  value = matrix(0, ncol = 1,
                                 dimnames = list("Interval 1",
                                                 "Starting time")),
@@ -470,13 +426,13 @@ eventPanel <- tabPanel(
 
                numericInput(
                  "spline_k",
-                 "How many inner knots to use?",
+                 label = "How many inner knots to use?",
                  value = 0,
                  min = 0, max = 10, step = 1),
 
                radioButtons(
                  "spline_scale",
-                 "Which scale to model as a spline function?",
+                 label = "Which scale to model as a spline function?",
                  choices = c("hazard", "odds", "normal"),
                  selected = "hazard",
                  inline = TRUE)
@@ -500,7 +456,7 @@ dropoutPanel <- tabPanel(
     fluidRow(
       column(4, radioButtons(
         "dropout_prior",
-        "Which time-to-dropout model to use?",
+        label = "Which time-to-dropout model to use?",
         choices = c("None",
                     "Exponential",
                     "Weibull",
@@ -525,7 +481,7 @@ dropoutPanel <- tabPanel(
     fluidRow(
       column(6, radioButtons(
         "dropout_model",
-        "Which time-to-dropout model to use?",
+        label = "Which time-to-dropout model to use?",
         choices = c("None",
                     "Exponential",
                     "Weibull",
@@ -542,7 +498,7 @@ dropoutPanel <- tabPanel(
 
                shinyMatrix::matrixInput(
                  "piecewiseDropoutTime",
-                 "What is the starting time of each time interval?",
+                 label = "What is the starting time of each time interval?",
                  value = matrix(0, ncol = 1,
                                 dimnames = list("Interval 1",
                                                 "Starting time")),
@@ -561,8 +517,6 @@ dropoutPanel <- tabPanel(
     uiOutput("dropout_fit")
   )
 )
-
-
 
 
 predictPanel <- tabPanel(
@@ -602,25 +556,25 @@ fileInputNoExtra<-function(inputId, label, multiple = FALSE, accept = NULL,
     class = "input-group-btn",
     type="button",
     style=if (!is.null(width))
-      paste0("width: ", validateCssUnit(width),";",
-             "padding-right: 5px; padding-bottom: 0px; display:inline-block;"),
+      paste0("width: ", validateCssUnit(width), ";",
+             "padding-right: 5px; padding-bottom: 0px;
+             display:inline-block;"),
 
     span(class = "btn btn-default btn-file",type="button",
          buttonLabel, inputTag,
          style=if (!is.null(width))
-           paste0("width: ", validateCssUnit(width),";",
+           paste0("width: ", validateCssUnit(width), ";",
                   "border-radius: 4px; padding-bottom:5px;"))
   )
 }
 
+
 # user interface ----------------
 ui <- fluidPage(
-
   shinyFeedback::useShinyFeedback(),
   shinyjs::useShinyjs(),
   prompter::use_prompt(),
-
-  add_busy_spinner(),
+  shinybusy::add_busy_spinner(),
 
   titlePanel(tagList(
     span(HTML(paste(tags$span(style="font-size:14pt",
@@ -628,7 +582,7 @@ ui <- fluidPage(
          span(actionButton(
            "predict", "Predict",
            style="color: #fff; background-color: #337ab7;
-          border-color: #2e6da4"),
+           border-color: #2e6da4"),
 
            downloadButton("saveInputs", "Save inputs"),
            fileInputNoExtra("loadInputs", label=NULL, accept=".rds",
@@ -647,7 +601,7 @@ ui <- fluidPage(
 
       radioButtons(
         "stage",
-        "Stage of the study",
+        label = "Stage of the study",
         choices = c("Design stage",
                     "Real-time before enrollment completion",
                     "Real-time after enrollment completion"),
@@ -660,7 +614,7 @@ ui <- fluidPage(
 
         radioButtons(
           "to_predict",
-          "What to predict?",
+          label = "What to predict?",
           choices = c("Enrollment only",
                       "Enrollment and event"),
           selected = "Enrollment only",
@@ -675,7 +629,7 @@ ui <- fluidPage(
 
         radioButtons(
           "to_predict2",
-          "What to predict?",
+          label = "What to predict?",
           choices = c("Event only"),
           selected = "Event only",
           inline = FALSE)
@@ -691,7 +645,7 @@ ui <- fluidPage(
 
                  numericInput(
                    "target_n",
-                   "Target enrollment",
+                   label = "Target enrollment",
                    value = 300,
                    min = 1, max = 20000, step = 1)
                )
@@ -700,11 +654,11 @@ ui <- fluidPage(
         column(5,
                conditionalPanel(
                  condition = "input.to_predict == 'Enrollment and event' ||
-               input.stage == 'Real-time after enrollment completion'",
+                 input.stage == 'Real-time after enrollment completion'",
 
                  numericInput(
                    "target_d",
-                   "Target events",
+                   label = "Target events",
                    value = 200,
                    min = 1, max = 10000, step = 1)
                )
@@ -717,7 +671,7 @@ ui <- fluidPage(
 
         fileInput(
           "file1",
-          "Upload subject level data",
+          label = "Upload subject level data",
           accept = ".xlsx"
         )
       ),
@@ -726,7 +680,7 @@ ui <- fluidPage(
       fluidRow(
         column(7, radioButtons(
           "pilevel",
-          "Prediction interval",
+          label = "Prediction interval",
 
           choices = c("95%" = "0.95", "90%" = "0.90", "80%" = "0.80"),
           selected = "0.95",
@@ -735,7 +689,7 @@ ui <- fluidPage(
 
         column(5, numericInput(
           "nyears",
-          "Years after cutoff",
+          label = "Years after cutoff",
           value = 4,
           min = 1, max = 10, step = 1)
         )
@@ -748,7 +702,7 @@ ui <- fluidPage(
 
         checkboxGroupInput(
           "to_show",
-          "What to show on prediction plot?",
+          label = "What to show on prediction plot?",
           choices = c("Enrollment", "Event", "Dropout", "Ongoing"),
           selected = c("Enrollment", "Event"),
           inline = TRUE
@@ -758,20 +712,14 @@ ui <- fluidPage(
 
       fluidRow(
         column(7, checkboxInput(
-          "by_treatment",
-          "By treatment?",
-          value = FALSE)
-        ),
-
+          "by_treatment", label = "By treatment?", value = FALSE)),
 
         column(5, conditionalPanel(
           condition = "input.stage == 'Design stage' || input.by_treatment",
 
           selectInput(
-            "k", "Treatments",
-            choices = seq_len(6), selected = 2))
+            "k", label = "Treatments", choices = seq_len(6), selected = 2))
         )
-
       ),
 
 
@@ -799,14 +747,10 @@ ui <- fluidPage(
           min = 0, max = 100000, step = 1
         ))
       )
-
-
-
     ),
 
 
     mainPanel(
-
       tabsetPanel(
         id = "results",
         observedPanel,
@@ -820,13 +764,12 @@ ui <- fluidPage(
 )
 
 
-
-
 # server function -------------
 server <- function(input, output, session) {
   session$onSessionEnded(function() {
     stopApp()
   })
+
 
   # whether to show or hide the observed data panel
   observeEvent(input$stage, {
@@ -984,6 +927,88 @@ server <- function(input, output, session) {
   })
 
 
+  treatment_description <- reactive({
+    req(k())
+    if (k() > 1) {
+      if (!input$by_treatment && input$stage != "Design stage") {
+        a = "Overall"
+      } else if (input$stage != "Design stage" && !is.null(df())) {
+        treatment_mapping <- df() %>%
+          dplyr::select(treatment, treatment_description) %>%
+          dplyr::arrange(treatment, treatment_description) %>%
+          dplyr::group_by(treatment, treatment_description) %>%
+          dplyr::slice(dplyr::n())
+        a = treatment_mapping$treatment_description
+      } else {
+        a = rownames(input[[paste0("treatment_allocation_", k())]])
+      }
+    } else {
+      a = "Overall"
+    }
+    a
+  })
+
+
+  observeEvent(treatment_description(), {
+    if (input$stage == "Design stage") {
+      updateMatrixInput(
+        session, paste0("exponential_survival_", k()),
+        value=matrix(exponential_survival(), ncol=k(),
+                     dimnames = list(NULL, treatment_description())))
+      updateMatrixInput(
+        session, paste0("weibull_survival_", k()),
+        value=matrix(weibull_survival(), nrow=2, ncol=k(),
+                     dimnames = list(c("Shape", "Scale"),
+                                     treatment_description())))
+      updateMatrixInput(
+        session, paste0("lnorm_survival_", k()),
+        value=matrix(lnorm_survival(), nrow=2, ncol=k(),
+                     dimnames = list(c("Mean on log scale",
+                                       "SD on log scale"),
+                                     treatment_description())))
+
+      npieces = nrow(piecewise_exponential_survival())
+      updateMatrixInput(
+        session, paste0("piecewise_exponential_survival_", k()),
+        value=matrix(piecewise_exponential_survival(),
+                     nrow=npieces, ncol=k()+1,
+                     dimnames = list(
+                       paste("Interval", seq_len(npieces)),
+                       c("Starting time", treatment_description()))))
+
+      updateMatrixInput(
+        session, paste0("exponential_dropout_", k()),
+        value=matrix(exponential_dropout(), ncol=k(),
+                     dimnames = list(NULL, treatment_description())))
+      updateMatrixInput(
+        session, paste0("weibull_dropout_", k()),
+        value=matrix(weibull_dropout(), nrow=2, ncol=k(),
+                     dimnames = list(c("Shape", "Scale"),
+                                     treatment_description())))
+      updateMatrixInput(
+        session, paste0("lnorm_dropout_", k()),
+        value=matrix(lnorm_dropout(), nrow=2, ncol=k(),
+                     dimnames = list(c("Mean on log scale",
+                                       "SD on log scale"),
+                                     treatment_description())))
+
+      npieces = nrow(piecewise_exponential_dropout())
+      updateMatrixInput(
+        session, paste0("piecewise_exponential_dropout_", k()),
+        value=matrix(piecewise_exponential_dropout(),
+                     nrow=npieces, ncol=k()+1,
+                     dimnames = list(
+                       paste("Interval", seq_len(npieces)),
+                       c("Starting time", treatment_description()))))
+    } else if (input$by_treatment && !is.null(df())) {
+      updateMatrixInput(
+        session, paste0("treatment_allocation_", k()),
+        value=matrix(treatment_allocation(), ncol = 1,
+                     dimnames = list(treatment_description(), "Size")))
+    }
+  })
+
+
   poisson_rate <- reactive({
     req(input$poisson_rate)
     valid = (input$poisson_rate > 0)
@@ -1045,7 +1070,10 @@ server <- function(input, output, session) {
 
     req(valid1 && valid2 && valid3)
 
-    matrix(c(t, lambda), ncol = 2)
+    matrix(c(t, lambda), ncol = 2,
+           dimnames = list(paste("Interval",
+                                 1:nrow(piecewise_poisson_rate())),
+                           c("Starting time", "Enrollment rate")))
   })
 
 
@@ -1324,8 +1352,13 @@ server <- function(input, output, session) {
 
     shiny::validate(
       need(all(required_columns %in% column_names),
-           "You don't have the right data")
-    )
+           "You don't have the right data"))
+
+    if ('treatment' %in% column_names &&
+        !('treatment_description' %in% column_names)) {
+      df <- df %>% dplyr::mutate(
+        treatment_description = paste0("Treatment ", treatment))
+    }
 
     dplyr::tibble(df) %>%
       dplyr::mutate(trialsdt = as.Date(trialsdt),
@@ -1506,7 +1539,8 @@ server <- function(input, output, session) {
           showplot = FALSE,
           by_treatment = input$by_treatment,
           ngroups = k(),
-          alloc = treatment_allocation())
+          alloc = treatment_allocation(),
+          treatment_label = treatment_description())
       } else if (to_predict() == "Enrollment and event") {
         getPrediction(
           to_predict = to_predict(),
@@ -1526,7 +1560,8 @@ server <- function(input, output, session) {
           showplot = FALSE,
           by_treatment = input$by_treatment,
           ngroups = k(),
-          alloc = treatment_allocation())
+          alloc = treatment_allocation(),
+          treatment_label = treatment_description())
       }
     } else { # real-time prediction
       shiny::validate(
@@ -1631,7 +1666,6 @@ server <- function(input, output, session) {
   })
 
 
-
   output$dates <- renderText({
     if (!is.null(observed())) {
       str1 <- paste("Trial start date:", observed()$trialsdt)
@@ -1649,19 +1683,20 @@ server <- function(input, output, session) {
         if (to_predict() == "Enrollment and event" ||
             to_predict() == "Event only") {
           sum_by_trt <- df() %>%
-            dplyr::bind_rows(df() %>% dplyr::mutate(treatment = 9999)) %>%
-            dplyr::group_by(treatment) %>%
+            dplyr::bind_rows(df() %>% dplyr::mutate(
+              treatment = 9999, treatment_description = "Overall")) %>%
+            dplyr::group_by(treatment, treatment_description) %>%
             dplyr::summarise(n0 = n(),
                              d0 = sum(event),
                              c0 = sum(dropout),
                              r0 = sum(!(event | dropout)),
                              rp = sum((time < as.numeric(
-                               cutoffdt - randdt + 1)) & !(event | dropout)))
+                               cutoffdt - randdt + 1)) & !(event | dropout)),
+                             .groups = "drop")
 
           if (any(sum_by_trt$rp) > 0) {
             table <- t(sum_by_trt %>% dplyr::select(n0, d0, c0, r0, rp))
-            colnames(table) <- paste("Treatment", sum_by_trt$treatment)
-            colnames(table)[ncol(table)] <- "Overall"
+            colnames(table) <- sum_by_trt$treatment_description
             rownames(table) <- c("Current number of subjects",
                                  "Current number of events",
                                  "Current number of dropouts",
@@ -1669,8 +1704,7 @@ server <- function(input, output, session) {
                                  "  With ongoing date before cutoff")
           } else {
             table <- t(sum_by_trt %>% dplyr::select(n0, d0, c0, r0))
-            colnames(table) <- paste("Treatment", sum_by_trt$treatment)
-            colnames(table)[ncol(table)] <- "Overall"
+            colnames(table) <- sum_by_trt$treatment_description
             rownames(table) <- c("Current number of subjects",
                                  "Current number of events",
                                  "Current number of dropouts",
@@ -1679,13 +1713,13 @@ server <- function(input, output, session) {
 
         } else {
           sum_by_trt <- df() %>%
-            dplyr::bind_rows(df() %>% dplyr::mutate(treatment = 9999)) %>%
-            dplyr::group_by(treatment) %>%
-            dplyr::summarise(n0 = n())
+            dplyr::bind_rows(df() %>% dplyr::mutate(
+              treatment = 9999, treatment_description = "Overall")) %>%
+            dplyr::group_by(treatment, treatment_description) %>%
+            dplyr::summarise(n0 = n(), .groups = "drop")
 
           table <- t(sum_by_trt %>% dplyr::select(n0))
-          colnames(table) <- paste("Treatment", sum_by_trt$treatment)
-          colnames(table)[ncol(table)] <- "Overall"
+          colnames(table) <- sum_by_trt$treatment_description
           rownames(table) <- c("Current number of subjects")
         }
       } else {
@@ -1754,7 +1788,6 @@ server <- function(input, output, session) {
   )
 
 
-
   output$enroll_fit <- renderPlotly({
     if (!is.null(enroll_fit())) enroll_fit()$enroll_fit_plot
   })
@@ -1763,6 +1796,7 @@ server <- function(input, output, session) {
   output$event_fit1 <- renderPlotly({
     if (!is.null(event_fit())) event_fit()$event_fit_plot
   })
+
 
   output$event_fit <- renderUI({
     if (input$by_treatment && k() > 1) {
@@ -1777,6 +1811,7 @@ server <- function(input, output, session) {
     if (!is.null(dropout_fit())) dropout_fit()$dropout_fit_plot
   })
 
+
   output$dropout_fit <- renderUI({
     if (input$by_treatment && k() > 1) {
       plotlyOutput("dropout_fit1", height=240*k())
@@ -1784,7 +1819,6 @@ server <- function(input, output, session) {
       plotlyOutput("dropout_fit1")
     }
   })
-
 
 
   # enrollment predication date
@@ -1940,7 +1974,8 @@ server <- function(input, output, session) {
       }
     } else { # predict event only or predict enrollment and event
       shiny::validate(
-        need(showEnrollment() || showEvent() || showDropout() || showOngoing(),
+        need(showEnrollment() || showEvent() || showDropout() ||
+               showOngoing(),
              "Need at least one parameter to show on prediction plot"))
 
       req(pred()$event_pred)
@@ -2056,7 +2091,8 @@ server <- function(input, output, session) {
               data = dfs, x = ~t, y = ~n, color = ~parameter,
               line = list(width=2)) %>%
             plotly::layout(
-              xaxis = list(title = "Days since trial start", zeroline = FALSE),
+              xaxis = list(title = "Days since trial start",
+                           zeroline = FALSE),
               yaxis = list(zeroline = FALSE),
               legend = list(x = 0, y = 1.05, yanchor = "bottom",
                             orientation = 'h'))
@@ -2089,7 +2125,7 @@ server <- function(input, output, session) {
             dfbi <- dfb %>% dplyr::filter(treatment == i)
             dfai <- dfa %>% dplyr::filter(treatment == i)
 
-            g0 <- plotly::plot_ly() %>%
+            g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
               plotly::add_ribbons(
                 data = dfbi, x = ~date, ymin = ~lower, ymax = ~upper,
                 fill = "tonexty", fillcolor = ~parameter,
@@ -2108,10 +2144,17 @@ server <- function(input, output, session) {
                 xaxis = list(title = "", zeroline = FALSE),
                 yaxis = list(zeroline = FALSE),
                 legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                              orientation = 'h'))
+                              orientation = 'h')) %>%
+              plotly::layout(
+                annotations = list(
+                  x = 0.5, y = 1,
+                  text = paste0("<b>", dfsi$treatment_description[1], "</b>"),
+                  xanchor = "center", yanchor = "bottom",
+                  showarrow = FALSE, xref='paper', yref='paper'))
+
 
             if (observed()$tp < observed()$t0) {
-              g0 <- g0 %>%
+              g[[(i+1) %% 9999]] <- g[[(i+1) %% 9999]] %>%
                 plotly::add_lines(
                   x = rep(observed()$cutofftpdt, 2), y = range(dfsi$n),
                   name = "prediction start",
@@ -2121,17 +2164,12 @@ server <- function(input, output, session) {
 
 
             if (i == 9999) {
-              g[[1]] <- g0 %>%
+              g[[1]] <- g[[1]] %>%
                 plotly::layout(
                   annotations = list(
                     x = observed()$cutoffdt, y = 0, text = 'cutoff',
                     xanchor = "left", yanchor = "bottom",
-                    font = list(size = 12), showarrow = FALSE)) %>%
-                plotly::layout(
-                  annotations = list(
-                    x = 0.5, y = 1, text = "<b>Overall</b>",
-                    xanchor = "center", yanchor = "bottom",
-                    showarrow = FALSE, xref='paper', yref='paper'))
+                    font = list(size = 12), showarrow = FALSE))
 
               if (observed()$tp < observed()$t0) {
                 g[[1]] <- g[[1]] %>%
@@ -2157,22 +2195,14 @@ server <- function(input, output, session) {
                       yanchor = "bottom", font = list(size = 12),
                       showarrow = FALSE))
               }
-            } else {
-              g[[i+1]] <- g0 %>%
-                plotly::layout(
-                  annotations = list(
-                    x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
-                    xanchor = "center", yanchor = "bottom",
-                    showarrow = FALSE, xref='paper', yref='paper'))
             }
           }
-
         } else {  # Design stage
           g <- list()
           for (i in c(9999, 1:k())) {
             dfsi <- dfs %>% dplyr::filter(treatment == i)
 
-            g0 <- plotly::plot_ly() %>%
+            g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
               plotly::add_ribbons(
                 data = dfsi, x = ~t, ymin = ~lower, ymax = ~upper,
                 fill = "tonexty", fillcolor = ~parameter,
@@ -2185,16 +2215,16 @@ server <- function(input, output, session) {
                              zeroline = FALSE),
                 yaxis = list(zeroline = FALSE),
                 legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                              orientation = 'h'))
+                              orientation = 'h')) %>%
+              plotly::layout(
+                annotations = list(
+                  x = 0.5, y = 1,
+                  text = paste0("<b>", dfsi$treatment_description[1], "</b>"),
+                  xanchor = "center", yanchor = "bottom",
+                  showarrow = FALSE, xref='paper', yref='paper'))
+
 
             if (i == 9999) {
-              g[[1]] <- g0 %>%
-                plotly::layout(
-                  annotations = list(
-                    x = 0.5, y = 1, text = "<b>Overall</b>",
-                    xanchor = "center", yanchor = "bottom",
-                    showarrow = FALSE, xref='paper', yref='paper'))
-
               if (showEvent()) {
                 g[[1]] <- g[[1]] %>%
                   plotly::add_lines(
@@ -2209,13 +2239,6 @@ server <- function(input, output, session) {
                       yanchor = "bottom", font = list(size = 12),
                       showarrow = FALSE))
               }
-            } else {
-              g[[i+1]] <- g0 %>%
-                plotly::layout(
-                  annotations = list(
-                    x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
-                    xanchor = "center", yanchor = "bottom",
-                    showarrow = FALSE, xref='paper', yref='paper'))
             }
           }
         }
@@ -2278,7 +2301,7 @@ server <- function(input, output, session) {
                ncol=ncol(input$accrualTime))
     b = matrix(a[nrow(a),] + 1, nrow=1)
     c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
+    rownames(c) = paste("Interval", seq(1,nrow(c)))
     colnames(c) = colnames(input$accrualTime)
     updateMatrixInput(session, "accrualTime", c)
   })
@@ -2289,7 +2312,7 @@ server <- function(input, output, session) {
       a = matrix(as.numeric(input$accrualTime),
                  ncol=ncol(input$accrualTime))
       b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
+      rownames(b) = paste("Interval", seq(1,nrow(b)))
       colnames(b) = colnames(input$accrualTime)
       updateMatrixInput(session, "accrualTime", b)
     }
@@ -2302,7 +2325,7 @@ server <- function(input, output, session) {
     b = matrix(a[nrow(a),], nrow=1)
     b[1,1] = b[1,1] + 1
     c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
+    rownames(c) = paste("Interval", seq(1,nrow(c)))
     colnames(c) = colnames(input$piecewise_poisson_rate)
     updateMatrixInput(session, "piecewise_poisson_rate", c)
   })
@@ -2313,7 +2336,7 @@ server <- function(input, output, session) {
       a = matrix(as.numeric(input$piecewise_poisson_rate),
                  ncol=ncol(input$piecewise_poisson_rate))
       b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
+      rownames(b) = paste("Interval", seq(1,nrow(b)))
       colnames(b) = colnames(input$piecewise_poisson_rate)
       updateMatrixInput(session, "piecewise_poisson_rate", b)
     }
@@ -2325,7 +2348,7 @@ server <- function(input, output, session) {
                ncol=ncol(input$piecewiseSurvivalTime))
     b = matrix(a[nrow(a),] + 1, nrow=1)
     c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
+    rownames(c) = paste("Interval", seq(1,nrow(c)))
     colnames(c) = colnames(input$piecewiseSurvivalTime)
     updateMatrixInput(session, "piecewiseSurvivalTime", c)
   })
@@ -2336,7 +2359,7 @@ server <- function(input, output, session) {
       a = matrix(as.numeric(input$piecewiseSurvivalTime),
                  ncol=ncol(input$piecewiseSurvivalTime))
       b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
+      rownames(b) = paste("Interval", seq(1,nrow(b)))
       colnames(b) = colnames(input$piecewiseSurvivalTime)
       updateMatrixInput(session, "piecewiseSurvivalTime", b)
     }
@@ -2350,7 +2373,7 @@ server <- function(input, output, session) {
       b = matrix(a[nrow(a),], nrow=1)
       b[1,1] = b[1,1] + 1
       c = rbind(a, b)
-      rownames(c) = paste("Interval", seq(1:nrow(c)))
+      rownames(c) = paste("Interval", seq(1,nrow(c)))
       colnames(c) = colnames(input[[pwexp]])
       updateMatrixInput(session, pwexp, c)
     })
@@ -2363,7 +2386,7 @@ server <- function(input, output, session) {
       if (nrow(input[[pwexp]]) >= 2) {
         a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
         b = matrix(a[-nrow(a),], ncol=ncol(a))
-        rownames(b) = paste("Interval", seq(1:nrow(b)))
+        rownames(b) = paste("Interval", seq(1,nrow(b)))
         colnames(b) = colnames(input[[pwexp]])
         updateMatrixInput(session, pwexp, b)
       }
@@ -2376,7 +2399,7 @@ server <- function(input, output, session) {
                ncol=ncol(input$piecewiseDropoutTime))
     b = matrix(a[nrow(a),] + 1, nrow=1)
     c = rbind(a, b)
-    rownames(c) = paste("Interval", seq(1:nrow(c)))
+    rownames(c) = paste("Interval", seq(1,nrow(c)))
     colnames(c) = colnames(input$piecewiseDropoutTime)
     updateMatrixInput(session, "piecewiseDropoutTime", c)
   })
@@ -2387,12 +2410,11 @@ server <- function(input, output, session) {
       a = matrix(as.numeric(input$piecewiseDropoutTime),
                  ncol=ncol(input$piecewiseDropoutTime))
       b = matrix(a[-nrow(a),], ncol=ncol(a))
-      rownames(b) = paste("Interval", seq(1:nrow(b)))
+      rownames(b) = paste("Interval", seq(1,nrow(b)))
       colnames(b) = colnames(input$piecewiseDropoutTime)
       updateMatrixInput(session, "piecewiseDropoutTime", b)
     }
   })
-
 
 
   lapply(1:6, function(i) {
@@ -2402,7 +2424,7 @@ server <- function(input, output, session) {
       b = matrix(a[nrow(a),], nrow=1)
       b[1,1] = b[1,1] + 1
       c = rbind(a, b)
-      rownames(c) = paste("Interval", seq(1:nrow(c)))
+      rownames(c) = paste("Interval", seq(1,nrow(c)))
       colnames(c) = colnames(input[[pwexp]])
       updateMatrixInput(session, pwexp, c)
     })
@@ -2415,13 +2437,12 @@ server <- function(input, output, session) {
       if (nrow(input[[pwexp]]) >= 2) {
         a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
         b = matrix(a[-nrow(a),], ncol=ncol(a))
-        rownames(b) = paste("Interval", seq(1:nrow(b)))
+        rownames(b) = paste("Interval", seq(1,nrow(b)))
         colnames(b) = colnames(input[[pwexp]])
         updateMatrixInput(session, pwexp, b)
       }
     })
   })
-
 
 
   # save inputs
@@ -2434,45 +2455,44 @@ server <- function(input, output, session) {
       x <- list(
         treatment_allocation = matrix(
           treatment_allocation(), ncol=1,
-          dimnames = list(paste("Treatment", 1:k()), "Size")),
+          dimnames = list(treatment_description(), "Size")),
         exponential_survival = matrix(
           exponential_survival(), nrow = 1,
-          dimnames = list(NULL, paste("Treatment", 1:k()))),
+          dimnames = list(NULL, treatment_description())),
         weibull_survival = matrix(
           weibull_survival(), nrow = 2,
-          dimnames = list(c("Shape", "Scale"), paste("Treatment", 1:k()))),
+          dimnames = list(c("Shape", "Scale"), treatment_description())),
         lnorm_survival = matrix(
           lnorm_survival(), nrow = 2,
           dimnames = list(c("Mean on log scale", "SD on log scale"),
-                          paste("Treatment", 1:k()))),
+                          treatment_description())),
         piecewise_exponential_survival = matrix(
           piecewise_exponential_survival(), ncol = k()+1,
           dimnames = list(paste("Interval",
                                 1:nrow(piecewise_exponential_survival())),
-                          c("Starting time", paste("Treatment", 1:k())))),
+                          c("Starting time", treatment_description()))),
         exponential_dropout = matrix(
           exponential_dropout(), nrow = 1,
-          dimnames = list(NULL, paste("Treatment", 1:k()))),
+          dimnames = list(NULL, treatment_description())),
         weibull_dropout = matrix(
           weibull_dropout(), nrow = 2,
-          dimnames = list(c("Shape", "Scale"), paste("Treatment", 1:k()))),
+          dimnames = list(c("Shape", "Scale"), treatment_description())),
         lnorm_dropout = matrix(
           lnorm_dropout(), nrow = 2,
           dimnames = list(c("Mean on log scale", "SD on log scale"),
-                          paste("Treatment", 1:k()))),
+                          treatment_description())),
         piecewise_exponential_dropout = matrix(
           piecewise_exponential_dropout(), ncol = k()+1,
           dimnames = list(paste("Interval",
                                 1:nrow(piecewise_exponential_dropout())),
-                          c("Starting time", paste("Treatment", 1:k())))),
+                          c("Starting time", treatment_description()))),
         enroll_prior = input$enroll_prior,
         poisson_rate = poisson_rate(),
         mu = mu(),
         delta = delta(),
         piecewise_poisson_rate = matrix(
           piecewise_poisson_rate(), ncol = 2,
-          dimnames = list(paste("Interval", 1:nrow(piecewise_poisson_rate())),
-                          c("Starting time", "Enrollment rate"))),
+          dimnames = dimnames(piecewise_poisson_rate)),
         enroll_model = input$enroll_model,
         nknots = nknots(),
         lags = lags(),
@@ -2484,7 +2504,8 @@ server <- function(input, output, session) {
         event_model = input$event_model,
         piecewiseSurvivalTime = matrix(
           piecewiseSurvivalTime(), ncol = 1,
-          dimnames = list(paste("Interval", 1:length(piecewiseSurvivalTime())),
+          dimnames = list(paste("Interval",
+                                1:length(piecewiseSurvivalTime())),
                           "Starting time")),
         spline_k = spline_k(),
         spline_scale = input$spline_scale,
@@ -2492,7 +2513,8 @@ server <- function(input, output, session) {
         dropout_model = input$dropout_model,
         piecewiseDropoutTime = matrix(
           piecewiseDropoutTime(), ncol = 1,
-          dimnames = list(paste("Interval", 1:length(piecewiseDropoutTime())),
+          dimnames = list(paste("Interval",
+                                1:length(piecewiseDropoutTime())),
                           "Starting time")),
         stage = input$stage,
         to_predict = input$to_predict,
@@ -2531,83 +2553,59 @@ server <- function(input, output, session) {
           x$stage != 'Real-time after enrollment completion')) && x$k > 1) {
       updateMatrixInput(
         session, paste0("treatment_allocation_", x$k),
-        value=matrix(x$treatment_allocation, ncol = 1,
-                     dimnames = list(paste("Treatment", 1:x$k),
-                                     "Size")))
+        value=x$treatment_allocation)
     }
 
     if (x$stage == 'Design stage' && x$event_prior == 'Exponential') {
       updateMatrixInput(
         session, paste0("exponential_survival_", x$k),
-        value=matrix(x$exponential_survival, ncol = x$k,
-                     dimnames = list(NULL, paste("Treatment", 1:x$k))))
+        value=x$exponential_survival)
     }
 
     if (x$stage == 'Design stage' && x$event_prior == 'Weibull') {
       updateMatrixInput(
         session, paste0("weibull_survival_", x$k),
-        value=matrix(x$weibull_survival, ncol = x$k,
-                     dimnames = list(c("Shape", "Scale"),
-                                     paste("Treatment", 1:x$k))))
+        value=x$weibull_survival)
     }
 
     if (x$stage == 'Design stage' && x$event_prior == 'Log-normal') {
       updateMatrixInput(
         session, paste0("lnorm_survival_", x$k),
-        value=matrix(x$lnorm_survival, ncol = x$k,
-                     dimnames = list(c("Mean on log scale",
-                                       "SD on log scale"),
-                                     paste("Treatment", 1:x$k))))
+        value=x$lnorm_survival)
     }
 
     if (x$stage == 'Design stage' &&
         x$event_prior == 'Piecewise exponential') {
       updateMatrixInput(
         session, paste0("piecewise_exponential_survival_", x$k),
-        value=matrix(x$piecewise_exponential_survival, ncol = x$k + 1,
-                     dimnames = list(
-                       paste("Interval",
-                             1:nrow(x$piecewise_exponential_survival)),
-                       c("Starting time", paste("Treatment", 1:x$k)))))
+        value=x$piecewise_exponential_survival)
     }
 
 
     if (x$stage == 'Design stage' && x$dropout_prior == 'Exponential') {
       updateMatrixInput(
         session, paste0("exponential_dropout_", x$k),
-        value=matrix(x$exponential_dropout, ncol = x$k,
-                     dimnames = list(NULL, paste("Treatment", 1:x$k))))
+        value=x$exponential_dropout)
     }
 
     if (x$stage == 'Design stage' && x$dropout_prior == 'Weibull') {
       updateMatrixInput(
         session, paste0("weibull_dropout_", x$k),
-        value=matrix(x$weibull_dropout, ncol = x$k,
-                     dimnames = list(c("Shape", "Scale"),
-                                     paste("Treatment", 1:x$k))))
+        value=x$weibull_dropout)
     }
 
     if (x$stage == 'Design stage' && x$dropout_prior == 'Log-normal') {
       updateMatrixInput(
         session, paste0("lnorm_dropout_", x$k),
-        value=matrix(x$lnorm_dropout, ncol = x$k,
-                     dimnames = list(c("Mean on log scale",
-                                       "SD on log scale"),
-                                     paste("Treatment", 1:x$k))))
+        value=x$lnorm_dropout)
     }
 
     if (x$stage == 'Design stage' &&
         x$dropout_prior == 'Piecewise exponential') {
       updateMatrixInput(
         session, paste0("piecewise_exponential_dropout_", x$k),
-        value=matrix(x$piecewise_exponential_dropout, ncol = x$k + 1,
-                     dimnames = list(
-                       paste("Interval",
-                             1:nrow(x$piecewise_exponential_dropout)),
-                       c("Starting time", paste("Treatment", 1:x$k)))))
+        value=x$piecewise_exponential_dropout)
     }
-
-
 
     if (x$stage == 'Design stage') {
       updateRadioButtons(session, "enroll_prior", selected=x$enroll_prior)
@@ -2619,21 +2617,14 @@ server <- function(input, output, session) {
         updateNumericInput(session, "delta", value=x$delta)
       } else if (x$enroll_prior == "Piecewise Poisson") {
         updateMatrixInput(
-          session, "piecewise_poisson_rate",
-          value=matrix(x$piecewise_poisson_rate, ncol = 2,
-                       dimnames = list(
-                         paste("Interval",
-                               1:nrow(x$piecewise_poisson_rate)),
-                         c("Starting time", "Enrollment rate"))))
+          session, "piecewise_poisson_rate", value=x$piecewise_poisson_rate)
       }
 
       if (x$to_predict == 'Enrollment and event') {
         updateRadioButtons(session, "event_prior", selected=x$event_prior)
         updateRadioButtons(session, "dropout_prior", selected=x$dropout_prior)
       }
-
     } else {
-
       if (x$stage == 'Real-time before enrollment completion') {
         updateRadioButtons(session, "enroll_model", selected=x$enroll_model)
 
@@ -2642,14 +2633,9 @@ server <- function(input, output, session) {
           updateNumericInput(session, "lags", value=x$lags)
         } else if (x$enroll_model == "Piecewise Poisson") {
           updateMatrixInput(
-            session, "accrualTime",
-            value=matrix(x$accrualTime, ncol = 1,
-                         dimnames = list(
-                           paste("Interval", 1:nrow(x$accrualTime)),
-                           "Starting time")))
+            session, "accrualTime", value=x$accrualTime)
         }
       }
-
 
       if ((x$stage == 'Real-time before enrollment completion' &&
            x$to_predict == 'Enrollment and event') ||
@@ -2659,12 +2645,7 @@ server <- function(input, output, session) {
 
         if (x$event_model == "Piecewise exponential") {
           updateMatrixInput(
-            session, "piecewiseSurvivalTime",
-            value=matrix(x$piecewiseSurvivalTime, ncol = 1,
-                         dimnames = list(
-                           paste("Interval",
-                                 1:nrow(x$piecewiseSurvivalTime)),
-                           "Starting time")))
+            session, "piecewiseSurvivalTime", value=x$piecewiseSurvivalTime)
         } else if (x$event_model == "Spline") {
           updateNumericInput(session, "spline_k", value=x$spline_k)
           updateRadioButtons(session, "spline_scale", selected=x$spline_scale)
@@ -2674,18 +2655,10 @@ server <- function(input, output, session) {
 
         if (x$dropout_model == "Piecewise exponential") {
           updateMatrixInput(
-            session, "piecewiseDropoutTime",
-            value=matrix(x$piecewiseDropoutTime, ncol = 1,
-                         dimnames = list(
-                           paste("Interval",
-                                 1:nrow(x$piecewiseDropoutTime)),
-                           "Starting time")))
+            session, "piecewiseDropoutTime", value=x$piecewiseDropoutTime)
         }
       }
-
-
     }
-
 
     updateRadioButtons(session, "stage", selected=x$stage)
 
