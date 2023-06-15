@@ -1,3 +1,7 @@
+# eventPred 0.1.6
+
+- allow the use of treatment labels for by-treatment prediction
+
 # eventPred 0.1.5
 
 - update design stage prediction with one treatment arm
