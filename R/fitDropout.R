@@ -3,7 +3,8 @@
 #'
 #' @param df The subject-level dropout data, including \code{time} and
 #'   \code{dropout}. The data should also include \code{treatment}
-#'   coded as 1, 2, and so on, for fitting the dropout model by treatment.
+#'   coded as 1, 2, and so on, and \code{treatment_description}
+#'   for fitting the dropout model by treatment.
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
 #'   "Weibull", "log-normal", or "piecewise exponential". By default,
@@ -65,10 +66,14 @@ fitDropout <- function(df, dropout_model = "exponential",
 
   if (by_treatment) {
     ngroups = length(table(df$treatment))
+
+    if (!("treatment_description" %in% names(df))) {
+      df <- df %>% dplyr::mutate(
+        treatment_description = paste0("Treatment ", .data$treatment))
+    }
   } else {
     ngroups = 1
-    df <- df %>%
-      dplyr::mutate(treatment = 1)
+    df <- df %>% dplyr::mutate(treatment = 1)
   }
 
   # fit by treatment group
@@ -76,8 +81,8 @@ fitDropout <- function(df, dropout_model = "exponential",
   g1 <- list()
 
   for (i in 1:ngroups) {
-    df1 <- df %>%
-      dplyr::filter(.data$treatment == i)
+    df1 <- df %>% dplyr::filter(.data$treatment == i)
+
     n0 = nrow(df1)
     c0 = sum(df1$dropout)
     ex0 = sum(df1$time)
@@ -211,9 +216,15 @@ fitDropout <- function(df, dropout_model = "exponential",
     if (by_treatment && ngroups > 1) {
       fittedDropout <- fittedDropout %>%
         plotly::layout(annotations = list(
-          x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
+          x = 0.5, y = 1,
+          text = paste0("<b>", df1$treatment_description[1], "</b>"),
           xanchor = "center", yanchor = "middle", showarrow = FALSE,
           xref='paper', yref='paper'))
+    }
+
+    if (by_treatment) {
+      fit3$treatment = df1$treatment[1]
+      fit3$treatment_description = df1$treatment_description[1]
     }
 
     dropout_fit[[i]] = fit3
