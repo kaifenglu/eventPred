@@ -5,9 +5,10 @@
 #'
 #' @param df The subject-level enrollment data, including \code{trialsdt},
 #'   \code{randdt} and \code{cutoffdt}. The data should also include
-#'   \code{treatment} for prediction by treatment group.
-#'   By default, it is set to \code{NULL} for enrollment prediction
-#'   at the design stage.
+#'   \code{treatment} coded as 1, 2, and so on, and
+#'   \code{treatment_description} for prediction
+#'   by treatment group. By default, it is set to \code{NULL}
+#'   for enrollment prediction at the design stage.
 #' @param target_n The target number of subjects to enroll in the study.
 #' @param enroll_fit The pre-fitted enrollment model used to
 #'   generate predictions.
@@ -34,6 +35,8 @@
 #' @param alloc The treatment allocation in a randomization block.
 #'   By default, it is set to \code{NULL}, which yields equal allocation
 #'   among the treatment groups.
+#' @param treatment_label The treatment labels for treatments in a
+#'   randomization block for design stage prediction.
 #'
 #' @details
 #' The \code{enroll_fit} variable can be used for enrollment prediction
@@ -76,7 +79,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                               pilevel = 0.90, nyears = 4, nreps = 500,
                               showsummary = TRUE, showplot = TRUE,
                               by_treatment = FALSE, ngroups = 1,
-                              alloc = NULL) {
+                              alloc = NULL, treatment_label = NULL) {
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_n)
 
@@ -334,16 +337,56 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
     # summary of observed data by treatment
     if (!is.null(df)) {
+      if (!("treatment_description" %in% names(df))) {
+        df <- df %>% dplyr::mutate(
+          treatment_description = paste0("Treatment ", .data$treatment))
+      }
+
+      # order treatment description based on treatment
+      df$treatment_description = stats::reorder(
+        as.factor(df$treatment_description), df$treatment)
+
+      treatment_mapping <- df %>%
+        dplyr::select(.data$treatment, .data$treatment_description) %>%
+        dplyr::arrange(.data$treatment) %>%
+        dplyr::group_by(.data$treatment) %>%
+        dplyr::slice(dplyr::n())
+
+      newSubjects <- newSubjects %>%
+        dplyr::left_join(treatment_mapping, by = "treatment")
+
       # add overall treatment
       df2 <- df %>%
-        dplyr::bind_rows(df %>% dplyr::mutate(treatment = 9999))
+        dplyr::bind_rows(df %>% dplyr::mutate(
+          treatment = 9999, treatment_description = "Overall"))
 
       sum_by_trt <- df2 %>%
-        dplyr::group_by(.data$treatment) %>%
-        dplyr::summarise(n0 = dplyr::n())
+        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
+        dplyr::summarise(n0 = dplyr::n(), .groups = "drop")
     } else {
-      sum_by_trt <- dplyr::tibble(treatment = c(1:ngroups, 9999),
-                                  n0 = 0)
+      if (!is.null(treatment_label)) {
+        treatment_mapping <- dplyr::tibble(
+          treatment = 1:ngroups, treatment_description = treatment_label)
+
+        newSubjects <- newSubjects %>%
+          dplyr::left_join(treatment_mapping, by = "treatment")
+
+        sum_by_trt <- dplyr::tibble(
+          treatment = c(1:ngroups, 9999),
+          treatment_description = c(treatment_label, "Overall"),
+          n0 = 0)
+      } else {
+        newSubjects <- newSubjects %>% dplyr::mutate(
+          treatment_description = paste0("Treatment ", .data$treatment))
+
+        sum_by_trt <- dplyr::tibble(treatment = c(1:ngroups, 9999)) %>%
+          dplyr::mutate(treatment_description = c(
+            paste0("Treatment ", 1:ngroups), "Overall"),
+            n0 = 0)
+      }
+
+      sum_by_trt$treatment_description = stats::reorder(
+        as.factor(sum_by_trt$treatment_description), sum_by_trt$treatment)
     }
   }
 
@@ -461,18 +504,21 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                         orientation = "h"))
     }
 
-  } else {
+  } else { # by treatment
     # add overall treatment
     newSubjects2 <- newSubjects %>%
-      dplyr::bind_rows(newSubjects %>% dplyr::mutate(treatment = 9999))
+      dplyr::bind_rows(newSubjects %>% dplyr::mutate(
+        treatment = 9999, treatment_description = "Overall"))
 
     # predicted number of subjects enrolled by treatment after cutoff
     dfb1 <- dplyr::tibble(t = t) %>%
       dplyr::cross_join(newSubjects2) %>%
-      dplyr::group_by(.data$treatment, .data$t, .data$draw) %>%
+      dplyr::group_by(.data$treatment, .data$treatment_description,
+                      .data$t, .data$draw) %>%
       dplyr::summarise(nenrolled = sum(.data$arrivalTime <= .data$t),
                        .groups = "drop_last") %>%
-      dplyr::left_join(sum_by_trt, by = "treatment") %>%
+      dplyr::left_join(sum_by_trt,
+                       by = c("treatment", "treatment_description")) %>%
       dplyr::mutate(nenrolled = .data$nenrolled + .data$n0) %>%
       dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
                        lower = quantile(.data$nenrolled, probs = plower),
@@ -484,13 +530,13 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
     if (!is.null(df)) {
       # day 1
-      df0 <- dplyr::tibble(treatment = c(1:ngroups, 9999),
-                           t = 1, n = 0, lower = NA, upper = NA,
-                           mean = 0, var = 0)
+      df0 <- sum_by_trt %>%
+        dplyr::select(.data$treatment, .data$treatment_description) %>%
+        dplyr::mutate(t = 1, n = 0, lower = NA, upper = NA, mean = 0, var = 0)
 
       # arrival time for subjects already enrolled before data cut
       dfa1 <- df2 %>%
-        dplyr::group_by(.data$treatment) %>%
+        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
         dplyr::arrange(.data$randdt) %>%
         dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
                       n = dplyr::row_number()) %>%
@@ -499,9 +545,11 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
         dplyr::bind_rows(sum_by_trt %>%
                            dplyr::mutate(t = t0, n = n0, lower = NA,
                                          upper = NA, mean = n0, var = 0)) %>%
-        dplyr::select(.data$treatment, .data$t, .data$n, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::group_by(.data$treatment, .data$t) %>%
+        dplyr::select(.data$treatment, .data$treatment_description,
+                      .data$t, .data$n, .data$lower, .data$upper,
+                      .data$mean, .data$var) %>%
+        dplyr::group_by(.data$treatment, .data$treatment_description,
+                        .data$t) %>%
         dplyr::slice(dplyr::n()) %>%
         dplyr::ungroup()
 
@@ -525,7 +573,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
         dfai <- dfa %>%
           dplyr::filter(.data$treatment == i)
 
-        g0 <- plotly::plot_ly() %>%
+        g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
           plotly::add_ribbons(
             data = dfbi, x = ~date, ymin = ~lower, ymax = ~upper,
             name = "prediction interval", fill = "tonexty",
@@ -543,34 +591,30 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
             xaxis = list(title = "", zeroline = FALSE),
             yaxis = list(title = "Subjects", zeroline = FALSE),
             legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                          orientation = "h"))
+                          orientation = "h")) %>%
+          plotly::layout(
+            annotations = list(
+              x = 0.5, y = 1,
+              text = paste0("<b>", dfbi$treatment_description[1], "</b>"),
+              xanchor = "center", yanchor = "bottom",
+              showarrow = FALSE, xref='paper', yref='paper'))
 
         if (i == 9999) {
-          g[[1]] <- g0 %>%
+          g[[1]] <- g[[1]] %>%
             plotly::layout(
               annotations = list(
                 x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
                 yanchor = "bottom", font = list(size=12),
-                showarrow = FALSE)) %>%
-            plotly::layout(
-              annotations = list(
-                x = 0.5, y = 1, text = "<b>Overall</b>",
-                xanchor = "center", yanchor = "bottom",
-                showarrow = FALSE, xref='paper', yref='paper'))
-        } else {
-          g[[i+1]] <- g0 %>%
-            plotly::layout(
-              annotations = list(
-                x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
-                xanchor = "center", yanchor = "bottom",
-                showarrow = FALSE, xref='paper', yref='paper'))
+                showarrow = FALSE))
         }
       }
     } else { # prediction at design stage
       g <- list()
       for (i in c(9999, 1:ngroups)) {
-        g0 <- dfb1 %>%
-          dplyr::filter(.data$treatment == i) %>%
+        dfbi <- dfb1 %>%
+          dplyr::filter(.data$treatment == i)
+
+        g[[(i+1) %% 9999]] <- dfbi %>%
           plotly::plot_ly(x = ~t) %>%
           plotly::add_ribbons(
             ymin = ~lower, ymax = ~upper, name = "prediction interval",
@@ -581,23 +625,13 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
             xaxis = list(title = "Days since trial start", zeroline = FALSE),
             yaxis = list(title = "Subjects", zeroline = FALSE),
             legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                          orientation = "h"))
-
-        if (i == 9999) {
-          g[[1]] <- g0 %>%
-            plotly::layout(
-              annotations = list(
-                x = 0.5, y = 1, text = "<b>Overall</b>",
-                xanchor = "center", yanchor = "bottom",
-                showarrow = FALSE, xref='paper', yref='paper'))
-        } else {
-          g[[i+1]] <- g0 %>%
-            plotly::layout(
-              annotations = list(
-                x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
-                xanchor = "center", yanchor = "bottom",
-                showarrow = FALSE, xref='paper', yref='paper'))
-        }
+                          orientation = "h")) %>%
+          plotly::layout(
+            annotations = list(
+              x = 0.5, y = 1,
+              text = paste0("<b>", dfbi$treatment_description[1], "</b>"),
+              xanchor = "center", yanchor = "bottom",
+              showarrow = FALSE, xref='paper', yref='paper'))
       }
     }
 
