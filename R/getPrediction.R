@@ -6,7 +6,8 @@
 #'   \code{trialsdt}, \code{randdt}, and \code{cutoffdt} for
 #'   enrollment prediction, and, additionally, \code{time}, \code{event},
 #'   and \code{dropout} for event prediction. The data should also include
-#'   \code{treatment} coded as 1, 2, and so on, for enrollment and
+#'   \code{treatment} coded as 1, 2, and so on, and
+#'   \code{treatment_description} for enrollment and
 #'   event prediction by treatment. By default, it is set to
 #'   \code{NULL} for enrollment and event prediction at the design stage.
 #' @param to_predict Specifies what to predict: "enrollment only", "event
@@ -95,6 +96,8 @@
 #' @param alloc The treatment allocation in a randomization block.
 #'   By default, it is set to \code{NULL}, which yields equal allocation
 #'   among the treatment groups.
+#' @param treatment_label The treatment labels for treatments in a
+#'   randomization block for design stage prediction.
 #'
 #' @details
 #' For the time-decay model, the mean function is
@@ -176,7 +179,8 @@ getPrediction <- function(
     showEnrollment = TRUE, showEvent = TRUE,
     showDropout = FALSE, showOngoing = FALSE,
     showsummary = TRUE, showplot = TRUE,
-    by_treatment = FALSE, ngroups = 1, alloc = NULL) {
+    by_treatment = FALSE, ngroups = 1, alloc = NULL,
+    treatment_label = NULL) {
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
 
@@ -533,13 +537,13 @@ getPrediction <- function(
       enroll_pred <- predictEnrollment(
         df = observed$adsl, target_n, enroll_fit = enroll_fit1,
         lags, pilevel, nyears, nreps, showsummary, showplot = FALSE,
-        by_treatment, ngroups, alloc)
+        by_treatment, ngroups, alloc, treatment_label)
     } else {
       # enrollment prediction at the design stage
       enroll_pred <- predictEnrollment(
         df = NULL, target_n, enroll_fit = enroll_prior,
         lags, pilevel, nyears, nreps, showsummary, showplot = FALSE,
-        by_treatment, ngroups, alloc)
+        by_treatment, ngroups, alloc, treatment_label)
     }
   }
 
