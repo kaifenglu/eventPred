@@ -9,7 +9,8 @@
 #' @param df The subject-level data, including \code{trialsdt},
 #'   \code{randdt}, and \code{cutoffdt} for enrollment prediction,
 #'   as well as \code{time}, \code{event} and \code{dropout}
-#'   for event prediction, and \code{treatment} for prediction
+#'   for event prediction, and \code{treatment} coded as 1, 2,
+#'   and so on, and \code{treatment_description} for prediction
 #'   by treatment group.
 #' @param to_predict Specifies what to predict: "enrollment only",
 #'   "event only", or "enrollment and event". By default, it is set to
@@ -19,7 +20,6 @@
 #' @param by_treatment A Boolean variable to control whether or not to
 #'   summarize observed data by treatment group. By default,
 #'   it is set to \code{FALSE}.
-#'
 #'
 #' @return A list that includes a range of summary statistics,
 #' data sets, and plots depending on the value of \code{to_predict}.
@@ -94,6 +94,20 @@ summarizeObserved <- function(df, to_predict = "event only",
 
   if (by_treatment) {
     ngroups = length(table(df$treatment))
+    if (!("treatment_description" %in% names(df))) {
+      df <- df %>% dplyr::mutate(
+        treatment_description = paste0("Treatment ", .data$treatment))
+    }
+
+    # order treatment description based on treatment
+    df$treatment_description = stats::reorder(
+      as.factor(df$treatment_description), df$treatment)
+
+    treatment_mapping <- df %>%
+      dplyr::select(.data$treatment, .data$treatment_description) %>%
+      dplyr::arrange(.data$treatment) %>%
+      dplyr::group_by(.data$treatment) %>%
+      dplyr::slice(dplyr::n())
   } else {
     ngroups = 1
   }
@@ -157,9 +171,9 @@ summarizeObserved <- function(df, to_predict = "event only",
         dplyr::bind_rows(adslu) %>%
         dplyr::bind_rows(adsl1)
     }
-  } else {
+  } else { # by treatment
     adsl <- df %>%
-      dplyr::group_by(.data$treatment) %>%
+      dplyr::group_by(.data$treatment, .data$treatment_description) %>%
       dplyr::arrange(.data$randdt) %>%
       dplyr::mutate(n = dplyr::row_number(),
                     parameter = "Enrollment",
@@ -168,30 +182,34 @@ summarizeObserved <- function(df, to_predict = "event only",
 
     # remove duplicate
     adslu <- adsl %>%
-      dplyr::group_by(.data$treatment, .data$randdt) %>%
+      dplyr::group_by(.data$treatment, .data$treatment_description,
+                      .data$randdt) %>%
       dplyr::slice(dplyr::n()) %>%
       dplyr::ungroup() %>%
-      dplyr::select(.data$treatment, .data$n, .data$parameter, .data$date)
+      dplyr::select(.data$treatment, .data$treatment_description,
+                    .data$n, .data$parameter, .data$date)
 
     # dummy subject to initialize time axis at trial start
     adsl0 <- dplyr::tibble(treatment = 1:ngroups,
                            n = 0,
                            parameter = "Enrollment",
-                           date = trialsdt)
+                           date = trialsdt) %>%
+      dplyr::left_join(treatment_mapping, by = "treatment")
 
     # extend enrollment information to cutoff date
     adsl1 <- adsl %>%
-      dplyr::group_by(.data$treatment) %>%
+      dplyr::group_by(.data$treatment, .data$treatment_description) %>%
       dplyr::slice(dplyr::n()) %>%
       dplyr::mutate(date = cutoffdt) %>%
-      dplyr::select(.data$treatment, .data$n, .data$parameter, .data$date) %>%
+      dplyr::select(.data$treatment, .data$treatment_description,
+                    .data$n, .data$parameter, .data$date) %>%
       dplyr::ungroup()
 
 
     if (grepl("event", to_predict, ignore.case = TRUE)) {
       # time to event data
       adtte <- df %>%
-        dplyr::group_by(.data$treatment) %>%
+        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
         dplyr::mutate(adt = as.Date(.data$time - 1, origin = .data$randdt)) %>%
         dplyr::arrange(.data$adt) %>%
         dplyr::mutate(n = cumsum(.data$event),
@@ -201,16 +219,19 @@ summarizeObserved <- function(df, to_predict = "event only",
 
       # remove duplicate
       adtteu <- adtte %>%
-        dplyr::group_by(.data$treatment, .data$adt) %>%
+        dplyr::group_by(.data$treatment, .data$treatment_description,
+                        .data$adt) %>%
         dplyr::slice(dplyr::n()) %>%
         dplyr::ungroup() %>%
-        dplyr::select(.data$treatment, .data$n, .data$parameter, .data$date)
+        dplyr::select(.data$treatment, .data$treatment_description,
+                      .data$n, .data$parameter, .data$date)
 
       # dummy subject to initialize time axis at trial start
       adtte0 <- dplyr::tibble(treatment = 1:ngroups,
                               n = 0,
                               parameter = "Event",
-                              date = trialsdt)
+                              date = trialsdt) %>%
+        dplyr::left_join(treatment_mapping, by = "treatment")
 
       # combine enrollment and time to event data
       ad <- adsl0 %>%
@@ -223,10 +244,6 @@ summarizeObserved <- function(df, to_predict = "event only",
         dplyr::bind_rows(adslu) %>%
         dplyr::bind_rows(adsl1)
     }
-
-    # treatment group label
-    ad <- ad %>%
-      dplyr::mutate(treatmentc = paste0("treatment=", .data$treatment))
   }
 
   # plot cumulative enrollment and event data
@@ -250,11 +267,11 @@ summarizeObserved <- function(df, to_predict = "event only",
     }
 
     if (showplot) print(cumAccrual)
-  } else {
+  } else { # by treatment
     if (length(unique(ad$parameter)) > 1) {
       cumAccrual <- plotly::plot_ly(
         ad, x=~date, y=~n, color=~parameter, colors=c("blue", "red"),
-        linetype=~treatmentc) %>%
+        linetype=~treatment_description) %>%
         plotly::add_lines(line = list(shape = "hv")) %>%
         plotly::layout(
           xaxis = list(title = ""),
@@ -263,7 +280,7 @@ summarizeObserved <- function(df, to_predict = "event only",
                         orientation = 'h'))
     } else {
       cumAccrual <- plotly::plot_ly(
-        ad, x=~date, y=~n, linetype=~treatmentc) %>%
+        ad, x=~date, y=~n, linetype=~treatment_description) %>%
         plotly::add_lines(line = list(shape = "hv")) %>%
         plotly::layout(
           xaxis = list(title = ""),
@@ -346,20 +363,27 @@ summarizeObserved <- function(df, to_predict = "event only",
     } else { # by treatment
       kmfitEvent <- survival::survfit(survival::Surv(time, event) ~ treatment,
                                       data = adtte)
-      treatment <- attr(kmfitEvent$strata, "names")
+      treatment <- as.numeric(substring(attr(kmfitEvent$strata, "names"), 11))
+      treatment_description <-
+        (treatment_mapping %>% dplyr::right_join(dplyr::tibble(
+          treatment = treatment), by = "treatment"))$treatment_description
 
-      kmdfEvent <- dplyr::tibble(treatment = treatment, time = 1,
-                                 surv = 1) %>%
+      kmdfEvent <- dplyr::tibble(
+        treatment = treatment, treatment_description = treatment_description,
+        time = 1, surv = 1) %>%
         dplyr::bind_rows(dplyr::tibble(
           treatment = rep(treatment, kmfitEvent$strata),
+          treatment_description = rep(treatment_description,
+                                      kmfitEvent$strata),
           time = kmfitEvent$time,
           surv = kmfitEvent$surv)) %>%
-        dplyr::group_by(.data$treatment, .data$time) %>%
+        dplyr::group_by(.data$treatment, .data$treatment_description,
+                        .data$time) %>%
         dplyr::slice(dplyr::n()) %>%
         dplyr::ungroup()
 
       kmEvent <- plotly::plot_ly(
-        kmdfEvent, x=~time, y=~surv, linetype=~treatment) %>%
+        kmdfEvent, x=~time, y=~surv, linetype=~treatment_description) %>%
         plotly::add_lines(line = list(shape = "hv")) %>%
         plotly::layout(
           xaxis = list(title = "Days since randomization", zeroline = FALSE),
@@ -373,20 +397,29 @@ summarizeObserved <- function(df, to_predict = "event only",
       # time to dropout
       kmfitDropout <- survival::survfit(survival::Surv(time, dropout) ~
                                           treatment, data = adtte)
-      treatment <- attr(kmfitDropout$strata, "names")
 
-      kmdfDropout <- dplyr::tibble(treatment = treatment, time = 1,
-                                   surv = 1) %>%
+      treatment <- as.numeric(substring(attr(kmfitDropout$strata, "names"),
+                                        11))
+      treatment_description <-
+        (treatment_mapping %>% dplyr::right_join(dplyr::tibble(
+          treatment = treatment), by = "treatment"))$treatment_description
+
+      kmdfDropout <- dplyr::tibble(
+        treatment = treatment, treatment_description = treatment_description,
+        time = 1, surv = 1) %>%
         dplyr::bind_rows(dplyr::tibble(
           treatment = rep(treatment, kmfitDropout$strata),
+          treatment_description = rep(treatment_description,
+                                      kmfitDropout$strata),
           time = kmfitDropout$time,
           surv = kmfitDropout$surv)) %>%
-        dplyr::group_by(.data$treatment, .data$time) %>%
+        dplyr::group_by(.data$treatment, .data$treatment_description,
+                        .data$time) %>%
         dplyr::slice(dplyr::n()) %>%
         dplyr::ungroup()
 
       kmDropout <- plotly::plot_ly(
-        kmdfDropout, x=~time, y=~surv, linetype=~treatment) %>%
+        kmdfDropout, x=~time, y=~surv, linetype=~treatment_description) %>%
         plotly::add_lines(line = list(shape = "hv")) %>%
         plotly::layout(
           xaxis = list(title = "Days since randomization", zeroline = FALSE),
