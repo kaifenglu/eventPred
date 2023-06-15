@@ -3,7 +3,8 @@
 #'
 #' @param df The subject-level event data, including \code{time}
 #'   and \code{event}. The data should also include \code{treatment}
-#'   coded as 1, 2, and so on, for fitting the event model by treatment.
+#'   coded as 1, 2, and so on, and \code{treatment_description}
+#'   for fitting the event model by treatment.
 #' @param event_model The event model used to analyze the event data
 #'   which can be set to one of the following options:
 #'   "exponential", "Weibull", "log-normal",
@@ -95,10 +96,14 @@ fitEvent <- function(df, event_model = "model averaging",
 
   if (by_treatment) {
     ngroups = length(table(df$treatment))
+
+    if (!("treatment_description" %in% names(df))) {
+      df <- df %>% dplyr::mutate(
+        treatment_description = paste0("Treatment ", .data$treatment))
+    }
   } else {
     ngroups = 1
-    df <- df %>%
-      dplyr::mutate(treatment = 1)
+    df <- df %>% dplyr::mutate(treatment = 1)
   }
 
   if (ngroups == 1) {
@@ -111,8 +116,7 @@ fitEvent <- function(df, event_model = "model averaging",
   g1 <- list()
 
   for (i in 1:ngroups) {
-    df1 <- df %>%
-      dplyr::filter(.data$treatment == i)
+    df1 <- df %>% dplyr::filter(.data$treatment == i)
 
     n0 = nrow(df1)
     d0 = sum(df1$event)
@@ -316,9 +320,15 @@ fitEvent <- function(df, event_model = "model averaging",
     if (by_treatment && ngroups > 1) {
       fittedEvent <- fittedEvent %>%
         plotly::layout(annotations = list(
-          x = 0.5, y = 1, text = paste0("<b>treatment=", i, "</b>"),
+          x = 0.5, y = 1,
+          text = paste0("<b>", df1$treatment_description[1], "</b>"),
           xanchor = "center", yanchor = "middle", showarrow = FALSE,
           xref='paper', yref='paper'))
+    }
+
+    if (by_treatment) {
+      fit2$treatment = df1$treatment[1]
+      fit2$treatment_description = df1$treatment_description[1]
     }
 
     event_fit[[i]] = fit2
