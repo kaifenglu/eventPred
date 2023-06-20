@@ -7,7 +7,7 @@
 #'   for fitting the event model by treatment.
 #' @param event_model The event model used to analyze the event data
 #'   which can be set to one of the following options:
-#'   "exponential", "Weibull", "log-normal",
+#'   "exponential", "Weibull", "log-logistic", "log-normal",
 #'   "piecewise exponential", "model averaging", or "spline".
 #'   The model averaging uses the \code{exp(-bic/2)} weighting and
 #'   combines Weibull and log-normal models. The spline model of
@@ -73,9 +73,9 @@ fitEvent <- function(df, event_model = "model averaging",
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(event_model),
-                       c("exponential", "weibull", "log-normal",
-                         "piecewise exponential", "model averaging",
-                         "spline"))
+                       c("exponential", "weibull", "log-logistic",
+                         "log-normal", "piecewise exponential",
+                         "model averaging", "spline"))
 
   if (piecewiseSurvivalTime[1] != 0) {
     stop("piecewiseSurvivalTime must start with 0");
@@ -151,26 +151,43 @@ fitEvent <- function(df, event_model = "model averaging",
                                data = df1, dist = "weibull")
 
       # weibull$shape = 1/reg$scale, weibull$scale = exp(reg$coefficients)
-      # we define theta = (log(weibull$shape), log(weibull$scale))
-      # reg$var is for c(reg$coefficients, log(reg$scale))
-      lmat <- matrix(c(0, -1, 1, 0), nrow=2, ncol=2, byrow=TRUE)
+      # we define theta = (log(weibull$scale), -log(weibull$shape))
+      # reg$var is for theta = c(reg$coefficients, log(reg$scale))
       fit2 <- list(model = "Weibull",
-                   theta = c(log(1/reg$scale), as.numeric(reg$coefficients)),
-                   vtheta = lmat %*% reg$var %*% t(lmat),
+                   theta = c(as.numeric(reg$coefficients), log(reg$scale)),
+                   vtheta = reg$var,
                    bic = -2*reg$loglik[1] + 2*log(n0))
 
       # fitted survival curve
       dffit2 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
-        surv = pweibull(.data$time, shape = exp(fit2$theta[1]),
-                        scale = exp(fit2$theta[2]), lower.tail = FALSE))
+        surv = pweibull(.data$time, shape = exp(-fit2$theta[2]),
+                        scale = exp(fit2$theta[1]), lower.tail = FALSE))
+    } else if (tolower(event_model) == "log-logistic") {
+      # S(t) = 1/(1 + (t/lambda)^kappa)
+      reg <- survival::survreg(survival::Surv(time, event) ~ 1,
+                               data = df1, dist = "loglogistic")
+
+      # llogis$shape = 1/reg$scale, llogis$scale = exp(reg$coefficients)
+      # we define theta = (log(llogis$scale), -log(llogis$shape))
+      # reg$var is for theta = c(reg$coefficients, log(reg$scale))
+      fit2 <- list(model = "Log-logistic",
+                   theta = c(as.numeric(reg$coefficients), log(reg$scale)),
+                   vtheta = reg$var,
+                   bic = -2*reg$loglik[1] + 2*log(n0))
+
+      # fitted survival curve
+      dffit2 <- dplyr::tibble(
+        time = seq(0, max(df1$time)),
+        surv = plogis(log(.data$time), location = fit2$theta[1],
+                      scale = exp(fit2$theta[2]), lower.tail = FALSE))
     } else if (tolower(event_model) == "log-normal") {
       # S(t) = 1 - Phi((log(t) - meanlog)/sdlog)
       reg <- survival::survreg(survival::Surv(time, event) ~ 1,
                                data = df1, dist = "lognormal")
 
       # we use parameterization theta = (meanlog, log(sdlog))
-      # reg$var is for c(reg$coefficients, log(reg$scale)) = theta
+      # reg$var is for theta = c(reg$coefficients, log(reg$scale))
       fit2 <- list(model = "Log-normal",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
@@ -235,14 +252,13 @@ fitEvent <- function(df, event_model = "model averaging",
 
 
       # model parameters from weibull and log-normal
-      theta = c(log(1/reg1$scale), as.numeric(reg1$coefficients),
+      theta = c(as.numeric(reg1$coefficients), log(reg1$scale),
                 as.numeric(reg2$coefficients), log(reg2$scale))
 
       # variance-covariance matrix, noting that the covariances
       # between the two sets of parameters are zero as they are estimated
       # from different likelihood functions
-      lmat <- matrix(c(0, -1, 1, 0), nrow=2, ncol=2, byrow=TRUE)
-      vtheta = as.matrix(Matrix::bdiag(lmat%*%reg1$var%*%t(lmat), reg2$var))
+      vtheta = as.matrix(Matrix::bdiag(reg1$var, reg2$var))
 
       # model fit, assuming fixed weight w1
       fit2 <- list(model = "Model averaging",
@@ -253,8 +269,8 @@ fitEvent <- function(df, event_model = "model averaging",
 
       # distribution function for model averaging of Weibull and log-normal
       pmodavg <- function(t, theta, w1, lower.tail = TRUE, log.p = FALSE) {
-        shape = exp(theta[1])
-        scale = exp(theta[2])
+        shape = exp(-theta[2])
+        scale = exp(theta[1])
         meanlog = theta[3]
         sdlog = exp(theta[4])
 
