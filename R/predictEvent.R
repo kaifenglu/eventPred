@@ -5,8 +5,8 @@
 #'   prediction interval for the expected time to reach the target
 #'   number of events.
 #'
-#' @param df The subject-level enrollment and event data,
-#'   including \code{trialsdt}, \code{randdt}, \code{cutoffdt},
+#' @param df The subject-level enrollment and event data, including
+#'   \code{trialsdt}, \code{usubjid}, \code{randdt}, \code{cutoffdt},
 #'   \code{time}, \code{event}, and \code{dropout}. The data should also
 #'   include \code{treatment} coded as 1, 2, and so on, and
 #'   \code{treatment_description} for by-treatment prediction. By default,
@@ -64,8 +64,8 @@
 #' per treatment. For each treatment, the element should include \code{w}
 #' to specify the weight of the treatment in a randomization block,
 #' \code{model} to specify the event model
-#' (exponential, weibull, log-normal, or piecewise exponential),
-#' \code{theta} and \code{vtheta} to indicate
+#' (exponential, weibull, log-logistic, log-normal,
+#' or piecewise exponential), \code{theta} and \code{vtheta} to indicate
 #' the parameter values and the covariance matrix.
 #' For the piecewise exponential event model, the list
 #' should also include \code{piecewiseSurvivalTime} to indicate
@@ -77,8 +77,8 @@
 #' with one element per treatment. For each treatment, the element
 #' should include \code{w} to specify the weight of the treatment
 #' in a randomization block, \code{model} to specify the dropout model
-#' (exponential, weibull, log-normal, or piecewise exponential),
-#' \code{theta} and \code{vtheta} to indicate
+#' (exponential, weibull, log-logistic, log-normal,
+#' or piecewise exponential), \code{theta} and \code{vtheta} to indicate
 #' the parameter values and the covariance matrix.
 #' For the piecewise exponential dropout model, the list
 #' should also include \code{piecewiseDropoutTime} to indicate
@@ -202,15 +202,15 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   if (!is.null(df)) {
     for (j in 1:ngroups) {
       erify::check_content(tolower(event_fit[[j]]$model),
-                           c("exponential", "weibull", "log-normal",
-                             "piecewise exponential", "model averaging",
-                             "spline"))
+                           c("exponential", "weibull", "log-logistic",
+                             "log-normal", "piecewise exponential",
+                             "model averaging", "spline"))
     }
   } else {
     for (j in 1:ngroups) {
       erify::check_content(tolower(event_fit[[j]]$model),
-                           c("exponential", "weibull", "log-normal",
-                             "piecewise exponential"))
+                           c("exponential", "weibull", "log-logistic",
+                             "log-normal", "piecewise exponential"))
     }
   }
 
@@ -229,6 +229,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     if ((model == "exponential" && p != 1) ||
         (model == "weibull" && p != 2) ||
+        (model == "log-logistic" && p != 2) ||
         (model == "log-normal" && p != 2) ||
         (model == "piecewise exponential" &&
          p != length(event_fit[[j]]$piecewiseSurvivalTime))) {
@@ -266,8 +267,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     # check dropout_fit model
     for (j in 1:ngroups) {
       erify::check_content(tolower(dropout_fit[[j]]$model),
-                           c("exponential", "weibull", "log-normal",
-                             "piecewise exponential"))
+                           c("exponential", "weibull", "log-logistic",
+                             "log-normal", "piecewise exponential"))
     }
 
     # check dropout_fit parameters
@@ -285,6 +286,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
       if ((model == "exponential" && p != 1) ||
           (model == "weibull" && p != 2) ||
+          (model == "log-logistic" && p != 2) ||
           (model == "log-normal" && p != 2) ||
           (model == "piecewise exponential" &&
            p != length(dropout_fit[[j]]$piecewiseDropoutTime))) {
@@ -360,10 +362,15 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1),
                     totalTime = .data$arrivalTime + .data$time - 1)
 
+    if (!("usubjid" %in% names(df))) {
+      df$usubjid = paste0("A-", 100000 + (1:nrow(df)))
+    }
+
     # subset to extract ongoing subjects
     ongoingSubjects <- df %>%
       dplyr::filter(.data$event == 0 & .data$dropout == 0)
 
+    usubjidOngoing <- ongoingSubjects$usubjid
     arrivalTimeOngoing <- ongoingSubjects$arrivalTime
     treatmentOngoing <- ongoingSubjects$treatment
     treatment_descriptionOngoing <- ongoingSubjects$treatment_description
@@ -620,8 +627,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   }
 
   newEvents = dplyr::as_tibble(matrix(
-    nrow = nreps*r0 + m1, ncol = 7,
-    dimnames = list(NULL, c("draw", "arrivalTime",
+    nrow = nreps*r0 + m1, ncol = 8,
+    dimnames = list(NULL, c("draw", "usubjid", "arrivalTime",
                             "treatment", "treatment_description",
                             "time", "event", "dropout"))))
 
@@ -636,8 +643,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     m = r0 + n1
 
-    # arrival time, treatment, and time offset for new subjects
+    # usubjid, arrival time, treatment, and time offset for new subjects
     if (n1 > 0) {
+      usubjidNew = newSubjects$usubjid[newSubjects$draw == i]
       arrivalTimeNew = newSubjects$arrivalTime[newSubjects$draw == i]
       treatmentNew = newSubjects$treatment[newSubjects$draw == i]
       treatment_descriptionNew = newSubjects$treatment_description[
@@ -647,17 +655,20 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # concatenate ongoing and new subjects
     if (r0 == 0 && n1 > 0) {  # design stage
+      usubjid = usubjidNew
       arrivalTime = arrivalTimeNew
       treatment = treatmentNew
       treatment_description = treatment_descriptionNew
       time0 = time0New
     } else if (r0 > 0 && n1 > 0) { # enrollment stage
+      usubjid = c(usubjidOngoing, usubjidNew)
       arrivalTime = c(arrivalTimeOngoing, arrivalTimeNew)
       treatment = c(treatmentOngoing, treatmentNew)
       treatment_description = c(treatment_descriptionOngoing,
                                 treatment_descriptionNew)
       time0 = c(time0Ongoing, time0New)
     } else if (r0 > 0 && n1 == 0) { # follow-up stage
+      usubjid = usubjidOngoing
       arrivalTime = arrivalTimeOngoing
       treatment = treatmentOngoing
       treatment_description = treatment_descriptionOngoing
@@ -679,10 +690,16 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           rate = exp(theta2[[j]][i,])
           survivalTime[cols] = rexp(ncols, rate) + time0[cols]
         } else if (model == "weibull") {
-          shape = exp(theta2[[j]][i,1])
-          scale = exp(theta2[[j]][i,2])
+          shape = exp(-theta2[[j]][i,2])
+          scale = exp(theta2[[j]][i,1])
           survivalTime[cols] = (rexp(ncols)*scale^shape +
                                   time0[cols]^shape)^(1/shape)
+        } else if (model == "log-logistic") {
+          location = theta2[[j]][i,1]
+          scale = exp(theta2[[j]][i,2])
+          p = plogis((log(time0[cols]) - location)/scale, lower.tail = F)
+          survivalTime[cols] = exp(location + scale*qlogis(
+            runif(ncols)*p, lower.tail = F))
         } else if (model == "log-normal") {
           meanlog = theta2[[j]][i,1]
           sdlog = exp(theta2[[j]][i,2])
@@ -710,8 +727,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           survivalTime[cols] = u[j1] + (rhs - psum[j1])/lambda[j1]
         } else if (model == "model averaging") {
           theta = theta2[[j]][i,]
-          shape = exp(theta[1])
-          scale = exp(theta[2])
+          shape = exp(-theta[2])
+          scale = exp(theta[1])
           meanlog = theta[3]
           sdlog = exp(theta[4])
           w1 = event_fit[[j]]$w1
@@ -768,10 +785,16 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             rate = exp(theta3[[j]][i,])
             dropoutTime[cols] = rexp(ncols, rate) + time0[cols]
           } else if (model == "weibull") {
-            shape = exp(theta3[[j]][i,1])
-            scale = exp(theta3[[j]][i,2])
+            shape = exp(-theta3[[j]][i,2])
+            scale = exp(theta3[[j]][i,1])
             dropoutTime[cols] = (rexp(ncols)*scale^shape +
                                    time0[cols]^shape)^(1/shape)
+          } else if (model == "log-logistic") {
+            location = theta3[[j]][i,1]
+            scale = exp(theta3[[j]][i,2])
+            p = plogis((log(time0[cols]) - location)/scale, lower.tail = F)
+            dropoutTime[cols] = exp(location + scale*qlogis(
+              runif(ncols)*p, lower.tail = F))
           } else if (model == "log-normal") {
             meanlog = theta3[[j]][i,1]
             sdlog = exp(theta3[[j]][i,2])
@@ -832,6 +855,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     # fill out the ith block of output data frame
     index = offset + (1:m)
     newEvents[index, "draw"] = i
+    newEvents[index, "usubjid"] = usubjid
     newEvents[index, "arrivalTime"] = arrivalTime
     newEvents[index, "treatment"] = treatment
     newEvents[index, "treatment_description"] = treatment_description
@@ -850,7 +874,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     # combined stopped, ongoing and new subjects
     allSubjects <- dplyr::tibble(draw = 1:nreps) %>%
       dplyr::cross_join(stoppedSubjects) %>%
-      dplyr::select(.data$draw, .data$arrivalTime,
+      dplyr::select(.data$draw, .data$usubjid, .data$arrivalTime,
                     .data$treatment, .data$treatment_description,
                     .data$time, .data$event, .data$dropout,
                     .data$totalTime) %>%
@@ -875,20 +899,31 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     mean(sumdata$n < target_d)
   }
 
-  # obtain the quantiles
-  q = 1 - c(0.5, plower, pupper)
-  pred_day = rep(NA, length(q))
   tmax = max(newEvents$totalTime[newEvents$event==1])
-  for (j in 1:length(q)) {
-    # check if the quantile can be estimated from observed data
-    if (sdf(tmax, target_d, d0, newEvents) <= q[j]) {
-      pred_day[j] = uniroot(function(x)
-        sdf(x, target_d, d0, newEvents) - q[j],
-        c(tp, tmax), tol = 1)$root
-      pred_day[j] = ceiling(pred_day[j])
+
+  # obtain the quantiles
+  if (sdf(tmax, target_d, d0, newEvents) == 0) {
+    new1 <- newEvents %>%
+      dplyr::group_by(.data$draw) %>%
+      dplyr::filter(.data$event == 1) %>%
+      dplyr::arrange(.data$draw, .data$totalTime) %>%
+      dplyr::filter(dplyr::row_number() == target_d - d0)
+    pred_day <- ceiling(quantile(new1$totalTime, c(0.5, plower, pupper)))
+  } else {
+    q = 1 - c(0.5, plower, pupper)
+    pred_day = rep(NA, length(q))
+    for (j in 1:length(q)) {
+      # check if the quantile can be estimated from observed data
+      if (sdf(tmax, target_d, d0, newEvents) <= q[j]) {
+        pred_day[j] = uniroot(function(x)
+          sdf(x, target_d, d0, newEvents) - q[j],
+          c(tp, tmax), tol = 1)$root
+        pred_day[j] = ceiling(pred_day[j])
+      }
     }
+    names(pred_day) <- names(quantile(1:100, c(0.5, plower, pupper)))
   }
-  names(pred_day) <- names(quantile(1:100, c(0.5, plower, pupper)))
+
 
   if (!is.null(df)) {
     pred_date <- as.Date(pred_day - 1, origin = trialsdt)
