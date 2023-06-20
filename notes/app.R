@@ -69,6 +69,25 @@ f_weibull_survival <- function(i) {
 }
 
 
+f_llogis_survival <- function(i) {
+  conditionalPanel(
+    condition = paste("input.event_prior == 'Log-logistic' && input.k ==", i),
+
+    shinyMatrix::matrixInput(
+      paste0("llogis_survival_", i),
+      label = "Log-logistic parameters",
+      value = matrix(rep(c(5.4, 1), i), nrow = 2, byrow = FALSE,
+                     dimnames = list(c("Location on log scale",
+                                       "Scale on log scale"),
+                                     paste("Treatment", 1:i))),
+      inputClass = "numeric",
+      rows = list(names=TRUE, extend=FALSE),
+      cols = list(names=TRUE, extend=FALSE)
+    )
+  )
+}
+
+
 f_lnorm_survival <- function(i) {
   conditionalPanel(
     condition = paste("input.event_prior == 'Log-normal' && input.k ==", i),
@@ -140,6 +159,26 @@ f_weibull_dropout <- function(i) {
       label = "Weibull parameters",
       value = matrix(rep(c(1.25, 1000), i), nrow = 2, byrow = FALSE,
                      dimnames = list(c("Shape", "Scale"),
+                                     paste("Treatment", 1:i))),
+      inputClass = "numeric",
+      rows = list(names=TRUE, extend=FALSE),
+      cols = list(names=TRUE, extend=FALSE)
+    )
+  )
+}
+
+
+f_llogis_dropout <- function(i) {
+  conditionalPanel(
+    condition = paste("input.dropout_prior == 'Log-logistic' && input.k ==",
+                      i),
+
+    shinyMatrix::matrixInput(
+      paste0("llogis_dropout_", i),
+      label = "Log-logistic parameters",
+      value = matrix(rep(c(8, 2.64), i), nrow = 2, byrow = FALSE,
+                     dimnames = list(c("Location on log scale",
+                                       "Scale on log scale"),
                                      paste("Treatment", 1:i))),
       inputClass = "numeric",
       rows = list(names=TRUE, extend=FALSE),
@@ -367,6 +406,7 @@ eventPanel <- tabPanel(
         label = "Which time-to-event model to use?",
         choices = c("Exponential",
                     "Weibull",
+                    "Log-logistic",
                     "Log-normal",
                     "Piecewise exponential"),
         selected = "Piecewise exponential",
@@ -377,6 +417,7 @@ eventPanel <- tabPanel(
       column(8,
              lapply(1:6, f_exponential_survival),
              lapply(1:6, f_weibull_survival),
+             lapply(1:6, f_llogis_survival),
              lapply(1:6, f_lnorm_survival),
              lapply(1:6, f_piecewise_exponential_survival)
       )
@@ -393,6 +434,7 @@ eventPanel <- tabPanel(
         label = "Which time-to-event model to use?",
         choices = c("Exponential",
                     "Weibull",
+                    "Log-logistic",
                     "Log-normal",
                     "Piecewise exponential",
                     "Model averaging",
@@ -460,6 +502,7 @@ dropoutPanel <- tabPanel(
         choices = c("None",
                     "Exponential",
                     "Weibull",
+                    "Log-logistic",
                     "Log-normal",
                     "Piecewise exponential"),
         selected = "Exponential",
@@ -469,6 +512,7 @@ dropoutPanel <- tabPanel(
       column(8,
              lapply(1:6, f_exponential_dropout),
              lapply(1:6, f_weibull_dropout),
+             lapply(1:6, f_llogis_dropout),
              lapply(1:6, f_lnorm_dropout),
              lapply(1:6, f_piecewise_exponential_dropout)
       )
@@ -485,6 +529,7 @@ dropoutPanel <- tabPanel(
         choices = c("None",
                     "Exponential",
                     "Weibull",
+                    "Log-logistic",
                     "Log-normal",
                     "Piecewise exponential"),
         selected = "Exponential",
@@ -766,9 +811,9 @@ ui <- fluidPage(
 
 # server function -------------
 server <- function(input, output, session) {
-  session$onSessionEnded(function() {
-    stopApp()
-  })
+  # session$onSessionEnded(function() {
+  #   stopApp()
+  # })
 
 
   # whether to show or hide the observed data panel
@@ -961,6 +1006,12 @@ server <- function(input, output, session) {
                      dimnames = list(c("Shape", "Scale"),
                                      treatment_description())))
       updateMatrixInput(
+        session, paste0("llogis_survival_", k()),
+        value=matrix(llogis_survival(), nrow=2, ncol=k(),
+                     dimnames = list(c("Location on log scale",
+                                       "Scale on log scale"),
+                                     treatment_description())))
+      updateMatrixInput(
         session, paste0("lnorm_survival_", k()),
         value=matrix(lnorm_survival(), nrow=2, ncol=k(),
                      dimnames = list(c("Mean on log scale",
@@ -984,6 +1035,12 @@ server <- function(input, output, session) {
         session, paste0("weibull_dropout_", k()),
         value=matrix(weibull_dropout(), nrow=2, ncol=k(),
                      dimnames = list(c("Shape", "Scale"),
+                                     treatment_description())))
+      updateMatrixInput(
+        session, paste0("llogis_dropout_", k()),
+        value=matrix(llogis_dropout(), nrow=2, ncol=k(),
+                     dimnames = list(c("Location on log scale",
+                                       "Scale on log scale"),
                                      treatment_description())))
       updateMatrixInput(
         session, paste0("lnorm_dropout_", k()),
@@ -1071,8 +1128,7 @@ server <- function(input, output, session) {
     req(valid1 && valid2 && valid3)
 
     matrix(c(t, lambda), ncol = 2,
-           dimnames = list(paste("Interval",
-                                 1:nrow(piecewise_poisson_rate())),
+           dimnames = list(paste("Interval", 1:length(t)),
                            c("Starting time", "Enrollment rate")))
   })
 
@@ -1150,6 +1206,25 @@ server <- function(input, output, session) {
     req(valid1 && valid2)
 
     matrix(c(shape, scale), nrow = 2, byrow = TRUE)
+  })
+
+
+  llogis_survival <- reactive({
+    req(k())
+    param = input[[paste0("llogis_survival_", k())]]
+    locationlog = as.numeric(param[1,])
+    scalelog = as.numeric(param[2,])
+
+    valid = all(scalelog > 0)
+    if (!valid) {
+      showNotification(
+        "Scale on the log scale must be positive"
+      )
+    }
+
+    req(valid)
+
+    matrix(c(locationlog, scalelog), nrow = 2, byrow = TRUE)
   })
 
 
@@ -1241,8 +1316,8 @@ server <- function(input, output, session) {
   weibull_dropout <- reactive({
     req(k())
     param = input[[paste0("weibull_dropout_", k())]]
-    shape = as.numeric(param[1,])
-    scale = as.numeric(param[2,])
+    shape = as.numeric(-param[2,])
+    scale = as.numeric(param[1,])
 
     valid1 = all(shape > 0)
     if (!valid1) {
@@ -1261,6 +1336,25 @@ server <- function(input, output, session) {
     req(valid1 && valid2)
 
     matrix(c(shape, scale), nrow = 2, byrow = TRUE)
+  })
+
+
+  llogis_dropout <- reactive({
+    req(k())
+    param = input[[paste0("llogis_dropout_", k())]]
+    locationlog = as.numeric(param[1,])
+    scalelog = as.numeric(param[2,])
+
+    valid = all(scalelog > 0)
+    if (!valid) {
+      showNotification(
+        "Scale on the log scale must be positive"
+      )
+    }
+
+    req(valid)
+
+    matrix(c(locationlog, scalelog), nrow = 2, byrow = TRUE)
   })
 
 
@@ -1460,7 +1554,10 @@ server <- function(input, output, session) {
           if (model == "Exponential") {
             theta = log(exponential_survival()[i])
           } else if (model == "Weibull") {
-            theta = log(weibull_survival()[,i])
+            theta = c(log(weibull_survival()[2,i]),
+                      -log(weibull_survival()[1,i]))
+          } else if (model == "Log-logistic") {
+            theta = c(llogis_survival()[1,i], log(llogis_survival()[2,i]))
           } else if (model == "Log-normal") {
             theta = c(lnorm_survival()[1,i], log(lnorm_survival()[2,i]))
           } else if (model == "Piecewise exponential") {
@@ -1495,7 +1592,10 @@ server <- function(input, output, session) {
             if (model == "Exponential") {
               theta = log(exponential_dropout()[i])
             } else if (model == "Weibull") {
-              theta = log(weibull_dropout()[,i])
+              theta = c(log(weibull_dropout()[2,i]),
+                        -log(weibull_dropout()[1,i]))
+            } else if (model == "Log-logistic") {
+              theta = c(llogis_dropout()[1,i], log(llogis_dropout()[2,i]))
             } else if (model == "Log-normal") {
               theta = c(lnorm_dropout()[1,i], log(lnorm_dropout()[2,i]))
             } else if (model == "Piecewise exponential") {
@@ -2462,6 +2562,10 @@ server <- function(input, output, session) {
         weibull_survival = matrix(
           weibull_survival(), nrow = 2,
           dimnames = list(c("Shape", "Scale"), treatment_description())),
+        llogis_survival = matrix(
+          llogis_survival(), nrow = 2,
+          dimnames = list(c("Location on log scale", "Scale on log scale"),
+                          treatment_description())),
         lnorm_survival = matrix(
           lnorm_survival(), nrow = 2,
           dimnames = list(c("Mean on log scale", "SD on log scale"),
@@ -2477,6 +2581,10 @@ server <- function(input, output, session) {
         weibull_dropout = matrix(
           weibull_dropout(), nrow = 2,
           dimnames = list(c("Shape", "Scale"), treatment_description())),
+        llogis_dropout = matrix(
+          llogis_dropout(), nrow = 2,
+          dimnames = list(c("Location on log scale", "Scale on log scale"),
+                          treatment_description())),
         lnorm_dropout = matrix(
           lnorm_dropout(), nrow = 2,
           dimnames = list(c("Mean on log scale", "SD on log scale"),
@@ -2490,9 +2598,7 @@ server <- function(input, output, session) {
         poisson_rate = poisson_rate(),
         mu = mu(),
         delta = delta(),
-        piecewise_poisson_rate = matrix(
-          piecewise_poisson_rate(), ncol = 2,
-          dimnames = dimnames(piecewise_poisson_rate)),
+        piecewise_poisson_rate = piecewise_poisson_rate(),
         enroll_model = input$enroll_model,
         nknots = nknots(),
         lags = lags(),
@@ -2568,6 +2674,12 @@ server <- function(input, output, session) {
         value=x$weibull_survival)
     }
 
+    if (x$stage == 'Design stage' && x$event_prior == 'Log-logistic') {
+      updateMatrixInput(
+        session, paste0("llogis_survival_", x$k),
+        value=x$llogis_survival)
+    }
+
     if (x$stage == 'Design stage' && x$event_prior == 'Log-normal') {
       updateMatrixInput(
         session, paste0("lnorm_survival_", x$k),
@@ -2592,6 +2704,12 @@ server <- function(input, output, session) {
       updateMatrixInput(
         session, paste0("weibull_dropout_", x$k),
         value=x$weibull_dropout)
+    }
+
+    if (x$stage == 'Design stage' && x$dropout_prior == 'Log-logistic') {
+      updateMatrixInput(
+        session, paste0("llogis_dropout_", x$k),
+        value=x$llogis_dropout)
     }
 
     if (x$stage == 'Design stage' && x$dropout_prior == 'Log-normal') {
