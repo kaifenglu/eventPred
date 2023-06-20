@@ -7,8 +7,8 @@
 #' and time to dropout.
 #'
 #' @param df The subject-level data, including \code{trialsdt},
-#'   \code{randdt}, and \code{cutoffdt} for enrollment prediction,
-#'   as well as \code{time}, \code{event} and \code{dropout}
+#'   \code{usubjid}, \code{randdt}, and \code{cutoffdt} for enrollment
+#'   prediction, as well as \code{time}, \code{event} and \code{dropout}
 #'   for event prediction, and \code{treatment} coded as 1, 2,
 #'   and so on, and \code{treatment_description} for prediction
 #'   by treatment group.
