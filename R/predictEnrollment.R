@@ -325,6 +325,9 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     newSubjects <- newEnrollment_pw(t0, n1, theta, u, nreps)
   }
 
+  # assign usubjid for new subjects
+  newSubjects$usubjid <- rep(paste0("Z-", 100000 + (1:n1)), nreps)
+
 
   if (by_treatment) {
     # add treatment group information
