@@ -12,6 +12,13 @@ library(plotly, warn.conflicts = FALSE)
 library(eventPred)
 
 
+rdirichlet <- function (n = 1, alpha) {
+  Gam <- matrix(0, n, length(alpha))
+  for (i in 1:length(alpha)) Gam[, i] <- rgamma(n, shape = alpha[i])
+  Gam/rowSums(Gam)
+}
+
+
 # conditional panels for treatment allocation
 f_treatment_allocation <- function(i) {
   conditionalPanel(
@@ -60,6 +67,25 @@ f_weibull_survival <- function(i) {
       label = "Weibull parameters",
       value = matrix(rep(c(1.42, 392), i), nrow = 2, byrow = FALSE,
                      dimnames = list(c("Shape", "Scale"),
+                                     paste("Treatment", 1:i))),
+      inputClass = "numeric",
+      rows = list(names=TRUE, extend=FALSE),
+      cols = list(names=TRUE, extend=FALSE)
+    )
+  )
+}
+
+
+f_llogis_survival <- function(i) {
+  conditionalPanel(
+    condition = paste("input.event_prior == 'Log-logistic' && input.k ==", i),
+
+    shinyMatrix::matrixInput(
+      paste0("llogis_survival_", i),
+      label = "Log-logistic parameters",
+      value = matrix(rep(c(5.4, 1), i), nrow = 2, byrow = FALSE,
+                     dimnames = list(c("Location on log scale",
+                                       "Scale on log scale"),
                                      paste("Treatment", 1:i))),
       inputClass = "numeric",
       rows = list(names=TRUE, extend=FALSE),
@@ -122,10 +148,9 @@ f_drug_description <- function(j) {
       label = "Drug names and dose units",
       value = matrix(c(paste("Drug", seq_len(j)), rep("mg", j)),
                      nrow = j, ncol = 2,
-                     dimnames = list(paste("Drug", seq_len(j)),
-                                     c("Drug Name", "Dose Unit"))),
+                     dimnames = list(NULL, c("Drug Name", "Dose Unit"))),
       inputClass = "character",
-      rows = list(names=TRUE, extend=FALSE),
+      rows = list(names=FALSE, extend=FALSE),
       cols = list(names=TRUE, extend=FALSE))
   )
 }
@@ -133,7 +158,7 @@ f_drug_description <- function(j) {
 
 f_treatment_by_drug <- function(i, j) {
   conditionalPanel(
-    condition = paste("input.k ==", i, "&&", "input.l ==", j),
+    condition = paste("input.k ==", i, "&&", "input.l - input.l2 ==", j),
 
     shinyMatrix::matrixInput(
       paste0("treatment_by_drug_", i, "_", j),
@@ -149,19 +174,58 @@ f_treatment_by_drug <- function(i, j) {
 }
 
 
+# conditional panels for chemotherapy occupancy
+f_chemotherapy_occupancy <- function(i) {
+  conditionalPanel(
+    condition = paste0("input.stage == 'Design stage' && input.m == ", i),
+
+    shinyMatrix::matrixInput(
+      paste0("chemotherapy_occupancy_", i),
+      label = "Chemotherapy occupancy",
+      value = matrix(rep(1/i,i), ncol = 1,
+                     dimnames = list(paste("Chemotherapy", 1:i),
+                                     "Probability")),
+      inputClass = "numeric",
+      rows = list(names=TRUE, extend=FALSE, editableNames=TRUE),
+      cols = list(names=TRUE, extend=FALSE))
+  )
+}
+
+
+f_chemotherapy_by_drug <- function(i, j) {
+  conditionalPanel(
+    condition = paste("input.m ==", i, "&&", "input.l2 ==", j),
+
+    shinyMatrix::matrixInput(
+      paste0("chemotherapy_by_drug_", i, "_", j),
+      label = "Drugs contained in each chemotherapy",
+      value = matrix(1, nrow = i, ncol = j,
+                     dimnames = list(paste("Chemotherapy", 1:i),
+                                     paste("Drug", 1:j))),
+      inputClass = "numeric",
+      rows = list(names=TRUE, extend=FALSE),
+      cols = list(names=TRUE, extend=FALSE)
+    )
+  )
+}
+
+
 f_dosing_schedule <- function(j) {
   lapply(1:j, function(i) {
     conditionalPanel(
       condition = paste("input.l ==", j),
 
+      htmlOutput(paste0("label_dosing_schedule_", j, "_", i)),
+
       shinyMatrix::matrixInput(
         paste0("dosing_schedule_", j, "_", i),
-        label = paste("Dosing schedule for Drug", i),
-        value = matrix(c(21, 10000, 100),
+        label = NULL,
+        value = matrix(c(21, 100, 10000),
                        nrow = 1, ncol = 3,
                        dimnames = list(
                          "Interval 1",
-                         c("Days per Cycle", "Number of Cycles", "Dose"))),
+                         c("Days per Cycle", "Dose per Cycle",
+                           "Number of Cycles"))),
         inputClass = "numeric",
         rows = list(names=TRUE, extend=FALSE, editableNames=TRUE),
         cols = list(names=TRUE, extend=FALSE)
@@ -358,6 +422,7 @@ eventPanel <- tabPanel(
         label = "Which time-to-event model to use?",
         choices = c("Exponential",
                     "Weibull",
+                    "Log-logistic",
                     "Log-normal",
                     "Piecewise exponential"),
         selected = "Piecewise exponential",
@@ -367,6 +432,7 @@ eventPanel <- tabPanel(
       column(8,
              lapply(1:6, f_exponential_survival),
              lapply(1:6, f_weibull_survival),
+             lapply(1:6, f_llogis_survival),
              lapply(1:6, f_lnorm_survival),
              lapply(1:6, f_piecewise_exponential_survival)
       )
@@ -383,6 +449,7 @@ eventPanel <- tabPanel(
         label = "Which time-to-event model to use?",
         choices = c("Exponential",
                     "Weibull",
+                    "Log-logistic",
                     "Log-normal",
                     "Piecewise exponential",
                     "Model averaging",
@@ -439,15 +506,36 @@ dosingPanel <- tabPanel(
   title = "Dosing Model",
   value = "dosing_model_panel",
 
-  selectInput(
-    "l", label = "Number of drugs", choices = seq_len(12), selected = 2),
+  fluidRow(
+    column(6, selectInput(
+      "l", label = "Total number of drugs",
+      choices = seq_len(12), selected = 2)),
 
-  lapply(1:12, f_drug_description),
+    column(6, lapply(1:12, f_drug_description))),
+
+  lapply(1:12, f_dosing_schedule),
+
+  fluidRow(
+    column(6, selectInput(
+      "l2", label = "Number of optional chemotherapy drugs",
+      choices = c(0, seq(2,6)), selected = 0),
+
+    conditionalPanel(
+      condition = "input.l2 > 0",
+      selectInput(
+        "m", label = "Number of optional chemotherapies",
+        choices = c(2:6), selected = 2))),
+
+    column(6, conditionalPanel(
+      condition = "input.l2 > 0",
+      lapply(2:6, f_chemotherapy_occupancy)
+      ))),
 
   lapply(c(outer(1:6, 1:12, function(i,j) 1000*i+j)),
          function(k) f_treatment_by_drug(k %/% 1000, k %% 1000)),
 
-  lapply(1:12, f_dosing_schedule)
+  lapply(c(outer(1:6, 1:6, function(i,j) 1000*i+j)),
+         function(k) f_chemotherapy_by_drug(k %/% 1000, k %% 1000))
 )
 
 
@@ -558,7 +646,7 @@ ui <- fluidPage(
           label = "What to predict?",
           choices = c("Enrollment only",
                       "Enrollment and event"),
-          selected = "Enrollment only",
+          selected = "Enrollment and event",
           inline = FALSE)
       ),
 
@@ -651,7 +739,7 @@ ui <- fluidPage(
 
       fluidRow(
         column(7, checkboxInput(
-          "by_treatment", label = "By treatment?", value = FALSE),
+          "by_treatment", label = "By treatment?", value = TRUE),
 
           conditionalPanel(
             condition = "input.by_treatment &&
@@ -659,7 +747,7 @@ ui <- fluidPage(
             input.stage == 'Real-time after enrollment completion')",
 
             checkboxInput(
-              "predict_dosing", label = "Predict dosing?", value = FALSE)
+              "predict_dosing", label = "Predict dosing?", value = TRUE)
           )
         ),
 
@@ -717,9 +805,9 @@ ui <- fluidPage(
 
 # server function -------------
 server <- function(input, output, session) {
-  session$onSessionEnded(function() {
-    stopApp()
-  })
+  # session$onSessionEnded(function() {
+  #   stopApp()
+  # })
 
   # whether to show or hide the observed data panel
   observeEvent(input$stage, {
@@ -734,6 +822,9 @@ server <- function(input, output, session) {
   # whether to allow the user to specify the number of treatments
   observeEvent(input$stage, {
     shinyjs::toggleState("k", input$stage == "Design stage")
+    if (input$l2 > 0) {
+      shinyjs::toggleState("m", input$stage == "Design stage")
+    }
   })
 
 
@@ -914,6 +1005,66 @@ server <- function(input, output, session) {
   })
 
 
+  m <- reactive({
+    req(l2())
+    if (l2() > 0) {
+      if (input$stage != "Design stage" && !is.null(df())) {
+        m = length(table(df()$chemotherapy))
+        updateSelectInput(session, "m", selected=m)
+      } else {
+        m = as.numeric(input$m)
+      }
+    } else {
+      m = 1
+    }
+    m
+  })
+
+
+  chemotherapy_occupancy <- reactive({
+    req(m())
+    if (m() > 1 && input$stage == "Design stage") {
+      d = input[[paste0("chemotherapy_occupancy_", m())]]
+      d <- as.numeric(d)
+
+      valid = all(d > 0)
+      if (!valid) {
+        showNotification("Chemotherapy occupancy must be positive")
+      }
+
+      req(valid)
+      d/sum(d)
+    } else if (m() > 1 && !is.null(df())) {
+      d = as.numeric(table(df()$chemotherapy))
+      d/sum(d)
+    } else if (m() > 1) {
+      rep(1/m(), m())
+    } else {
+      0
+    }
+  })
+
+
+  chemotherapy_description <- reactive({
+    if (l2() > 0) {
+      if (input$stage != "Design stage" && !is.null(df())) {
+        chemotherapy_mapping <- df() %>%
+          dplyr::select(chemotherapy, chemotherapy_description) %>%
+          dplyr::arrange(chemotherapy, chemotherapy_description) %>%
+          dplyr::group_by(chemotherapy, chemotherapy_description) %>%
+          dplyr::slice(dplyr::n())
+        chemotherapy_mapping$chemotherapy_description
+      } else if (input$stage != "Design stage" && is.null(df())) {
+        paste("Chemotherapy", 1:m())
+      } else if (input$stage == "Design stage") {
+        rownames(input[[paste0("chemotherapy_occupancy_", m())]])
+      }
+    } else {
+      "None"
+    }
+  })
+
+
   observeEvent(treatment_description(), {
     if (input$stage == "Design stage") {
       updateMatrixInput(
@@ -924,6 +1075,12 @@ server <- function(input, output, session) {
         session, paste0("weibull_survival_", k()),
         value=matrix(weibull_survival(), nrow=2, ncol=k(),
                      dimnames = list(c("Shape", "Scale"),
+                                     treatment_description())))
+      updateMatrixInput(
+        session, paste0("llogis_survival_", k()),
+        value=matrix(llogis_survival(), nrow=2, ncol=k(),
+                     dimnames = list(c("Location on log scale",
+                                       "Scale on log scale"),
                                      treatment_description())))
       updateMatrixInput(
         session, paste0("lnorm_survival_", k()),
@@ -951,9 +1108,19 @@ server <- function(input, output, session) {
 
   observeEvent(list(treatment_description(), drug_name()), {
     updateMatrixInput(
-      session, paste0("treatment_by_drug_", k(), "_", l()),
-      value=matrix(treatment_by_drug(), ncol = l(),
+      session, paste0("treatment_by_drug_", k(), "_", l1()),
+      value=matrix(treatment_by_drug(), ncol = l1(),
                    dimnames = dimnames(treatment_by_drug())))
+  })
+
+
+  observeEvent(list(chemotherapy_description(), drug_name()), {
+    if (l2() > 0) {
+      updateMatrixInput(
+        session, paste0("chemotherapy_by_drug_", m(), "_", l2()),
+        value=matrix(chemotherapy_by_drug(), ncol = l2(),
+                     dimnames = dimnames(chemotherapy_by_drug())))
+    }
   })
 
 
@@ -1019,7 +1186,7 @@ server <- function(input, output, session) {
     req(valid1 && valid2 && valid3)
 
     matrix(c(t, lambda), ncol = 2,
-           dimnames = list("Interval 1",
+           dimnames = list(paste("Interval", 1:length(t)),
                            c("Starting time", "Enrollment rate")))
   })
 
@@ -1100,6 +1267,25 @@ server <- function(input, output, session) {
   })
 
 
+  llogis_survival <- reactive({
+    req(k())
+    param = input[[paste0("llogis_survival_", k())]]
+    locationlog = as.numeric(param[1,])
+    scalelog = as.numeric(param[2,])
+
+    valid = all(scalelog > 0)
+    if (!valid) {
+      showNotification(
+        "Scale on the log scale must be positive"
+      )
+    }
+
+    req(valid)
+
+    matrix(c(locationlog, scalelog), nrow = 2, byrow = TRUE)
+  })
+
+
   lnorm_survival <- reactive({
     req(k())
     param = input[[paste0("lnorm_survival_", k())]]
@@ -1171,6 +1357,19 @@ server <- function(input, output, session) {
 
   l <- reactive(as.numeric(input$l))
 
+  observeEvent(list(input$l, input$l2), {
+    if (input$l <= input$l2) {
+      updateSelectInput(session, "l2", selected=0)
+    }
+  })
+
+  l2 <- reactive({
+    l2 = as.numeric(input$l2)
+    ifelse(l2 >= l(), 0, l2)
+  })
+
+  l1 <- reactive(l() - l2())
+
 
   drug_name <- reactive({
     req(l())
@@ -1188,7 +1387,7 @@ server <- function(input, output, session) {
 
   treatment_by_drug <- reactive({
     req(l())
-    param = input[[paste0("treatment_by_drug_", k(), "_", l())]]
+    param = input[[paste0("treatment_by_drug_", k(), "_", l1())]]
     t = as.numeric(param)
 
     valid = all(t==1 | t==0)
@@ -1200,14 +1399,14 @@ server <- function(input, output, session) {
 
     req(valid)
 
-    matrix(t, nrow = k(), ncol = l(),
-           dimnames = list(treatment_description(), drug_name()))
+    matrix(t, nrow = k(), ncol = l1(),
+           dimnames = list(treatment_description(), drug_name()[1:l1()]))
   })
 
 
   treatment_by_drug_df <- reactive({
     req(l())
-    param = input[[paste0("treatment_by_drug_", k(), "_", l())]]
+    param = input[[paste0("treatment_by_drug_", k(), "_", l1())]]
     t = as.numeric(param)
 
     valid = all(t==1 | t==0)
@@ -1219,13 +1418,63 @@ server <- function(input, output, session) {
 
     req(valid)
 
-    dplyr::tibble(treatment = rep(1:k(), l()),
-                  drug = rep(1:l(), each=k()),
-                  drug_name = rep(drug_name(), each=k()),
-                  dose_unit = rep(dose_unit(), each=k()),
+    dplyr::tibble(treatment = rep(1:k(), l1()),
+                  drug = rep(1:l1(), each=k()),
+                  drug_name = rep(drug_name()[1:l1()], each=k()),
+                  dose_unit = rep(dose_unit()[1:l1()], each=k()),
                   included = as.logical(t)) %>%
       dplyr::filter(included) %>%
       dplyr::select(treatment, drug, drug_name, dose_unit)
+  })
+
+
+
+  chemotherapy_by_drug <- reactive({
+    req(l2())
+    if (l2() > 0) {
+      param = input[[paste0("chemotherapy_by_drug_", m(), "_", l2())]]
+      t = as.numeric(param)
+
+      valid = all(t==1 | t==0)
+      if (!valid) {
+        showNotification(
+          "Entries of chemotherapy by drug matrix must be 1 or 0"
+        )
+      }
+
+      req(valid)
+
+      matrix(t, nrow = m(), ncol = l2(),
+             dimnames = list(chemotherapy_description(),
+                             drug_name()[(l1()+1):l()]))
+    } else {
+      matrix(1, nrow = 1, ncol = 1, dimnames = list("None", "None"))
+    }
+  })
+
+
+  chemotherapy_by_drug_df <- reactive({
+    if (l2() > 0) {
+      param = input[[paste0("chemotherapy_by_drug_", m(), "_", l2())]]
+      t = as.numeric(param)
+
+      valid = all(t==1 | t==0)
+      if (!valid) {
+        showNotification(
+          "Entries of chemotherapy by drug matrix must be 1 or 0"
+        )
+      }
+
+      req(valid)
+
+      dplyr::tibble(chemotherapy = rep(1:m(), l2()),
+                    drug = rep((l1()+1):l(), each=m()),
+                    drug_name = rep(drug_name()[(l1()+1):l()], each=m()),
+                    dose_unit = rep(dose_unit()[(l1()+1):l()], each=m()),
+                    included = as.logical(t)) %>%
+        dplyr::filter(included) %>%
+        dplyr::select(chemotherapy, drug, drug_name, dose_unit)
+    }
   })
 
 
@@ -1236,13 +1485,13 @@ server <- function(input, output, session) {
       lapply(1:l(), function(i) {
         x <- input[[paste0("dosing_schedule_", l(), "_", i)]]
         dplyr::tibble(
-          w = as.numeric(x[,1]),
-          N = as.numeric(x[,2]),
-          d = as.numeric(x[,3]),
+          w = as.numeric(x[, "Days per Cycle"]),
+          d = as.numeric(x[, "Dose per Cycle"]),
+          N = as.numeric(x[, "Number of Cycles"]),
           drug = i,
           interval = rownames(x)) %>%
           dplyr::bind_rows(dplyr::tibble(
-            w = 21, N = 10000, d = 0, drug = i, interval = "Infinite"))
+            w = 21, d = 0, N = 10000, drug = i, interval = "Infinite"))
       }))
 
     valid1 = all(param$w > 0 & param$w == round(param$w))
@@ -1291,6 +1540,10 @@ server <- function(input, output, session) {
       required_columns <- c(required_columns, 'treatment')
     }
 
+    if (input$l2 > 0) {
+      required_columns <- c(required_columns, 'chemotherapy')
+    }
+
     column_names <- colnames(df)
 
     shiny::validate(
@@ -1301,6 +1554,12 @@ server <- function(input, output, session) {
         !('treatment_description' %in% column_names)) {
       df <- df %>% dplyr::mutate(
         treatment_description = paste0("Treatment ", treatment))
+    }
+
+    if ('chemotherapy' %in% column_names &&
+        !('chemotherapy_description' %in% column_names)) {
+      df <- df %>% dplyr::mutate(
+        chemotherapy_description = paste0("Chemotherapy ", chemotherapy))
     }
 
     dplyr::tibble(df) %>%
@@ -1369,8 +1628,7 @@ server <- function(input, output, session) {
       }
 
       # event model specifications
-      if (to_predict() == "Enrollment and event" ||
-          to_predict() == "Event only") {
+      if (to_predict() == "Enrollment and event") {
         model = input$event_prior
         event_prior <- list()
 
@@ -1378,7 +1636,10 @@ server <- function(input, output, session) {
           if (model == "Exponential") {
             theta = log(exponential_survival()[i])
           } else if (model == "Weibull") {
-            theta = log(weibull_survival()[,i])
+            theta = c(log(weibull_survival()[2,i]),
+                      -log(weibull_survival()[1,i]))
+          } else if (model == "Log-logistic") {
+            theta = c(llogis_survival()[1,i], log(llogis_survival()[2,i]))
           } else if (model == "Log-normal") {
             theta = c(lnorm_survival()[1,i], log(lnorm_survival()[2,i]))
           } else if (model == "Piecewise exponential") {
@@ -1529,8 +1790,7 @@ server <- function(input, output, session) {
   dosing <- reactive({
     if (predict_dosing()) {
       req(pred()$event_pred)
-      req(pred()$stage == input$stage &&
-            pred()$to_predict == to_predict())
+      req(pred()$stage == input$stage && pred()$to_predict == to_predict())
 
       if (input$stage != 'Design stage') {
         shiny::validate(
@@ -1551,16 +1811,26 @@ server <- function(input, output, session) {
       pupper = 1 - plower
 
       if (input$stage == 'Design stage') {
-
         newEvents <- pred()$event_pred$newEvents
         if (!("treatment" %in% colnames(newEvents))) {
           newEvents$treatment = 1
         }
 
+        # generate chemotherapy for each subject
+        if (l2() > 0) {
+          chemoind <- t(rmultinom(nrow(newEvents), 1,
+                                  chemotherapy_occupancy()))
+          newEvents$chemotherapy = chemoind %*% seq(1,m())
+          newEvents$chemotherapy_description =
+            chemotherapy_description()[newEvents$chemotherapy]
+        }
+
+        # calculate cumulative doses
         t = pred()$event_pred$event_pred_df$t
 
-        df1 = dplyr::tibble(t = t) %>%
-          dplyr::cross_join(newEvents)
+        df2b = dplyr::tibble(t = t) %>%
+          dplyr::cross_join(newEvents) %>%
+          dplyr::filter(arrivalTime <= t)
 
         dfb <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
@@ -1570,11 +1840,19 @@ server <- function(input, output, session) {
             N = schedule$N
             d = schedule$d
 
-            df1 %>%
-              dplyr::right_join(treatment_by_drug_df() %>%
-                                  dplyr::filter(drug == j),
-                                by = "treatment") %>%
-              dplyr::filter(arrivalTime <= t) %>%
+            if (j <= l1()) {
+              dfx <- df2b %>%
+                dplyr::inner_join(treatment_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "treatment")
+            } else {
+              dfx <- df2b %>%
+                dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "chemotherapy")
+            }
+
+            dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t, draw) %>%
               dplyr::summarise(cum_dose = sum(
                 f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
@@ -1593,6 +1871,7 @@ server <- function(input, output, session) {
           dplyr::ungroup()
 
         pred <- pred()
+        pred$event_pred$newEvents <- newEvents
         pred$event_pred$dosing_pred_df <- dosing_pred_df
         pred
       } else if (input$stage == 'Real-time before enrollment completion') {
@@ -1613,7 +1892,8 @@ server <- function(input, output, session) {
         t = unique(c(seq(0, t0, 30), t0))
 
         df1 <- dplyr::tibble(t = t) %>%
-          dplyr::cross_join(df)
+          dplyr::cross_join(df) %>%
+          dplyr::filter(arrivalTime <= t)
 
         dosing_pred_obs_df <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
@@ -1623,11 +1903,19 @@ server <- function(input, output, session) {
             N = schedule$N
             d = schedule$d
 
-            df1 %>%
-              dplyr::right_join(treatment_by_drug_df() %>%
-                                  dplyr::filter(drug == j),
-                                by = "treatment") %>%
-              dplyr::filter(arrivalTime <= t) %>%
+            if (j <= l1()) {
+              dfx <- df1 %>%
+                dplyr::inner_join(treatment_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "treatment")
+            } else {
+              dfx <- df1 %>%
+                dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "chemotherapy")
+            }
+
+            dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t) %>%
               dplyr::summarise(n = sum(
                 f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
@@ -1644,20 +1932,60 @@ server <- function(input, output, session) {
           dplyr::rename(cum_dose_t0 = n) %>%
           dplyr::select(drug, drug_name, dose_unit, cum_dose_t0)
 
-
         # predicted dosing after data cut
         newEvents <- pred()$event_pred$newEvents
         if (!("treatment" %in% colnames(newEvents))) {
           newEvents$treatment = 1
         }
 
+        # obtain chemotherapy information
+        if (l2() > 0) {
+          # obtain chemotherapy info from observed data for ongoing patients
+          ongoingSubjectsNewEvents <- newEvents %>%
+            dplyr::inner_join(df %>% dplyr::select(usubjid, chemotherapy),
+                              by = "usubjid")
+
+          # obtain number of patients taking each chemotherapy in observed data
+          s = as.numeric(table(factor(df$chemotherapy)))
+
+          # draw chemotherapy occupancy probabilities from posterior
+          p = rdirichlet(nreps(), s+1)
+
+          # simulate chemotherapy for new patients
+          n1 = target_n() - pred()$observed$n0
+          usubjidNew <- paste0("Z-", 100000 + (1:n1))
+          newSubjectsChemo <- rep(NA, nreps()*n1)
+          for (i in 1:nreps()) {
+            index = ((i-1)*n1+1):(i*n1)
+            chemoind = t(rmultinom(n1, 1, p[i,]))
+            newSubjectsChemo[index] <- chemoind %*% seq(1,m())
+          }
+
+          newSubjectsNewEvents <- newEvents %>%
+            dplyr::right_join(dplyr::tibble(draw = rep(1:nreps(), each=n1),
+                                            usubjid = rep(usubjidNew, nreps()),
+                                            chemotherapy = newSubjectsChemo),
+                              by = c("draw", "usubjid"))
+
+          # combine ongoing and new patients and add chemotherapy description
+          newEvents <- dplyr::bind_rows(ongoingSubjectsNewEvents,
+                                        newSubjectsNewEvents) %>%
+            dplyr::arrange(draw)
+
+          newEvents$chemotherapy_description =
+            chemotherapy_description()[newEvents$chemotherapy]
+        }
+
+
+        # calculate cumulative doses
         t = pred()$event_pred$event_pred_df$t
         t = unique(t[t >= t0])
 
-        df2 = dplyr::tibble(t = t) %>%
-          dplyr::cross_join(newEvents)
-
         # from ongoing subjects
+        df2a = dplyr::tibble(t = t) %>%
+          dplyr::cross_join(newEvents) %>%
+          dplyr::filter(arrivalTime <= t0 & totalTime > t0)
+
         dfa <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
             schedule <- dosing_schedule_df() %>%
@@ -1666,11 +1994,19 @@ server <- function(input, output, session) {
             N = schedule$N
             d = schedule$d
 
-            df2 %>%
-              dplyr::right_join(treatment_by_drug_df() %>%
-                                  dplyr::filter(drug == j),
-                                by = "treatment") %>%
-              dplyr::filter(arrivalTime <= t0 & totalTime > t0) %>%
+            if (j <= l1()) {
+              dfx <- df2a %>%
+                dplyr::inner_join(treatment_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "treatment")
+            } else {
+              dfx <- df2a %>%
+                dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "chemotherapy")
+            }
+
+            dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t, draw) %>%
               dplyr::summarise(cum_dose_a = sum(
                 (f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d) -
@@ -1678,7 +2014,12 @@ server <- function(input, output, session) {
                 .groups = "drop_last")
           }))
 
+
         # from new subjects
+        df2b = dplyr::tibble(t = t) %>%
+          dplyr::cross_join(newEvents) %>%
+          dplyr::filter(arrivalTime > t0 & arrivalTime <= t)
+
         dfb <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
             schedule <- dosing_schedule_df() %>%
@@ -1687,16 +2028,25 @@ server <- function(input, output, session) {
             N = schedule$N
             d = schedule$d
 
-            df2 %>%
-              dplyr::right_join(treatment_by_drug_df() %>%
-                                  dplyr::filter(drug == j),
-                                by = "treatment") %>%
-              dplyr::filter(arrivalTime > t0 & arrivalTime <= t) %>%
+            if (j <= l1()) {
+              dfx <- df2b %>%
+                dplyr::inner_join(treatment_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "treatment")
+            } else {
+              dfx <- df2b %>%
+                dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "chemotherapy")
+            }
+
+            dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t, draw) %>%
               dplyr::summarise(cum_dose_b = sum(
                 f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
                 .groups = "drop_last")
           }))
+
 
         # dose dispense for time points after data cut
         dosing_pred_new_df <- dfa %>%
@@ -1723,6 +2073,7 @@ server <- function(input, output, session) {
           dplyr::ungroup()
 
         pred <- pred()
+        pred$event_pred$newEvents <- newEvents
         pred$event_pred$dosing_pred_df <- dosing_pred_df
         pred
       } else if (input$stage == "Real-time after enrollment completion") {
@@ -1743,7 +2094,8 @@ server <- function(input, output, session) {
         t = unique(c(seq(0, t0, 30), t0))
 
         df1 <- dplyr::tibble(t = t) %>%
-          dplyr::cross_join(df)
+          dplyr::cross_join(df) %>%
+          dplyr::filter(arrivalTime <= t)
 
         dosing_pred_obs_df <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
@@ -1753,16 +2105,24 @@ server <- function(input, output, session) {
             N = schedule$N
             d = schedule$d
 
-            df1 %>%
-              dplyr::right_join(treatment_by_drug_df() %>%
-                                  dplyr::filter(drug == j),
-                                by = "treatment") %>%
-              dplyr::filter(arrivalTime <= t) %>%
+            if (j <= l1()) {
+              dfx <- df1 %>%
+                dplyr::inner_join(treatment_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "treatment")
+            } else {
+              dfx <- df1 %>%
+                dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "chemotherapy")
+            }
+
+            dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t) %>%
               dplyr::summarise(n = sum(
                 f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
                 .groups = "drop_last") %>%
-              dplyr::mutate(lower = NA, upper = NA)
+              dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0)
           })) %>%
           dplyr::bind_rows(df0) %>%
           dplyr::group_by(drug, drug_name, dose_unit, t) %>%
@@ -1780,12 +2140,21 @@ server <- function(input, output, session) {
           newEvents$treatment = 1
         }
 
-        t0 = pred()$observed$t0
+        # obtain chemotherapy info from observed data
+        if (l2() > 0) {
+          newEvents <- newEvents %>%
+            dplyr::inner_join(df %>% dplyr::select(usubjid, chemotherapy,
+                                                   chemotherapy_description),
+                              by = "usubjid")
+        }
+
+        # calculate cumulative doses
         t = pred()$event_pred$event_pred_df$t
         t = unique(t[t >= t0])
 
-        df2 = dplyr::tibble(t = t) %>%
-          dplyr::cross_join(newEvents)
+        df2a = dplyr::tibble(t = t) %>%
+          dplyr::cross_join(newEvents) %>%
+          dplyr::filter(arrivalTime <= t0 & totalTime > t0)
 
         dfa <- dplyr::bind_rows(
           lapply(1:l(), function(j) {
@@ -1795,11 +2164,19 @@ server <- function(input, output, session) {
             N = schedule$N
             d = schedule$d
 
-            df2 %>%
-              dplyr::right_join(treatment_by_drug_df() %>%
-                                  dplyr::filter(drug == j),
-                                by = "treatment") %>%
-              dplyr::filter(arrivalTime <= t0 & totalTime > t0) %>%
+            if (j <= l1()) {
+              dfx <- df2a %>%
+                dplyr::inner_join(treatment_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "treatment")
+            } else {
+              dfx <- df2a %>%
+                dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                    dplyr::filter(drug == j),
+                                  by = "chemotherapy")
+            }
+
+            dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t, draw) %>%
               dplyr::summarise(cum_dose_a = sum(
                 (f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d) -
@@ -1828,6 +2205,7 @@ server <- function(input, output, session) {
           dplyr::ungroup()
 
         pred <- pred()
+        pred$event_pred$newEvents <- newEvents
         pred$event_pred$dosing_pred_df <- dosing_pred_df
         pred
       }
@@ -2163,7 +2541,8 @@ server <- function(input, output, session) {
               fill = "tonexty", fillcolor = ~parameter,
               line = list(width=0)) %>%
             plotly::add_lines(
-              data = dfb, x = ~date, y = ~n, color = ~parameter) %>%
+              data = dfb, x = ~date, y = ~n, color = ~parameter,
+              line = list(width=2)) %>%
             plotly::add_lines(
               data = dfa, x = ~date, y = ~n, color = ~parameter,
               line = list(shape="hv", width=2)) %>%
@@ -2427,13 +2806,28 @@ server <- function(input, output, session) {
   )
 
 
+
+  lapply(1:6, function(i) {
+    pwexp <- paste0("piecewise_exponential_survival_", i)
+    observeEvent(input[[paste0("add_piecewise_exponential_survival_", i)]], {
+      a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
+      b = matrix(a[nrow(a),], nrow=1)
+      b[1,1] = b[1,1] + 1
+      c = rbind(a, b)
+      rownames(c) = paste("Interval", seq(1,nrow(c)))
+      colnames(c) = colnames(input[[pwexp]])
+      updateMatrixInput(session, pwexp, c)
+    })
+  })
+
+
   output$dosing_plot1 <- renderPlotly({
     if (predict_dosing()) {
       req(dosing()$event_pred)
       req(dosing()$stage == input$stage &&
             dosing()$to_predict == to_predict())
 
-      df <- dosing()$event_pred$dosing_pred_df
+      dosing_pred_df <- dosing()$event_pred$dosing_pred_df
 
       if (input$stage != 'Design stage') {
         shiny::validate(
@@ -2451,9 +2845,9 @@ server <- function(input, output, session) {
 
         g <- list()
         for (j in 1:l()) {
-          dfs <- dplyr::filter(df, drug == j)
-          dfa <- dplyr::filter(df, drug == j & is.na(lower))
-          dfb <- dplyr::filter(df, drug == j & !is.na(lower))
+          dfs <- dplyr::filter(dosing_pred_df, drug == j)
+          dfa <- dplyr::filter(dosing_pred_df, drug == j & is.na(lower))
+          dfb <- dplyr::filter(dosing_pred_df, drug == j & !is.na(lower))
 
           g[[j]] <- plotly::plot_ly() %>%
             plotly::add_ribbons(
@@ -2514,7 +2908,7 @@ server <- function(input, output, session) {
       } else {
         g <- list()
         for (j in 1:l()) {
-          dfs <- dplyr::filter(df, drug == j)
+          dfs <- dplyr::filter(dosing_pred_df, drug == j)
 
           g[[j]] <- plotly::plot_ly() %>%
             plotly::add_ribbons(
@@ -2668,6 +3062,14 @@ server <- function(input, output, session) {
   })
 
 
+  observeEvent(l(), {
+    lapply(1:l(), function(i) {
+      output[[paste0("label_dosing_schedule_", l(), "_", i)]] <-
+        renderText(paste("<b>Dosing schedule for", drug_name()[i], "</b>"))
+    })
+  })
+
+
   lapply(1:12, function(j) {
     lapply(1:j, function(i) {
       dosing <- paste0("dosing_schedule_", j, "_", i)
@@ -2716,6 +3118,10 @@ server <- function(input, output, session) {
         weibull_survival = matrix(
           weibull_survival(), nrow = 2,
           dimnames = list(c("Shape", "Scale"), treatment_description())),
+        llogis_survival = matrix(
+          llogis_survival(), nrow = 2,
+          dimnames = list(c("Location on log scale", "Scale on log scale"),
+                          treatment_description())),
         lnorm_survival = matrix(
           lnorm_survival(), nrow = 2,
           dimnames = list(c("Mean on log scale", "SD on log scale"),
@@ -2725,19 +3131,19 @@ server <- function(input, output, session) {
           dimnames = list(paste("Interval",
                                 1:nrow(piecewise_exponential_survival())),
                           c("Starting time", treatment_description()))),
+        chemotherapy_occupancy = matrix(
+          chemotherapy_occupancy(), ncol = 1,
+          dimnames = list(chemotherapy_description(), "Probability")),
         drug_description = matrix(
           as.character(input[[paste0("drug_description_", l())]]), ncol = 2,
-          dimnames = list(paste("Drug", 1:l()), c("Drug Name", "Dose Unit"))),
-        treatment_by_drug = matrix(
-          treatment_by_drug(), nrow = k(), ncol = l(),
-          dimnames = list(treatment_description(), drug_name())),
+          dimnames = list(NULL, c("Drug Name", "Dose Unit"))),
+        treatment_by_drug = treatment_by_drug(),
+        chemotherapy_by_drug = chemotherapy_by_drug(),
         enroll_prior = input$enroll_prior,
         poisson_rate = poisson_rate(),
         mu = mu(),
         delta = delta(),
-        piecewise_poisson_rate = matrix(
-          piecewise_poisson_rate(), ncol = 2,
-          dimnames = dimnames(piecewise_poisson_rate)),
+        piecewise_poisson_rate = piecewise_poisson_rate(),
         enroll_model = input$enroll_model,
         nknots = nknots(),
         lags = lags(),
@@ -2755,6 +3161,8 @@ server <- function(input, output, session) {
         spline_k = spline_k(),
         spline_scale = input$spline_scale,
         l = l(),
+        l2 = l2(),
+        m = m(),
         stage = input$stage,
         to_predict = input$to_predict,
         to_predict2 = input$to_predict2,
@@ -2772,15 +3180,12 @@ server <- function(input, output, session) {
 
       for (i in 1:l()) {
         a = paste0("dosing_schedule_", l(), "_", i)
-        x[[a]] = matrix(
-          as.numeric(input[[a]]), ncol = 3,
-          dimnames = dimnames(input[[a]]))
+        x[[a]] = input[[a]]
       }
 
       save(x, file = file)
     }
   )
-
 
   # load inputs
   observeEvent(input$loadInputs, {
@@ -2803,7 +3208,6 @@ server <- function(input, output, session) {
         value=x$treatment_allocation)
     }
 
-
     if (x$stage == 'Design stage' && x$event_prior == 'Exponential') {
       updateMatrixInput(
         session, paste0("exponential_survival_", x$k),
@@ -2814,6 +3218,12 @@ server <- function(input, output, session) {
       updateMatrixInput(
         session, paste0("weibull_survival_", x$k),
         value=x$weibull_survival)
+    }
+
+    if (x$stage == 'Design stage' && x$event_prior == 'Log-logistic') {
+      updateMatrixInput(
+        session, paste0("llogis_survival_", x$k),
+        value=x$llogis_survival)
     }
 
     if (x$stage == 'Design stage' && x$event_prior == 'Log-normal') {
@@ -2831,12 +3241,30 @@ server <- function(input, output, session) {
 
     if (x$predict_dosing) {
       updateSelectInput(session, "l", selected=x$l)
+      updateSelectInput(session, "l2", selected=x$l2)
+
+      if (x$l2 > 0) {
+        updateSelectInput(session, "m", selected=x$m)
+
+        if (x$stage == 'Design stage') {
+          updateMatrixInput(
+            session, paste0("chemotherapy_occupancy_", x$m),
+            value=x$chemotherapy_occupancy)
+        }
+      }
+
       updateMatrixInput(
         session, paste0("drug_description_", x$l),
         value=x$drug_description)
       updateMatrixInput(
-        session, paste0("treatment_by_drug_", x$k, "_", x$l),
+        session, paste0("treatment_by_drug_", x$k, "_", x$l - x$l2),
         value=x$treatment_by_drug)
+
+      if (x$l2 > 0) {
+        updateMatrixInput(
+          session, paste0("chemotherapy_by_drug_", x$m, "_", x$l2),
+          value=x$chemotherapy_by_drug)
+      }
 
       lapply(1:x$l, function(i) {
         a = paste0("dosing_schedule_", x$l, "_", i)
