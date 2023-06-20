@@ -1,6 +1,11 @@
 # eventPred 0.1.6
 
 - allow the use of treatment labels for by-treatment prediction
+- include usubjid in subject-level datasets
+- use the quantile method for predicted date if all simulated datatsets attain the target number of events
+- add log-logistic event and dropout model
+- change parameterization of Weibull distribution to be consistent with log-logistic and log-normal distributions
+
 
 # eventPred 0.1.5
 
