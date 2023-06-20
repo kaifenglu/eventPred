@@ -3,7 +3,7 @@
 #'   observed data and specified enrollment and event models.
 #'
 #' @param df The subject-level enrollment and event data, including
-#'   \code{trialsdt}, \code{randdt}, and \code{cutoffdt} for
+#'   \code{trialsdt}, \code{usubjid}, \code{randdt}, and \code{cutoffdt} for
 #'   enrollment prediction, and, additionally, \code{time}, \code{event},
 #'   and \code{dropout} for event prediction. The data should also include
 #'   \code{treatment} coded as 1, 2, and so on, and
@@ -30,7 +30,7 @@
 #' @param enroll_prior The prior of enrollment model parameters.
 #' @param event_model The event model used to analyze the event data
 #'   which can be set to one of the following options:
-#'   "exponential", "Weibull", "log-normal",
+#'   "exponential", "Weibull", "log-logistic", "log-normal",
 #'   "piecewise exponential", or "model averaging". The model averaging
 #'   uses the \code{exp(-bic/2)} weighting and combines Weibull and
 #'   log-normal models. By default, it is set to "model
@@ -53,8 +53,8 @@
 #' @param event_prior The prior of event model parameters.
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
-#'   "Weibull", "log-normal", or "piecewise exponential". By default,
-#'   it is set to "exponential".
+#'   "Weibull", "log-logistic", "log-normal", or "piecewise exponential".
+#'   By default, it is set to "exponential".
 #' @param piecewiseDropoutTime A vector that specifies the time
 #'   intervals for the piecewise exponential dropout distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
@@ -122,8 +122,8 @@
 #' per treatment. For each treatment, the element should include \code{w}
 #' to specify the weight of the treatment in a randomization block,
 #' \code{model} to specify the event model
-#' (exponential, weibull, log-normal, or piecewise exponential),
-#' \code{theta} and \code{vtheta} to indicate
+#' (exponential, weibull, log-logistic, log-normal,
+#' or piecewise exponential), \code{theta} and \code{vtheta} to indicate
 #' the parameter values and the covariance matrix.
 #' For the piecewise exponential event model, the list
 #' should also include \code{piecewiseSurvivalTime} to indicate
@@ -134,8 +134,8 @@
 #' per treatment. For each treatment, the element should include \code{w}
 #' to specify the weight of the treatment in a randomization block,
 #' \code{model} to specify the dropout model
-#' (exponential, weibull, log-normal, or piecewise exponential),
-#' \code{theta} and \code{vtheta} to indicate
+#' (exponential, weibull, log-logistic, log-normal,
+#' or piecewise exponential), \code{theta} and \code{vtheta} to indicate
 #' the parameter values and the covariance matrix.
 #' For the piecewise exponential dropout model, the list
 #' should also include \code{piecewiseDropoutTime} to indicate
@@ -292,9 +292,9 @@ getPrediction <- function(
 
 
   erify::check_content(tolower(event_model),
-                       c("exponential", "weibull", "log-normal",
-                         "piecewise exponential", "model averaging",
-                         "spline"))
+                       c("exponential", "weibull", "log-logistic",
+                         "log-normal", "piecewise exponential",
+                         "model averaging", "spline"))
 
   if (piecewiseSurvivalTime[1] != 0) {
     stop("piecewiseSurvivalTime must start with 0")
@@ -328,8 +328,8 @@ getPrediction <- function(
 
     for (j in 1:length(event_prior2)) {
       erify::check_content(tolower(event_prior2[[j]]$model),
-                           c("exponential", "weibull", "log-normal",
-                             "piecewise exponential"))
+                           c("exponential", "weibull", "log-logistic",
+                             "log-normal", "piecewise exponential"))
 
       model = tolower(event_prior2[[j]]$model)
       p = length(event_prior2[[j]]$theta)
@@ -344,6 +344,7 @@ getPrediction <- function(
 
       if ((model == "exponential" && p != 1) ||
           (model == "weibull" && p != 2) ||
+          (model == "log-logistic" && p != 2) ||
           (model == "log-normal" && p != 2) ||
           (model == "piecewise exponential" &&
            p != length(event_prior2[[j]]$piecewiseSurvivalTime))) {
@@ -382,8 +383,8 @@ getPrediction <- function(
   }
 
   erify::check_content(tolower(dropout_model),
-                       c("none", "exponential", "weibull", "log-normal",
-                         "piecewise exponential"))
+                       c("none", "exponential", "weibull", "log-logistic",
+                         "log-normal", "piecewise exponential"))
 
   if (piecewiseDropoutTime[1] != 0) {
     stop("piecewiseDropoutTime must start with 0")
@@ -413,8 +414,8 @@ getPrediction <- function(
 
     for (j in 1:length(dropout_prior2)) {
       erify::check_content(tolower(dropout_prior2[[j]]$model),
-                           c("exponential", "weibull", "log-normal",
-                             "piecewise exponential"))
+                           c("exponential", "weibull", "log-logistic",
+                             "log-normal", "piecewise exponential"))
 
       model = tolower(dropout_prior2[[j]]$model)
       p = length(dropout_prior2[[j]]$theta)
@@ -429,6 +430,7 @@ getPrediction <- function(
 
       if ((model == "exponential" && p != 1) ||
           (model == "weibull" && p != 2) ||
+          (model == "log-logistic" && p != 2) ||
           (model == "log-normal" && p != 2) ||
           (model == "piecewise exponential" &&
            p != length(dropout_prior2[[j]]$piecewiseDropoutTime))) {
@@ -509,7 +511,7 @@ getPrediction <- function(
       erify::check_n(target_n - observed$n0,
                      supplement = "Enrollment target reached.")
 
-      enroll_fit <- fitEnrollment(df = observed$adsl, enroll_model,
+      enroll_fit <- fitEnrollment(df = df, enroll_model,
                                   nknots, accrualTime, showplot)
       enroll_fit1 <- enroll_fit$enroll_fit
 
@@ -535,7 +537,7 @@ getPrediction <- function(
 
       # enrollment prediction at the analysis stage
       enroll_pred <- predictEnrollment(
-        df = observed$adsl, target_n, enroll_fit = enroll_fit1,
+        df = df, target_n, enroll_fit = enroll_fit1,
         lags, pilevel, nyears, nreps, showsummary, showplot = FALSE,
         by_treatment, ngroups, alloc, treatment_label)
     } else {
@@ -613,8 +615,8 @@ getPrediction <- function(
 
           # mean and variance of weibull as a function of theta
           fmweibull <- function(theta) {
-            shape = exp(theta[1])
-            scale = exp(theta[2])
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
             list(mean = scale*gamma(1+1/shape),
                  var = scale^2*(gamma(1+2/shape) - (gamma(1+1/shape))^2))
           }
@@ -638,14 +640,14 @@ getPrediction <- function(
                       sum(w*m1mean^2) - (sum(w*m1mean))^2)
 
           # solve for theta given the mean and variance for pooled
-          theta1s = sapply(theta, function(sub_list) sub_list[1])
+          theta2s = sapply(theta, function(sub_list) sub_list[2])
 
-          theta11 = uniroot(function(x)
-            lgamma(1+2/exp(x)) - 2*lgamma(1+1/exp(x)) -
+          theta12 = uniroot(function(x)
+            lgamma(1+2/exp(-x)) - 2*lgamma(1+1/exp(-x)) -
               log(m2$var/m2$mean^2 + 1),
-            c(min(theta1s) - 1, max(theta1s) + 1), extendInt = "yes")$root
+            c(min(theta2s) - 1, max(theta2s) + 1), extendInt = "yes")$root
 
-          theta12 = log(m2$mean) - lgamma(1+1/exp(theta11))
+          theta11 = log(m2$mean) - lgamma(1+1/exp(-theta12))
           theta1 = c(theta11, theta12)
 
           # gradient of theta with respect to mean and variance for pooled
@@ -660,6 +662,45 @@ getPrediction <- function(
             vtheta1 = vtheta1 + li %*% vm1i %*% t(li)
           }
           vtheta1 = ig %*% vtheta1 %*% t(ig)
+
+          event_prior1 <- list(
+            model = model, theta = theta1, vtheta = vtheta1)
+        } else if (model == "log-logistic") {
+          # since the mean and variance of log-logistic distribution
+          # may not exist, match the cdf at the weighted average of
+          # treatment-specific 97.5% percentiles and medians
+
+          fllogis <- function(theta) {
+            k = length(theta)/2
+            mus = theta[seq(1,2*k-1,2)]
+            sigmas = exp(theta[seq(2,2*k,2)])
+            t1 = sum(w*exp(mus + qlogis(0.975)*sigmas))
+            t2 = sum(w*exp(mus))
+            a1 = log(1/sum(w*plogis(-(log(t1) - mus)/sigmas)) - 1)
+            a2 = log(1/sum(w*plogis(-(log(t2) - mus)/sigmas)) - 1)
+            gamma = (a1 - a2)/(log(t1) - log(t2))
+            mu = log(t1) - 1/gamma*a1
+            c(mu, -log(gamma))
+          }
+
+          # gradient vector
+          gllogis <- function(theta) {
+            g1 = numDeriv::grad(function(theta) fllogis(theta)[1], theta)
+            g2 = numDeriv::grad(function(theta) fllogis(theta)[2], theta)
+            matrix(c(g1, g2), nrow=2, byrow=TRUE)
+          }
+
+          # concatenating treatment-specific model parameters
+          theta = lapply(event_prior, function(sub_list) sub_list$theta)
+
+          # parameter and variance for the overall population
+          theta1 = fllogis(theta)
+          g = gllogis(theta)
+          vtheta1 = 0
+          for (i in 1:m) {
+            gi = g[,(2*i-1):(2*i)]
+            vtheta1 = vtheta1 + gi * event_prior[[i]]$vtheta * t(gi)
+          }
 
           event_prior1 <- list(
             model = model, theta = theta1, vtheta = vtheta1)
@@ -743,7 +784,7 @@ getPrediction <- function(
       # fit the event model
       if ((!by_treatment && observed$d0 > 0) ||
           (by_treatment && all(sum_by_trt$d0 > 0))) {
-        event_fit <- fitEvent(df = observed$adtte, event_model,
+        event_fit <- fitEvent(df = df, event_model,
                               piecewiseSurvivalTime, k, scale, showplot,
                               by_treatment)
         event_fit1 <- event_fit$event_fit
@@ -871,18 +912,16 @@ getPrediction <- function(
 
             # mean and variance of weibull as a function of theta
             fmweibull <- function(theta) {
-              shape = exp(theta[1])
-              scale = exp(theta[2])
+              shape = exp(-theta[2])
+              scale = exp(theta[1])
               list(mean = scale*gamma(1+1/shape),
                    var = scale^2*(gamma(1+2/shape) - (gamma(1+1/shape))^2))
             }
 
             # gradient vector
             gmweibull <- function(theta) {
-              g1 = numDeriv::grad(function(theta) fmweibull(theta)$mean,
-                                  theta)
-              g2 = numDeriv::grad(function(theta) fmweibull(theta)$var,
-                                  theta)
+              g1 = numDeriv::grad(function(theta) fmweibull(theta)$mean, theta)
+              g2 = numDeriv::grad(function(theta) fmweibull(theta)$var, theta)
               matrix(c(g1, g2), nrow=2, byrow=TRUE)
             }
 
@@ -898,14 +937,14 @@ getPrediction <- function(
                         sum(w*m1mean^2) - (sum(w*m1mean))^2)
 
             # solve for theta given the mean and variance for pooled
-            theta1s = sapply(theta, function(sub_list) sub_list[1])
+            theta2s = sapply(theta, function(sub_list) sub_list[2])
 
-            theta11 = uniroot(function(x)
-              lgamma(1+2/exp(x)) - 2*lgamma(1+1/exp(x)) -
+            theta12 = uniroot(function(x)
+              lgamma(1+2/exp(-x)) - 2*lgamma(1+1/exp(-x)) -
                 log(m2$var/m2$mean^2 + 1),
-              c(min(theta1s) - 1, max(theta1s) + 1), extendInt = "yes")$root
+              c(min(theta2s) - 1, max(theta2s) + 1), extendInt = "yes")$root
 
-            theta12 = log(m2$mean) - lgamma(1+1/exp(theta11))
+            theta11 = log(m2$mean) - lgamma(1+1/exp(-theta12))
             theta1 = c(theta11, theta12)
 
             # gradient of theta with respect to mean and variance for pooled
@@ -916,10 +955,49 @@ getPrediction <- function(
             for (i in 1:m) {
               gi = gmweibull(dropout_prior[[i]]$theta)
               vm1i = gi * dropout_prior[[i]]$vtheta * t(gi)
-              li = w[i]*matrix(c(1, 2*(m1[[i]]$mean-m2$mean), 0, 1), ncol=2)
+              li = w[i]*matrix(c(1, 2*(m1[[i]]$mean - m2$mean), 0, 1), ncol=2)
               vtheta1 = vtheta1 + li %*% vm1i %*% t(li)
             }
             vtheta1 = ig %*% vtheta1 %*% t(ig)
+
+            dropout_prior1 <- list(
+              model = model, theta = theta1, vtheta = vtheta1)
+          } else if (model == "log-logistic") {
+            # since the mean and variance of log-logistic distribution
+            # may not exist, match the cdf at the weighted average of
+            # treatment-specific 97.5% percentiles and medians
+
+            fllogis <- function(theta) {
+              k = length(theta)/2
+              mus = theta[seq(1,2*k-1,2)]
+              sigmas = exp(theta[seq(2,2*k,2)])
+              t1 = sum(w*exp(mus + qlogis(0.975)*sigmas))
+              t2 = sum(w*exp(mus))
+              a1 = log(1/sum(w*plogis(-(log(t1) - mus)/sigmas)) - 1)
+              a2 = log(1/sum(w*plogis(-(log(t2) - mus)/sigmas)) - 1)
+              gamma = (a1 - a2)/(log(t1) - log(t2))
+              mu = log(t1) - 1/gamma*a1
+              c(mu, -log(gamma))
+            }
+
+            # gradient vector
+            gllogis <- function(theta) {
+              g1 = numDeriv::grad(function(theta) fllogis(theta)[1], theta)
+              g2 = numDeriv::grad(function(theta) fllogis(theta)[2], theta)
+              matrix(c(g1, g2), nrow=2, byrow=TRUE)
+            }
+
+            # concatenating treatment-specific model parameters
+            theta = lapply(dropout_prior, function(sub_list) sub_list$theta)
+
+            # parameter and variance for the overall population
+            theta1 = fllogis(theta)
+            g = gllogis(theta)
+            vtheta1 = 0
+            for (i in 1:m) {
+              gi = g[,(2*i-1):(2*i)]
+              vtheta1 = vtheta1 + gi * dropout_prior[[i]]$vtheta * t(gi)
+            }
 
             dropout_prior1 <- list(
               model = model, theta = theta1, vtheta = vtheta1)
@@ -965,7 +1043,7 @@ getPrediction <- function(
             for (i in 1:m) {
               gi = gmlnorm(dropout_prior[[i]]$theta)
               vm1i = gi * dropout_prior[[i]]$vtheta * t(gi)
-              li = w[i]*matrix(c(1, 2*(m1[[i]]$mean-m2$mean), 0, 1), ncol=2)
+              li = w[i]*matrix(c(1, 2*(m1[[i]]$mean - m2$mean), 0, 1), ncol=2)
               vtheta1 = vtheta1 + li %*% vm1i %*% t(li)
             }
             vtheta1 = ig %*% vtheta1 %*% t(ig)
@@ -1004,7 +1082,7 @@ getPrediction <- function(
         # fit the dropout model
         if ((!by_treatment && observed$c0 > 0) ||
             (by_treatment && all(sum_by_trt$c0 > 0))) {
-          dropout_fit <- fitDropout(df = observed$adtte, dropout_model,
+          dropout_fit <- fitDropout(df = df, dropout_model,
                                     piecewiseDropoutTime, showplot,
                                     by_treatment)
           dropout_fit1 <- dropout_fit$dropout_fit
@@ -1086,7 +1164,7 @@ getPrediction <- function(
 
         if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
           event_pred <- predictEvent(
-            df = observed$adtte, target_d,
+            df = df, target_d,
             newSubjects = enroll_pred$newSubjects,
             event_fit = event_fit1,
             dropout_fit = dropout_fit1,
@@ -1095,7 +1173,7 @@ getPrediction <- function(
             showsummary, showplot = FALSE, by_treatment)
         } else {
           event_pred <- predictEvent(
-            df = observed$adtte, target_d,
+            df = df, target_d,
             newSubjects = NULL,
             event_fit = event_fit1,
             dropout_fit = dropout_fit1,
@@ -1106,7 +1184,7 @@ getPrediction <- function(
       } else {  # no dropout model
         if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
           event_pred <- predictEvent(
-            df = observed$adtte, target_d,
+            df = df, target_d,
             newSubjects = enroll_pred$newSubjects,
             event_fit = event_fit1,
             dropout_fit = NULL,
@@ -1115,7 +1193,7 @@ getPrediction <- function(
             showsummary, showplot = FALSE, by_treatment)
         } else {
           event_pred <- predictEvent(
-            df = observed$adtte, target_d,
+            df = df, target_d,
             newSubjects = NULL,
             event_fit = event_fit1,
             dropout_fit = NULL,
