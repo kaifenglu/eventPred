@@ -27,3 +27,5 @@ Imports:
 Depends: 
     R (>= 3.5.0)
 LazyData: true
+URL: https://github.com/kaifenglu/eventPred
+BugReports: https://github.com/kaifenglu/eventPred/issues
