@@ -7,8 +7,8 @@
 #'   for fitting the dropout model by treatment.
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
-#'   "Weibull", "log-normal", or "piecewise exponential". By default,
-#'   it is set to "exponential".
+#'   "Weibull", "log-logistic", "log-normal", or "piecewise exponential".
+#'   By default, it is set to "exponential".
 #' @param piecewiseDropoutTime A vector that specifies the time
 #'   intervals for the piecewise exponential dropout distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
@@ -47,8 +47,8 @@ fitDropout <- function(df, dropout_model = "exponential",
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(dropout_model),
-                       c("exponential", "weibull", "log-normal",
-                         "piecewise exponential"))
+                       c("exponential", "weibull", "log-logistic",
+                         "log-normal", "piecewise exponential"))
 
   if (piecewiseDropoutTime[1] != 0) {
     stop("piecewiseDropoutTime must start with 0");
@@ -116,21 +116,37 @@ fitDropout <- function(df, dropout_model = "exponential",
       reg <- survival::survreg(survival::Surv(time, dropout) ~ 1,
                                data = df1, dist = "weibull")
 
-      # Note: weibull$shape = 1/reg$scale,
-      #       weibull$scale = exp(reg$coefficients)
-      # we define theta = c(log(weibull$shape), log(weibull$scale))
-      # reg$var is for c(reg$coefficients, log(reg$scale))
-      lmat <- matrix(c(0, -1, 1, 0), nrow=2, ncol=2, byrow=TRUE)
+      # weibull$shape = 1/reg$scale, weibull$scale = exp(reg$coefficients)
+      # we define theta = c(log(weibull$scale), -log(weibull$shape))
+      # reg$var is for theta = c(reg$coefficients, log(reg$scale))
       fit3 <- list(model = "Weibull",
-                   theta = c(log(1/reg$scale), as.numeric(reg$coefficients)),
-                   vtheta = lmat %*% reg$var %*% t(lmat),
+                   theta = c(as.numeric(reg$coefficients), log(reg$scale)),
+                   vtheta = reg$var,
                    bic = -2*reg$loglik[1] + 2*log(n0))
 
       # fitted survival curve
       dffit3 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
-        surv = pweibull(.data$time, shape = exp(fit3$theta[1]),
-                        scale = exp(fit3$theta[2]), lower.tail = FALSE))
+        surv = pweibull(.data$time, shape = exp(-fit3$theta[2]),
+                        scale = exp(fit3$theta[1]), lower.tail = FALSE))
+    } else if (tolower(dropout_model) == "log-logistic") {
+      # S(t) = 1/(1 + (t/lambda)^kappa)
+      reg <- survival::survreg(survival::Surv(time, dropout) ~ 1,
+                               data = df1, dist = "loglogistic")
+
+      # llogis$shape = 1/reg$scale, llogis$scale = exp(reg$coefficients)
+      # we define theta = (log(llogis$scale), -log(llogis$shape))
+      # reg$var is for theta = c(reg$coefficients, log(reg$scale))
+      fit3 <- list(model = "Log-logistic",
+                   theta = c(as.numeric(reg$coefficients), log(reg$scale)),
+                   vtheta = reg$var,
+                   bic = -2*reg$loglik[1] + 2*log(n0))
+
+      # fitted survival curve
+      dffit3 <- dplyr::tibble(
+        time = seq(0, max(df1$time)),
+        surv = plogis(log(.data$time), location = fit3$theta[1],
+                      scale = exp(fit3$theta[2]), lower.tail = FALSE))
     } else if (tolower(dropout_model) == "log-normal") {
       # S(t) = 1 - Phi((log(t) - meanlog)/sdlog)
       reg <- survival::survreg(survival::Surv(time, dropout) ~ 1,
