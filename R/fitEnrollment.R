@@ -26,7 +26,8 @@
 #' @return
 #' A list of results from the model fit including key information
 #' such as the enrollment model, \code{model}, the estimated model
-#' parameters, \code{theta}, the covariance matrix, \code{vtheta}, and
+#' parameters, \code{theta}, the covariance matrix, \code{vtheta},
+#' the Akaike Information Criterion, \code{aic}, and
 #' the Bayesian Information Criterion, \code{bic}, as well as
 #' the design matrix \code{x} for the B-spline enrollment model, and
 #' \code{accrualTime} for the piecewise Poisson enrollment model.
@@ -106,6 +107,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     fit1 <- list(model = 'Poisson',
                  theta = log(n0/t0),
                  vtheta = 1/n0,
+                 aic = -2*(-n0 + n0*log(n0/t0)) + 2,
                  bic = -2*(-n0 + n0*log(n0/t0)) + log(n0))
 
     dffit1 <- dplyr::tibble(
@@ -140,6 +142,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
                  theta = opt1$par,
                  vtheta = solve(-optimHess(opt1$par, llik_td, gr = NULL,
                                            t = t0, df = df1)),
+                 aic = -2*opt1$value + 4,
                  bic = -2*opt1$value + 2*log(n0))
 
     dffit1 <- dplyr::tibble(
@@ -172,6 +175,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
                  theta = opt1$par,
                  vtheta = solve(-optimHess(opt1$par, llik_bs, gr = NULL,
                                            n = n, x = x)),
+                 aic = -2*opt1$value + 2*(K+4),
                  bic = -2*opt1$value + (K+4)*log(n0),
                  x = x)
 
@@ -208,6 +212,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     fit1 <- list(model = 'Piecewise Poisson',
                  theta = log(n/t),
                  vtheta = vtheta,
+                 aic = -2*sum(-n + n*log(n/t)) + 2*length(u),
                  bic = -2*sum(-n + n*log(n/t)) + length(u)*log(n0),
                  accrualTime = u)
 
@@ -223,6 +228,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   }
 
 
+  aictext = paste("AIC:", round(fit1$aic,2))
   bictext = paste("BIC:", round(fit1$bic,2))
 
   # plot the enrollment curve
@@ -235,8 +241,10 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
       yaxis = list(title = "Subjects", zeroline = FALSE),
       title = list(text = "Fitted enrollment curve"),
       annotations = list(
-        x = c(0.05, 0.05), y = c(0.95, 0.85), xref = "paper", yref = "paper",
-        text = paste('<i>', c(fit1$model, bictext), '</i>'), xanchor = "left",
+        x = c(0.05, 0.05, 0.05), y = c(0.95, 0.80, 0.65),
+        xref = "paper", yref = "paper",
+        text = paste('<i>', c(fit1$model, aictext, bictext), '</i>'),
+        xanchor = "left",
         font = list(size = 14, color = "red"), showarrow = FALSE)) %>%
     plotly::hide_legend()
 
