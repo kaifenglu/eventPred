@@ -799,10 +799,12 @@ getPrediction <- function(
         # inflate the variance
         if (!by_treatment) {
           event_fit1$vtheta <- event_prior1$vtheta*1e8
+          event_fit1$aic <- NA
           event_fit1$bic <- NA
         } else {
           for (i in 1:ngroups) {
             event_fit1[[i]]$vtheta <- event_prior1[[i]]$vtheta*1e8
+            event_fit1[[i]]$aic <- NA
             event_fit1[[i]]$bic <- NA
           }
         }
@@ -1097,10 +1099,12 @@ getPrediction <- function(
           # inflate the variance
           if (!by_treatment) {
             dropout_fit1$vtheta <- dropout_prior1$vtheta*1e8
+            dropout_fit1$aic <- NA
             dropout_fit1$bic <- NA
           } else {
             for (i in 1:ngroups) {
               dropout_fit1[[i]]$vtheta <- dropout_prior1[[i]]$vtheta*1e8
+              dropout_fit1[[i]]$aic <- NA
               dropout_fit1[[i]]$bic <- NA
             }
           }
