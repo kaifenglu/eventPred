@@ -44,7 +44,8 @@
 #' drawn from the posterior distribution. Time-to-dropout can be
 #' generated in a similar fashion.
 #'
-#' The \code{eventPred} package displays the Bayesian Information
+#' The \code{eventPred} package displays the Akaike Information
+#' Criterion (AIC), the Bayesian Information
 #' Criterion (BIC) and a fitted curve overlaid with observed data
 #' to help users select the most appropriate model for enrollment
 #' and event prediction. Prediction intervals in the prediction plot
