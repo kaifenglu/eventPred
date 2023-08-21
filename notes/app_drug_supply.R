@@ -145,7 +145,13 @@ f_drug_description <- function(j) {
 
     shinyMatrix::matrixInput(
       paste0("drug_description_", j),
-      label = "Drug names and dose units",
+      label = tags$span(
+        "Drug names and dose units",
+        tags$span(icon(name = "question-circle")) %>%
+          add_prompt(message = paste(
+            "enter drugs determined by treatment arms",
+            "followed by optional chemotherapy drugs if any"),
+                     position = "right")),
       value = matrix(c(paste("Drug", seq_len(j)), rep("mg", j)),
                      nrow = j, ncol = 2,
                      dimnames = list(NULL, c("Drug Name", "Dose Unit"))),
@@ -181,7 +187,13 @@ f_chemotherapy_occupancy <- function(i) {
 
     shinyMatrix::matrixInput(
       paste0("chemotherapy_occupancy_", i),
-      label = "Chemotherapy occupancy",
+      label = tags$span(
+        "Chemotherapy occupancy",
+        tags$span(icon(name = "question-circle")) %>%
+          add_prompt(message = paste(
+            "no need to enter the probability for the last chemotherapy",
+            "as it will be calculated automatically"),
+            position = "left")),
       value = matrix(rep(1/i,i), ncol = 1,
                      dimnames = list(paste("Chemotherapy", 1:i),
                                      "Probability")),
@@ -506,36 +518,42 @@ dosingPanel <- tabPanel(
   title = "Dosing Model",
   value = "dosing_model_panel",
 
-  fluidRow(
-    column(6, selectInput(
-      "l", label = "Total number of drugs",
-      choices = seq_len(12), selected = 2)),
-
-    column(6, lapply(1:12, f_drug_description))),
-
-  lapply(1:12, f_dosing_schedule),
+  selectInput(
+    "l", label = "Total number of drugs",
+    choices = seq_len(12), selected = 2),
 
   fluidRow(
     column(6, selectInput(
-      "l2", label = "Number of optional chemotherapy drugs",
-      choices = c(0, seq(2,6)), selected = 0),
+      "l2",
+      label = tags$span(
+        "Number of optional chemotherapy drugs",
+        tags$span(icon(name = "question-circle")) %>%
+          add_prompt(message = paste(
+            "must be less than the total number of drugs",
+            "and will be reset to 0 otherwise"),
+            position = "right")),
+      choices = c(0, 2:6), selected = 0),
 
-    conditionalPanel(
-      condition = "input.l2 > 0",
-      selectInput(
-        "m", label = "Number of optional chemotherapies",
-        choices = c(2:6), selected = 2))),
+      conditionalPanel(
+        condition = "input.l2 > 0",
+        selectInput(
+          "m", label = "Number of optional chemotherapies",
+          choices = 2:6, selected = 2))),
 
     column(6, conditionalPanel(
       condition = "input.l2 > 0",
       lapply(2:6, f_chemotherapy_occupancy)
-      ))),
+    ))),
+
+  lapply(1:12, f_drug_description),
 
   lapply(c(outer(1:6, 1:12, function(i,j) 1000*i+j)),
          function(k) f_treatment_by_drug(k %/% 1000, k %% 1000)),
 
-  lapply(c(outer(1:6, 1:6, function(i,j) 1000*i+j)),
-         function(k) f_chemotherapy_by_drug(k %/% 1000, k %% 1000))
+  lapply(c(outer(1:6, 1:12, function(i,j) 1000*i+j)),
+         function(k) f_chemotherapy_by_drug(k %/% 1000, k %% 1000)),
+
+  lapply(1:12, f_dosing_schedule)
 )
 
 
@@ -822,9 +840,6 @@ server <- function(input, output, session) {
   # whether to allow the user to specify the number of treatments
   observeEvent(input$stage, {
     shinyjs::toggleState("k", input$stage == "Design stage")
-    if (input$l2 > 0) {
-      shinyjs::toggleState("m", input$stage == "Design stage")
-    }
   })
 
 
@@ -1002,125 +1017,6 @@ server <- function(input, output, session) {
       a = "Overall"
     }
     a
-  })
-
-
-  m <- reactive({
-    req(l2())
-    if (l2() > 0) {
-      if (input$stage != "Design stage" && !is.null(df())) {
-        m = length(table(df()$chemotherapy))
-        updateSelectInput(session, "m", selected=m)
-      } else {
-        m = as.numeric(input$m)
-      }
-    } else {
-      m = 1
-    }
-    m
-  })
-
-
-  chemotherapy_occupancy <- reactive({
-    req(m())
-    if (m() > 1 && input$stage == "Design stage") {
-      d = input[[paste0("chemotherapy_occupancy_", m())]]
-      d <- as.numeric(d)
-
-      valid = all(d > 0)
-      if (!valid) {
-        showNotification("Chemotherapy occupancy must be positive")
-      }
-
-      req(valid)
-      d/sum(d)
-    } else if (m() > 1 && !is.null(df())) {
-      d = as.numeric(table(df()$chemotherapy))
-      d/sum(d)
-    } else if (m() > 1) {
-      rep(1/m(), m())
-    } else {
-      0
-    }
-  })
-
-
-  chemotherapy_description <- reactive({
-    if (l2() > 0) {
-      if (input$stage != "Design stage" && !is.null(df())) {
-        chemotherapy_mapping <- df() %>%
-          dplyr::select(chemotherapy, chemotherapy_description) %>%
-          dplyr::arrange(chemotherapy, chemotherapy_description) %>%
-          dplyr::group_by(chemotherapy, chemotherapy_description) %>%
-          dplyr::slice(dplyr::n())
-        chemotherapy_mapping$chemotherapy_description
-      } else if (input$stage != "Design stage" && is.null(df())) {
-        paste("Chemotherapy", 1:m())
-      } else if (input$stage == "Design stage") {
-        rownames(input[[paste0("chemotherapy_occupancy_", m())]])
-      }
-    } else {
-      "None"
-    }
-  })
-
-
-  observeEvent(treatment_description(), {
-    if (input$stage == "Design stage") {
-      updateMatrixInput(
-        session, paste0("exponential_survival_", k()),
-        value=matrix(exponential_survival(), ncol=k(),
-                     dimnames = list(NULL, treatment_description())))
-      updateMatrixInput(
-        session, paste0("weibull_survival_", k()),
-        value=matrix(weibull_survival(), nrow=2, ncol=k(),
-                     dimnames = list(c("Shape", "Scale"),
-                                     treatment_description())))
-      updateMatrixInput(
-        session, paste0("llogis_survival_", k()),
-        value=matrix(llogis_survival(), nrow=2, ncol=k(),
-                     dimnames = list(c("Location on log scale",
-                                       "Scale on log scale"),
-                                     treatment_description())))
-      updateMatrixInput(
-        session, paste0("lnorm_survival_", k()),
-        value=matrix(lnorm_survival(), nrow=2, ncol=k(),
-                     dimnames = list(c("Mean on log scale",
-                                       "SD on log scale"),
-                                     treatment_description())))
-
-      npieces = nrow(piecewise_exponential_survival())
-      updateMatrixInput(
-        session, paste0("piecewise_exponential_survival_", k()),
-        value=matrix(piecewise_exponential_survival(),
-                     nrow=npieces, ncol=k()+1,
-                     dimnames = list(
-                       paste("Interval", seq_len(npieces)),
-                       c("Starting time", treatment_description()))))
-    } else if (input$by_treatment && !is.null(df())) {
-      updateMatrixInput(
-        session, paste0("treatment_allocation_", k()),
-        value=matrix(treatment_allocation(), ncol = 1,
-                     dimnames = list(treatment_description(), "Size")))
-    }
-  })
-
-
-  observeEvent(list(treatment_description(), drug_name()), {
-    updateMatrixInput(
-      session, paste0("treatment_by_drug_", k(), "_", l1()),
-      value=matrix(treatment_by_drug(), ncol = l1(),
-                   dimnames = dimnames(treatment_by_drug())))
-  })
-
-
-  observeEvent(list(chemotherapy_description(), drug_name()), {
-    if (l2() > 0) {
-      updateMatrixInput(
-        session, paste0("chemotherapy_by_drug_", m(), "_", l2()),
-        value=matrix(chemotherapy_by_drug(), ncol = l2(),
-                     dimnames = dimnames(chemotherapy_by_drug())))
-    }
   })
 
 
@@ -1355,20 +1251,49 @@ server <- function(input, output, session) {
   })
 
 
-  l <- reactive(as.numeric(input$l))
+  observeEvent(treatment_description(), {
+    if (input$stage == "Design stage") {
+      updateMatrixInput(
+        session, paste0("exponential_survival_", k()),
+        value=matrix(exponential_survival(), ncol=k(),
+                     dimnames = list(NULL, treatment_description())))
+      updateMatrixInput(
+        session, paste0("weibull_survival_", k()),
+        value=matrix(weibull_survival(), nrow=2, ncol=k(),
+                     dimnames = list(c("Shape", "Scale"),
+                                     treatment_description())))
+      updateMatrixInput(
+        session, paste0("llogis_survival_", k()),
+        value=matrix(llogis_survival(), nrow=2, ncol=k(),
+                     dimnames = list(c("Location on log scale",
+                                       "Scale on log scale"),
+                                     treatment_description())))
+      updateMatrixInput(
+        session, paste0("lnorm_survival_", k()),
+        value=matrix(lnorm_survival(), nrow=2, ncol=k(),
+                     dimnames = list(c("Mean on log scale",
+                                       "SD on log scale"),
+                                     treatment_description())))
 
-  observeEvent(list(input$l, input$l2), {
-    if (input$l <= input$l2) {
-      updateSelectInput(session, "l2", selected=0)
+      npieces = nrow(piecewise_exponential_survival())
+      updateMatrixInput(
+        session, paste0("piecewise_exponential_survival_", k()),
+        value=matrix(piecewise_exponential_survival(),
+                     nrow=npieces, ncol=k()+1,
+                     dimnames = list(
+                       paste("Interval", seq_len(npieces)),
+                       c("Starting time", treatment_description()))))
+    } else if (input$by_treatment && !is.null(df())) {
+      updateMatrixInput(
+        session, paste0("treatment_allocation_", k()),
+        value=matrix(treatment_allocation(), ncol = 1,
+                     dimnames = list(treatment_description(), "Size")))
     }
   })
 
-  l2 <- reactive({
-    l2 = as.numeric(input$l2)
-    ifelse(l2 >= l(), 0, l2)
-  })
 
-  l1 <- reactive(l() - l2())
+
+  l <- reactive(as.numeric(input$l))
 
 
   drug_name <- reactive({
@@ -1383,6 +1308,163 @@ server <- function(input, output, session) {
     param = input[[paste0("drug_description_", l())]]
     as.character(param[,2])
   })
+
+
+  dosing_schedule_df <- reactive({
+    req(l())
+
+    param <- dplyr::bind_rows(
+      lapply(1:l(), function(i) {
+        x <- input[[paste0("dosing_schedule_", l(), "_", i)]]
+        dplyr::tibble(
+          w = as.numeric(x[, "Days per Cycle"]),
+          d = as.numeric(x[, "Dose per Cycle"]),
+          N = as.numeric(x[, "Number of Cycles"]),
+          drug = i,
+          interval = rownames(x)) %>%
+          dplyr::bind_rows(dplyr::tibble(
+            w = 21, d = 0, N = 10000, drug = i, interval = "Infinite"))
+      }))
+
+    valid1 = all(param$w > 0 & param$w == round(param$w))
+    if (!valid1) {
+      showNotification("Days per Cycle must be positive integers")
+    }
+
+    valid2 = all(param$N > 0 & param$N == round(param$N))
+    if (!valid2) {
+      showNotification("Number of Cycles must be positive integers")
+    }
+
+    valid3 = all(param$d >= 0)
+    if (!valid3) {
+      showNotification("Doses must be nonnegative")
+    }
+
+    req(valid1 && valid2 && valid3)
+
+    param
+  })
+
+
+  observeEvent(list(input$l, input$l2), {
+    if (as.numeric(input$l) <= as.numeric(input$l2)) {
+      updateSelectInput(session, "l2", selected = 0)
+    }
+  })
+
+
+  l2 <- reactive({
+    l2 = as.numeric(input$l2)
+    ifelse(l2 >= l(), 0, l2)
+  })
+
+
+  l1 <- reactive(l() - l2())
+
+
+  m <- reactive({
+    req(l2())
+    if (l2() > 0) {
+      if (input$stage != "Design stage" && !is.null(df())) {
+        m = length(table(df()$chemotherapy))
+        updateSelectInput(session, "m", selected=m)
+      } else {
+        m = as.numeric(input$m)
+      }
+    } else {
+      m = 1
+    }
+    m
+  })
+
+
+  chemotherapy_occupancy <- reactive({
+    req(m())
+    if (m() > 1 && input$stage == "Design stage") {
+      d = input[[paste0("chemotherapy_occupancy_", m())]]
+      d <- as.numeric(d)
+
+      valid = all(d > 0) && (sum(d[-m()]) < 1)
+      if (!valid) {
+        showNotification(paste("Chemotherapy occupancy probabilities must be",
+                               "positive and sum to 1"))
+      }
+
+      req(valid)
+      d
+    } else if (m() > 1 && !is.null(df())) {
+      d = as.numeric(table(df()$chemotherapy))
+      d/sum(d)
+    } else if (m() > 1) {
+      rep(1/m(), m())
+    } else {
+      0
+    }
+  })
+
+
+  observeEvent(chemotherapy_occupancy(), {
+    req(m())
+    if (m() > 1 && input$stage == "Design stage") {
+      a <- paste0("chemotherapy_occupancy_", m())
+      prevValues <- as.numeric(input[[a]][-m()])
+      lastValue <- 1 - sum(prevValues)
+      b = matrix(c(prevValues, lastValue), nrow = m(), ncol = 1,
+                 dimnames = dimnames(input[[a]]))
+      updateMatrixInput(session, a, value=b)
+    }
+  })
+
+
+  chemotherapy_description <- reactive({
+    if (l2() > 0) {
+      if (input$stage != "Design stage" && !is.null(df())) {
+        chemotherapy_mapping <- df() %>%
+          dplyr::select(chemotherapy, chemotherapy_description) %>%
+          dplyr::arrange(chemotherapy, chemotherapy_description) %>%
+          dplyr::group_by(chemotherapy, chemotherapy_description) %>%
+          dplyr::slice(dplyr::n())
+        chemotherapy_mapping$chemotherapy_description
+      } else if (input$stage != "Design stage" && is.null(df())) {
+        paste("Chemotherapy", 1:m())
+      } else if (input$stage == "Design stage") {
+        rownames(input[[paste0("chemotherapy_occupancy_", m())]])
+      }
+    } else {
+      "None"
+    }
+  })
+
+
+
+  observeEvent(list(treatment_description(), drug_name(), k(), l1()), {
+    updateMatrixInput(
+      session, paste0("treatment_by_drug_", k(), "_", l1()),
+      value=matrix(treatment_by_drug(), ncol = l1(),
+                   dimnames = dimnames(treatment_by_drug())))
+  })
+
+
+  observeEvent(list(chemotherapy_description(), drug_name(), m(), l2()), {
+    if (l2() > 0) {
+      updateMatrixInput(
+        session, paste0("chemotherapy_by_drug_", m(), "_", l2()),
+        value=matrix(chemotherapy_by_drug(), ncol = l2(),
+                     dimnames = dimnames(chemotherapy_by_drug())))
+    }
+  })
+
+
+
+
+  # whether to allow the user to specify the number of chemotherapies
+  observeEvent(input$stage, {
+    if (input$l2 > 0) {
+      shinyjs::toggleState("m", input$stage == "Design stage")
+    }
+  })
+
 
 
   treatment_by_drug <- reactive({
@@ -1477,42 +1559,6 @@ server <- function(input, output, session) {
     }
   })
 
-
-  dosing_schedule_df <- reactive({
-    req(l())
-
-    param <- dplyr::bind_rows(
-      lapply(1:l(), function(i) {
-        x <- input[[paste0("dosing_schedule_", l(), "_", i)]]
-        dplyr::tibble(
-          w = as.numeric(x[, "Days per Cycle"]),
-          d = as.numeric(x[, "Dose per Cycle"]),
-          N = as.numeric(x[, "Number of Cycles"]),
-          drug = i,
-          interval = rownames(x)) %>%
-          dplyr::bind_rows(dplyr::tibble(
-            w = 21, d = 0, N = 10000, drug = i, interval = "Infinite"))
-      }))
-
-    valid1 = all(param$w > 0 & param$w == round(param$w))
-    if (!valid1) {
-      showNotification("Days per Cycle must be positive integers")
-    }
-
-    valid2 = all(param$N > 0 & param$N == round(param$N))
-    if (!valid2) {
-      showNotification("Number of Cycles must be positive integers")
-    }
-
-    valid3 = all(param$d >= 0)
-    if (!valid3) {
-      showNotification("Doses must be nonnegative")
-    }
-
-    req(valid1 && valid2 && valid3)
-
-    param
-  })
 
 
   # input data set
