@@ -23,7 +23,8 @@
 #' @return A list of results from the model fit including key information
 #'   such as the dropout model, \code{model}, the estimated model parameters,
 #'   \code{theta}, the covariance matrix, \code{vtheta}, as well as the
-#'   Bayesian Information Criterion, \code{bic}.
+#'   Akaike Information Criterion, \code{aic},
+#'   and Bayesian Information Criterion, \code{bic}.
 #'
 #'   If the piecewise exponential model is used, the location
 #'   of knots used in the model, \code{piecewiseDropoutTime}, will
@@ -102,6 +103,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       fit3 <- list(model = 'Exponential',
                    theta = log(c0/ex0),
                    vtheta = 1/c0,
+                   aic = -2*(-c0 + c0*log(c0/ex0)) + 2,
                    bic = -2*(-c0 + c0*log(c0/ex0)) + log(n0))
 
       # fitted survival curve
@@ -122,6 +124,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       fit3 <- list(model = "Weibull",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
+                   aic = -2*reg$loglik[1] + 4,
                    bic = -2*reg$loglik[1] + 2*log(n0))
 
       # fitted survival curve
@@ -140,6 +143,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       fit3 <- list(model = "Log-logistic",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
+                   aic = -2*reg$loglik[1] + 4,
                    bic = -2*reg$loglik[1] + 2*log(n0))
 
       # fitted survival curve
@@ -157,6 +161,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       fit3 <- list(model = "Log-normal",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
+                   aic = -2*reg$loglik[1] + 4,
                    bic = -2*reg$loglik[1] + 2*log(n0))
 
       # fitted survival curve
@@ -189,6 +194,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       fit3 <- list(model = "Piecewise exponential",
                    theta = log(d/ex),
                    vtheta = vtheta,
+                   aic = -2*sum(-d + d*log(d/ex)) + 2*J,
                    bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
                    piecewiseDropoutTime = u)
 
@@ -209,6 +215,7 @@ fitDropout <- function(df, dropout_model = "exponential",
     }
 
 
+    aictext = paste("AIC:", round(fit3$aic,2))
     bictext = paste("BIC:", round(fit3$bic,2))
 
     # plot the survival curve
@@ -223,8 +230,9 @@ fitDropout <- function(df, dropout_model = "exponential",
         yaxis = list(title = "Survival probability", zeroline = FALSE),
         title = list(text = "Fitted time to dropout survival curve"),
         annotations = list(
-          x = c(0.75, 0.75), y = c(0.95, 0.85), xref = "paper",
-          yref = "paper", text = paste('<i>', c(fit3$model, bictext), '</i>'),
+          x = c(0.75, 0.75, 0.75), y = c(0.95, 0.80, 0.65), xref = "paper",
+          yref = "paper", text = paste('<i>', c(fit3$model, aictext,
+                                                bictext), '</i>'),
           xanchor = "left", font = list(size = 14, color = "red"),
           showarrow = FALSE)) %>%
       plotly::hide_legend()
