@@ -40,6 +40,7 @@
 #' A list of results from the model fit including key information
 #' such as the event model, \code{model}, the estimated model parameters,
 #' \code{theta}, the covariance matrix, \code{vtheta}, as well as the
+#' Akaike Information Criterion, \code{aic}, and
 #' Bayesian Information Criterion, \code{bic}.
 #'
 #' If the piecewise exponential model is used, the location
@@ -137,6 +138,7 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = 'Exponential',
                    theta = log(d0/ex0),
                    vtheta = 1/d0,
+                   aic = -2*(-d0 + d0*log(d0/ex0)) + 2,
                    bic = -2*(-d0 + d0*log(d0/ex0)) + log(n0))
 
       # fitted survival curve
@@ -156,6 +158,7 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = "Weibull",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
+                   aic = -2*reg$loglik[1] + 4,
                    bic = -2*reg$loglik[1] + 2*log(n0))
 
       # fitted survival curve
@@ -174,6 +177,7 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = "Log-logistic",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
+                   aic = -2*reg$loglik[1] + 4,
                    bic = -2*reg$loglik[1] + 2*log(n0))
 
       # fitted survival curve
@@ -191,6 +195,7 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = "Log-normal",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
+                   aic = -2*reg$loglik[1] + 4,
                    bic = -2*reg$loglik[1] + 2*log(n0))
 
       # fitted survival curve
@@ -223,6 +228,7 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = "Piecewise exponential",
                    theta = log(d/ex),
                    vtheta = vtheta,
+                   aic = -2*sum(-d + d*log(d/ex)) + 2*J,
                    bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
                    piecewiseSurvivalTime = u)
 
@@ -245,6 +251,8 @@ fitEvent <- function(df, event_model = "model averaging",
                                 data = df1, dist = "weibull")
       reg2 <- survival::survreg(survival::Surv(time, event) ~ 1,
                                 data = df1, dist = "lognormal")
+      aic1 <- -2*reg1$loglik[1] + 4
+      aic2 <- -2*reg2$loglik[1] + 4
       bic1 <- -2*reg1$loglik[1] + 2*log(n0)
       bic2 <- -2*reg2$loglik[1] + 2*log(n0)
 
@@ -264,6 +272,7 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = "Model averaging",
                    theta = theta,
                    vtheta = vtheta,
+                   aic = w1*aic1 + (1-w1)*aic2,
                    bic = w1*bic1 + (1-w1)*bic2,
                    w1 = w1)
 
@@ -296,6 +305,7 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = "Spline",
                    theta = spl$coefficients,
                    vtheta = spl$cov,
+                   aic = -2*spl$loglik + 2*(k+2),
                    bic = -2*spl$loglik + (k+2)*log(n0),
                    knots = spl$knots,
                    scale = spl$scale)
@@ -311,8 +321,10 @@ fitEvent <- function(df, event_model = "model averaging",
 
     # plot the survival curve
     if (tolower(event_model) == "model averaging") {
+      aictext = paste("Weighted AIC:", round(fit2$aic,2))
       bictext = paste("Weighted BIC:", round(fit2$bic,2))
     } else {
+      aictext = paste("AIC:", round(fit2$aic,2))
       bictext = paste("BIC:", round(fit2$bic,2))
     }
 
@@ -327,8 +339,9 @@ fitEvent <- function(df, event_model = "model averaging",
         yaxis = list(title = "Survival probability", zeroline = FALSE),
         title = list(text = "Fitted time to event survival curve"),
         annotations = list(
-          x = c(0.75, 0.75), y = c(0.95, 0.85), xref = "paper",
-          yref = "paper", text = paste('<i>', c(fit2$model, bictext), '</i>'),
+          x = c(0.75, 0.75, 0.75), y = c(0.95, 0.80, 0.65), xref = "paper",
+          yref = "paper", text = paste('<i>', c(fit2$model, aictext,
+                                                bictext), '</i>'),
           xanchor = "left", font = list(size = 14, color = "red"),
           showarrow = FALSE)) %>%
       plotly::hide_legend()
