@@ -571,8 +571,8 @@ predictPanel <- tabPanel(
   uiOutput("pred_date"),
   uiOutput("pred_plot"),
 
-  downloadButton("downloadSumdata", "Download summary data"),
-  downloadButton("downloadSimdata", "Download simulated data")
+  downloadButton("downloadEventSummaryData", "Download summary data"),
+  downloadButton("downloadEventSubjectData", "Download subject data")
 )
 
 
@@ -2363,37 +2363,78 @@ server <- function(input, output, session) {
   })
 
 
-  output$downloadSumdata <- downloadHandler(
+  output$downloadEventSummaryData <- downloadHandler(
     filename = function() {
-      paste0("sumdata_", Sys.Date(), "_eventPred.xlsx")
+      paste0("event_summary_data_", Sys.Date(), ".xlsx")
     },
     content = function(file) {
       if (to_predict() == "Enrollment only") {
-        sumdata <- pred()$enroll_pred$enroll_pred_df
+        eventsummarydata <- pred()$enroll_pred$enroll_pred_df
       } else {
-        sumdata <- pred()$event_pred$enroll_pred_df %>%
+        eventsummarydata <- pred()$event_pred$enroll_pred_df %>%
           dplyr::bind_rows(pred()$event_pred$event_pred_df) %>%
           dplyr::bind_rows(pred()$event_pred$dropout_pred_df) %>%
           dplyr::bind_rows(pred()$event_pred$ongoing_pred_df)
       }
-      writexl::write_xlsx(sumdata, file)
+      writexl::write_xlsx(eventsummarydata, file)
     }
   )
 
 
-  output$downloadSimdata <- downloadHandler(
+  output$downloadEventSubjectData <- downloadHandler(
     filename = function() {
-      paste0("simdata_", Sys.Date(), "_eventPred.xlsx")
+      paste0("event_subject_data_", Sys.Date(), ".xlsx")
     },
     content = function(file) {
       if (to_predict() == "Enrollment only") {
-        simdata <- pred()$enroll_pred$newSubjects
+        eventsubjectdata <- pred()$enroll_pred$newSubjects
+        if (input$stage != 'Design stage') {
+          df <- df() %>%
+            dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
+                          totalTime = arrivalTime + time - 1)
+
+          if (input$by_treatment) {
+            eventsubjectdata <- df %>%
+              dplyr::mutate(draw = 0) %>%
+              dplyr::select(draw, usubjid, arrivalTime,
+                            treatment, treatment_description) %>%
+              dplyr::bind_rows(eventsubjectdata)
+          } else {
+            eventsubjectdata <- df %>%
+              dplyr::mutate(draw = 0) %>%
+              dplyr::select(draw, usubjid, arrivalTime) %>%
+              dplyr::bind_rows(eventsubjectdata)
+          }
+        }
       } else {
-        simdata <- pred()$event_pred$newEvents
+        eventsubjectdata <- pred()$event_pred$newEvents
+        if (input$stage != 'Design stage') {
+          df <- df() %>%
+            dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
+                          totalTime = arrivalTime + time - 1)
+
+          if (input$by_treatment) {
+            eventsubjectdata <- df %>%
+              dplyr::filter(event == 1 | dropout == 1) %>%
+              dplyr::mutate(draw = 0) %>%
+              dplyr::select(draw, usubjid, arrivalTime,
+                            treatment, treatment_description,
+                            time, event, dropout, totalTime) %>%
+              dplyr::bind_rows(eventsubjectdata)
+          } else {
+            eventsubjectdata <- df %>%
+              dplyr::filter(event == 1 | dropout == 1) %>%
+              dplyr::mutate(draw = 0) %>%
+              dplyr::select(draw, usubjid, arrivalTime,
+                            time, event, dropout, totalTime) %>%
+              dplyr::bind_rows(eventsubjectdata)
+          }
+        }
       }
-      writexl::write_xlsx(simdata, file)
+      writexl::write_xlsx(eventsubjectdata, file)
     }
   )
+
 
 
   observeEvent(input$add_accrualTime, {
