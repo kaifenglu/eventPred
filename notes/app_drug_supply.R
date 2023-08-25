@@ -6,6 +6,7 @@ library(shinybusy)
 library(readxl)
 library(writexl)
 library(dplyr, warn.conflicts = FALSE)
+library(tidyr)
 library(prompter)
 library(ggplot2)
 library(plotly, warn.conflicts = FALSE)
@@ -93,7 +94,6 @@ f_llogis_survival <- function(i) {
     )
   )
 }
-
 
 f_lnorm_survival <- function(i) {
   conditionalPanel(
@@ -252,14 +252,40 @@ f_dosing_schedule <- function(j) {
 }
 
 
-# cumulative dose for duration x and a drug with dosing schedule (w,N,d)
-f_cum_dose <- function(x, w, N, d) {
-  m = length(w)  # number of dosing intervals
+# cumulative dose for duration x and a drug with dosing schedule (w, d, N)
+# here x can be a vector
+f_cum_dose <- function(x, w, d, N) {
+  m = length(w)
   u = c(0, cumsum(w*N))
-  i = findInterval(x, u)
-  v = c(0, cumsum(N*d))
-  n = floor((x - u[i])/w[i]) + 1
+  i = pmin(findInterval(x, u), m)
+  z = pmin(x, u[m+1]) - u[i]
+  n = pmin(floor(z/w[i]) + 1, N[i])
+  v = c(0, cumsum(d*N))
   v[i] + n*d[i]
+}
+
+
+# detailed dosing for duration x and a drug with dosing schedule (w, d, N)
+# here we assume that x is a scalar
+g_cum_dose <- function(x, w, d, N) {
+  m = length(w)
+  u = c(0, cumsum(w*N))
+  i = min(findInterval(x, u), m)
+  z = min(x, u[m+1]) - u[i]
+  n = min(floor(z/w[i]) + 1, N[i])
+
+  N1 = N[1:i]
+  N1[i] = n # number of cycles in the last interval
+
+  w1 <- w0 <- rep(w[1:i], times = N1)
+  w1[length(w1)] = z %% w[i] # days in last cycle
+  w2 = c(0, cumsum(w1)) + 1 # relative day at start of cycle
+
+  dplyr::tibble(
+    day_rel_randdt = w2[-length(w2)],
+    days_per_cycle = w0,
+    dose_to_dispense = rep(d[1:i], times = N1),
+    cum_dose = cumsum(dose_to_dispense))
 }
 
 
@@ -389,7 +415,8 @@ enrollmentPanel <- tabPanel(
 
                numericInput(
                  "lags",
-                 label = paste("How many days before cutoff to average",
+                 label = paste("How many days before the last enrollment",
+                               "date to average",
                                "the enrollment rate over for prediction?"),
                  value = 30,
                  min = 0, max = 365, step = 1)
@@ -525,13 +552,7 @@ dosingPanel <- tabPanel(
   fluidRow(
     column(6, selectInput(
       "l2",
-      label = tags$span(
-        "Number of optional chemotherapy drugs",
-        tags$span(icon(name = "question-circle")) %>%
-          add_prompt(message = paste(
-            "must be less than the total number of drugs",
-            "and will be reset to 0 otherwise"),
-            position = "right")),
+      label = "Number of optional chemotherapy drugs",
       choices = c(0, 2:6), selected = 0),
 
       conditionalPanel(
@@ -564,8 +585,8 @@ eventPredictPanel <- tabPanel(
   uiOutput("pred_date"),
   uiOutput("pred_plot"),
 
-  downloadButton("downloadSumdata", "Download summary data"),
-  downloadButton("downloadSimdata", "Download simulated data")
+  downloadButton("downloadEventSummaryData", "Download summary data"),
+  downloadButton("downloadEventSubjectData", "Download subject data")
 )
 
 
@@ -574,7 +595,12 @@ dosingPredictPanel <- tabPanel(
   value = "dosing_prediction_panel",
 
   uiOutput("dosing_plot"),
-  downloadButton("downloadDosingdata", "Download dosing data")
+  downloadButton("downloadDosingSummaryData", "Download summary data"),
+
+  conditionalPanel(
+    condition = "input.subject_dosing",
+    downloadButton("downloadDosingSubjectData", "Download subject data")
+  )
 )
 
 
@@ -765,7 +791,14 @@ ui <- fluidPage(
             input.stage == 'Real-time after enrollment completion')",
 
             checkboxInput(
-              "predict_dosing", label = "Predict dosing?", value = TRUE)
+              "predict_dosing", label = "Predict dosing?", value = TRUE),
+
+            conditionalPanel(
+              condition = "input.predict_dosing",
+              checkboxInput(
+                "subject_dosing", label = "Subject-level dosing?",
+                value = FALSE)
+            )
           )
         ),
 
@@ -887,6 +920,16 @@ server <- function(input, output, session) {
     } else {
       hideTab(inputId = "results", target = "dosing_model_panel")
       hideTab(inputId = "results", target = "dosing_prediction_panel")
+    }
+  })
+
+
+  # whether to generate subject-level dosing data
+  subject_dosing <- reactive({
+    if (input$predict_dosing) {
+      input$subject_dosing
+    } else {
+      FALSE
     }
   })
 
@@ -1321,9 +1364,7 @@ server <- function(input, output, session) {
           d = as.numeric(x[, "Dose per Cycle"]),
           N = as.numeric(x[, "Number of Cycles"]),
           drug = i,
-          interval = rownames(x)) %>%
-          dplyr::bind_rows(dplyr::tibble(
-            w = 21, d = 0, N = 10000, drug = i, interval = "Infinite"))
+          interval = rownames(x))
       }))
 
     valid1 = all(param$w > 0 & param$w == round(param$w))
@@ -1347,9 +1388,17 @@ server <- function(input, output, session) {
   })
 
 
-  observeEvent(list(input$l, input$l2), {
-    if (as.numeric(input$l) <= as.numeric(input$l2)) {
-      updateSelectInput(session, "l2", selected = 0)
+  observeEvent(input$l, {
+    if (l() > 2) {
+      choices <- c(0, 2:min((l()-1), 6))
+    } else {
+      choices <- 0
+    }
+
+    if (as.numeric(input$l2) < l()) {
+      updateSelectInput(session, "l2", choices = choices, selected = input$l2)
+    } else {
+      updateSelectInput(session, "l2", choices = choices, selected = 0)
     }
   })
 
@@ -1883,8 +1932,8 @@ server <- function(input, output, session) {
             schedule <- dosing_schedule_df() %>%
               dplyr::filter(drug == j)
             w = schedule$w
-            N = schedule$N
             d = schedule$d
+            N = schedule$N
 
             if (j <= l1()) {
               dfx <- df2b %>%
@@ -1901,7 +1950,7 @@ server <- function(input, output, session) {
             dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t, draw) %>%
               dplyr::summarise(cum_dose = sum(
-                f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
+                f_cum_dose(pmin(totalTime, t) - arrivalTime, w, d, N)),
                 .groups = "drop_last")
           }))
 
@@ -1916,9 +1965,47 @@ server <- function(input, output, session) {
                            .groups = "drop_last") %>%
           dplyr::ungroup()
 
+
         pred <- pred()
         pred$event_pred$newEvents <- newEvents
         pred$event_pred$dosing_pred_df <- dosing_pred_df
+
+        if (subject_dosing()) {
+          # subject-level dosing data
+          dosing_df <- dplyr::bind_rows(
+            lapply(1:l(), function(j) {
+              schedule <- dosing_schedule_df() %>%
+                dplyr::filter(drug == j)
+              w = schedule$w
+              d = schedule$d
+              N = schedule$N
+
+              if (j <= l1()) {
+                dfx <- newEvents %>%
+                  dplyr::inner_join(treatment_by_drug_df() %>%
+                                      dplyr::filter(drug == j),
+                                    by = "treatment")
+              } else {
+                dfx <- newEvents %>%
+                  dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                      dplyr::filter(drug == j),
+                                    by = "chemotherapy")
+              }
+
+              dfx %>%
+                dplyr::select(-c(event, dropout)) %>%
+                dplyr::group_by(draw, usubjid, drug, drug_name, dose_unit) %>%
+                dplyr::mutate(y = list(g_cum_dose(
+                  min(time - 1, 365*nyears()), w, d, N))) %>%
+                unnest(y) %>%
+                dplyr::mutate(day_rel_trialsdt = arrivalTime +
+                                day_rel_randdt - 1)
+            })
+          )
+
+          pred$event_pred$dosing_df <- dosing_df
+        }
+
         pred
       } else if (input$stage == 'Real-time before enrollment completion') {
         df0 <- dplyr::tibble(drug = 1:l(),
@@ -1932,10 +2019,12 @@ server <- function(input, output, session) {
                         totalTime = arrivalTime + time - 1)
 
         trialsdt = pred()$observed$trialsdt
+        cutoffdt = pred()$observed$cutoffdt
         t0 = pred()$observed$t0
+        t1 = t0 + 365*nyears()
 
         # observed dosing before data cut
-        t = unique(c(seq(0, t0, 30), t0))
+        t = unique(c(seq(1, t0, 30), t0))
 
         df1 <- dplyr::tibble(t = t) %>%
           dplyr::cross_join(df) %>%
@@ -1946,8 +2035,8 @@ server <- function(input, output, session) {
             schedule <- dosing_schedule_df() %>%
               dplyr::filter(drug == j)
             w = schedule$w
-            N = schedule$N
             d = schedule$d
+            N = schedule$N
 
             if (j <= l1()) {
               dfx <- df1 %>%
@@ -1964,7 +2053,7 @@ server <- function(input, output, session) {
             dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t) %>%
               dplyr::summarise(n = sum(
-                f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
+                f_cum_dose(pmin(totalTime, t) - arrivalTime, w, d, N)),
                 .groups = "drop_last") %>%
               dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0)
           })) %>%
@@ -2037,8 +2126,8 @@ server <- function(input, output, session) {
             schedule <- dosing_schedule_df() %>%
               dplyr::filter(drug == j)
             w = schedule$w
-            N = schedule$N
             d = schedule$d
+            N = schedule$N
 
             if (j <= l1()) {
               dfx <- df2a %>%
@@ -2055,8 +2144,8 @@ server <- function(input, output, session) {
             dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t, draw) %>%
               dplyr::summarise(cum_dose_a = sum(
-                (f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d) -
-                   f_cum_dose(t0 - arrivalTime, w, N, d))),
+                (f_cum_dose(pmin(totalTime, t) - arrivalTime, w, d, N) -
+                   f_cum_dose(t0 - arrivalTime, w, d, N))),
                 .groups = "drop_last")
           }))
 
@@ -2071,8 +2160,8 @@ server <- function(input, output, session) {
             schedule <- dosing_schedule_df() %>%
               dplyr::filter(drug == j)
             w = schedule$w
-            N = schedule$N
             d = schedule$d
+            N = schedule$N
 
             if (j <= l1()) {
               dfx <- df2b %>%
@@ -2089,7 +2178,7 @@ server <- function(input, output, session) {
             dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t, draw) %>%
               dplyr::summarise(cum_dose_b = sum(
-                f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
+                f_cum_dose(pmin(totalTime, t) - arrivalTime, w, d, N)),
                 .groups = "drop_last")
           }))
 
@@ -2118,9 +2207,63 @@ server <- function(input, output, session) {
           dplyr::arrange(drug, drug_name, dose_unit, t) %>%
           dplyr::ungroup()
 
+
         pred <- pred()
         pred$event_pred$newEvents <- newEvents
         pred$event_pred$dosing_pred_df <- dosing_pred_df
+
+        if (subject_dosing()) {
+          # subject-level dosing data
+          discont_df <- df %>%
+            dplyr::filter(event == 1) %>%
+            dplyr::mutate(draw = 0)
+
+          newEvents <- newEvents %>%
+            dplyr::mutate(trialsdt = trialsdt,
+                          cutoffdt = cutoffdt,
+                          randdt = as.Date(arrivalTime - 1, origin = trialsdt))
+
+          allsubjects <- dplyr::bind_rows(discont_df, newEvents) %>%
+            dplyr::mutate(adt = as.Date(time - 1, origin = randdt))
+
+          dosing_df <- dplyr::bind_rows(
+            lapply(1:l(), function(j) {
+              schedule <- dosing_schedule_df() %>%
+                dplyr::filter(drug == j)
+              w = schedule$w
+              d = schedule$d
+              N = schedule$N
+
+              if (j <= l1()) {
+                dfx <- allsubjects %>%
+                  dplyr::inner_join(treatment_by_drug_df() %>%
+                                      dplyr::filter(drug == j),
+                                    by = "treatment")
+              } else {
+                dfx <- allsubjects %>%
+                  dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                      dplyr::filter(drug == j),
+                                    by = "chemotherapy")
+              }
+
+              dfx %>%
+                dplyr::select(-c(event, dropout)) %>%
+                dplyr::group_by(draw, usubjid, drug, drug_name, dose_unit) %>%
+                dplyr::mutate(y = list(g_cum_dose(
+                  min(time - 1, t1 - arrivalTime), w, d, N))) %>%
+                unnest(y) %>%
+                dplyr::mutate(day_rel_trialsdt = arrivalTime +
+                                day_rel_randdt - 1)
+            })
+          )
+
+          dosing_df <- dosing_df %>%
+            dplyr::mutate(date = as.Date(day_rel_trialsdt - 1,
+                                         origin = trialsdt))
+
+          pred$event_pred$dosing_df <- dosing_df
+        }
+
         pred
       } else if (input$stage == "Real-time after enrollment completion") {
         df0 <- dplyr::tibble(drug = 1:l(),
@@ -2134,10 +2277,12 @@ server <- function(input, output, session) {
                         totalTime = arrivalTime + time - 1)
 
         trialsdt = pred()$observed$trialsdt
+        cutoffdt = pred()$observed$cutoffdt
         t0 = pred()$observed$t0
+        t1 = t0 + 365*nyears()
 
         # observed dosing before data cut
-        t = unique(c(seq(0, t0, 30), t0))
+        t = unique(c(seq(1, t0, 30), t0))
 
         df1 <- dplyr::tibble(t = t) %>%
           dplyr::cross_join(df) %>%
@@ -2148,8 +2293,8 @@ server <- function(input, output, session) {
             schedule <- dosing_schedule_df() %>%
               dplyr::filter(drug == j)
             w = schedule$w
-            N = schedule$N
             d = schedule$d
+            N = schedule$N
 
             if (j <= l1()) {
               dfx <- df1 %>%
@@ -2166,7 +2311,7 @@ server <- function(input, output, session) {
             dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t) %>%
               dplyr::summarise(n = sum(
-                f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d)),
+                f_cum_dose(pmin(totalTime, t) - arrivalTime, w, d, N)),
                 .groups = "drop_last") %>%
               dplyr::mutate(lower = NA, upper = NA, mean = n, var = 0)
           })) %>%
@@ -2207,8 +2352,8 @@ server <- function(input, output, session) {
             schedule <- dosing_schedule_df() %>%
               dplyr::filter(drug == j)
             w = schedule$w
-            N = schedule$N
             d = schedule$d
+            N = schedule$N
 
             if (j <= l1()) {
               dfx <- df2a %>%
@@ -2225,8 +2370,8 @@ server <- function(input, output, session) {
             dfx %>%
               dplyr::group_by(drug, drug_name, dose_unit, t, draw) %>%
               dplyr::summarise(cum_dose_a = sum(
-                (f_cum_dose(pmin(totalTime, t) - arrivalTime, w, N, d) -
-                   f_cum_dose(t0 - arrivalTime, w, N, d))),
+                (f_cum_dose(pmin(totalTime, t) - arrivalTime, w, d, N) -
+                   f_cum_dose(t0 - arrivalTime, w, d, N))),
                 .groups = "drop_last")
           }))
 
@@ -2250,9 +2395,63 @@ server <- function(input, output, session) {
           dplyr::arrange(drug, drug_name, dose_unit, t) %>%
           dplyr::ungroup()
 
+
         pred <- pred()
         pred$event_pred$newEvents <- newEvents
         pred$event_pred$dosing_pred_df <- dosing_pred_df
+
+        if (subject_dosing()) {
+          # subject-level dosing data
+          discont_df <- df %>%
+            dplyr::filter(event == 1) %>%
+            dplyr::mutate(draw = 0)
+
+          newEvents <- newEvents %>%
+            dplyr::mutate(trialsdt = trialsdt,
+                          cutoffdt = cutoffdt,
+                          randdt = as.Date(arrivalTime - 1, origin = trialsdt))
+
+          allsubjects <- dplyr::bind_rows(discont_df, newEvents) %>%
+            dplyr::mutate(adt = as.Date(time - 1, origin = randdt))
+
+          dosing_df <- dplyr::bind_rows(
+            lapply(1:l(), function(j) {
+              schedule <- dosing_schedule_df() %>%
+                dplyr::filter(drug == j)
+              w = schedule$w
+              d = schedule$d
+              N = schedule$N
+
+              if (j <= l1()) {
+                dfx <- allsubjects %>%
+                  dplyr::inner_join(treatment_by_drug_df() %>%
+                                      dplyr::filter(drug == j),
+                                    by = "treatment")
+              } else {
+                dfx <- allsubjects %>%
+                  dplyr::inner_join(chemotherapy_by_drug_df() %>%
+                                      dplyr::filter(drug == j),
+                                    by = "chemotherapy")
+              }
+
+              dfx %>%
+                dplyr::select(-c(event, dropout)) %>%
+                dplyr::group_by(draw, usubjid, drug, drug_name, dose_unit) %>%
+                dplyr::mutate(y = list(g_cum_dose(
+                  min(time - 1, t1 - arrivalTime), w, d, N))) %>%
+                unnest(y) %>%
+                dplyr::mutate(day_rel_trialsdt = arrivalTime +
+                                day_rel_randdt - 1)
+            })
+          )
+
+          dosing_df <- dosing_df %>%
+            dplyr::mutate(date = as.Date(day_rel_trialsdt - 1,
+                                         origin = trialsdt))
+
+          pred$event_pred$dosing_df <- dosing_df
+        }
+
         pred
       }
     }
@@ -2820,34 +3019,74 @@ server <- function(input, output, session) {
   })
 
 
-  output$downloadSumdata <- downloadHandler(
+  output$downloadEventSummaryData <- downloadHandler(
     filename = function() {
-      paste0("sumdata_", Sys.Date(), "_drug_supply.xlsx")
+      paste0("event_summary_data_", Sys.Date(), ".xlsx")
     },
     content = function(file) {
       if (to_predict() == "Enrollment only") {
-        sumdata <- pred()$enroll_pred$enroll_pred_df
+        eventsummarydata <- pred()$enroll_pred$enroll_pred_df
       } else {
-        sumdata <- pred()$event_pred$enroll_pred_df %>%
+        eventsummarydata <- pred()$event_pred$enroll_pred_df %>%
           dplyr::bind_rows(pred()$event_pred$event_pred_df) %>%
           dplyr::bind_rows(pred()$event_pred$ongoing_pred_df)
       }
-      writexl::write_xlsx(sumdata, file)
+      writexl::write_xlsx(eventsummarydata, file)
     }
   )
 
 
-  output$downloadSimdata <- downloadHandler(
+  output$downloadEventSubjectData <- downloadHandler(
     filename = function() {
-      paste0("simdata_", Sys.Date(), "_drug_supply.xlsx")
+      paste0("event_subject_data_", Sys.Date(), ".xlsx")
     },
     content = function(file) {
       if (to_predict() == "Enrollment only") {
-        simdata <- pred()$enroll_pred$newSubjects
+        eventsubjectdata <- pred()$enroll_pred$newSubjects
+        if (input$stage != 'Design stage') {
+          df <- df() %>%
+            dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
+                          totalTime = arrivalTime + time - 1)
+
+          if (input$by_treatment) {
+            eventsubjectdata <- df %>%
+              dplyr::mutate(draw = 0) %>%
+              dplyr::select(draw, usubjid, arrivalTime,
+                            treatment, treatment_description) %>%
+              dplyr::bind_rows(eventsubjectdata)
+          } else {
+            eventsubjectdata <- df %>%
+              dplyr::mutate(draw = 0) %>%
+              dplyr::select(draw, usubjid, arrivalTime) %>%
+              dplyr::bind_rows(eventsubjectdata)
+          }
+        }
       } else {
-        simdata <- pred()$event_pred$newEvents
+        eventsubjectdata <- pred()$event_pred$newEvents
+        if (input$stage != 'Design stage') {
+          df <- df() %>%
+            dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
+                          totalTime = arrivalTime + time - 1)
+
+          if (input$by_treatment) {
+            eventsubjectdata <- df %>%
+              dplyr::filter(event == 1 | dropout == 1) %>%
+              dplyr::mutate(draw = 0) %>%
+              dplyr::select(draw, usubjid, arrivalTime,
+                            treatment, treatment_description,
+                            time, event, dropout, totalTime) %>%
+              dplyr::bind_rows(eventsubjectdata)
+          } else {
+            eventsubjectdata <- df %>%
+              dplyr::filter(event == 1 | dropout == 1) %>%
+              dplyr::mutate(draw = 0) %>%
+              dplyr::select(draw, usubjid, arrivalTime,
+                            time, event, dropout, totalTime) %>%
+              dplyr::bind_rows(eventsubjectdata)
+          }
+        }
       }
-      writexl::write_xlsx(simdata, file)
+      writexl::write_xlsx(eventsubjectdata, file)
     }
   )
 
@@ -2999,16 +3238,25 @@ server <- function(input, output, session) {
   })
 
 
-  output$downloadDosingdata <- downloadHandler(
+  output$downloadDosingSummaryData <- downloadHandler(
     filename = function() {
-      paste0("dosingdata_", Sys.Date(), "_drug_supply.xlsx")
+      paste0("dosing_summary_data_", Sys.Date(), ".xlsx")
     },
     content = function(file) {
-      dosingdata <- dosing()$event_pred$dosing_pred_df
-      writexl::write_xlsx(dosingdata, file)
+      dosingsummarydata <- dosing()$event_pred$dosing_pred_df
+      writexl::write_xlsx(dosingsummarydata, file)
     }
   )
 
+  output$downloadDosingSubjectData <- downloadHandler(
+    filename = function() {
+      paste0("dosing_subject_data_", Sys.Date(), ".csv")
+    },
+    content = function(file) {
+      dosingsubjectdata <- dosing()$event_pred$dosing_df
+      write.csv(dosingsubjectdata, file)
+    }
+  )
 
   observeEvent(input$add_accrualTime, {
     a = matrix(as.numeric(input$accrualTime),
@@ -3287,7 +3535,14 @@ server <- function(input, output, session) {
 
     if (x$predict_dosing) {
       updateSelectInput(session, "l", selected=x$l)
-      updateSelectInput(session, "l2", selected=x$l2)
+
+      if (x$l > 2) {
+        choices <- c(0, 2:min((x$l-1), 6))
+      } else {
+        choices <- 0
+      }
+
+      updateSelectInput(session, "l2", choices = choices, selected = x$l2)
 
       if (x$l2 > 0) {
         updateSelectInput(session, "m", selected=x$m)
