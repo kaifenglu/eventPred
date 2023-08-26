@@ -228,6 +228,15 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   }
 
 
+  # plot the survival curve
+  if (tolower(fit1$model) == "piecewise poisson") {
+    modeltext = cat(paste0(fit1$model, "("), accrualTime, ")")
+  } else if (tolower(fit1$model) == "b-spline") {
+    modeltext = paste0(fit1$model, "(nknots = ", nknots, ")")
+  } else {
+    modeltext = fit1$model
+  }
+
   aictext = paste("AIC:", round(fit1$aic,2))
   bictext = paste("BIC:", round(fit1$bic,2))
 
@@ -243,7 +252,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
       annotations = list(
         x = c(0.05, 0.05, 0.05), y = c(0.95, 0.80, 0.65),
         xref = "paper", yref = "paper",
-        text = paste('<i>', c(fit1$model, aictext, bictext), '</i>'),
+        text = paste('<i>', c(modeltext, aictext, bictext), '</i>'),
         xanchor = "left",
         font = list(size = 14, color = "red"), showarrow = FALSE)) %>%
     plotly::hide_legend()
