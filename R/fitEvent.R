@@ -320,6 +320,15 @@ fitEvent <- function(df, event_model = "model averaging",
 
 
     # plot the survival curve
+    if (tolower(fit2$model) == "piecewise exponential") {
+      modeltext = cat(paste0(fit2$model, "("), piecewiseSurvivalTime, ")")
+    } else if (tolower(fit2$model) == "spline") {
+      modeltext = paste0(fit2$model, "(k = ", k, ", ", "scale = '",
+                         scale, "')")
+    } else {
+      modeltext = fit2$model
+    }
+
     if (tolower(event_model) == "model averaging") {
       aictext = paste("Weighted AIC:", round(fit2$aic,2))
       bictext = paste("Weighted BIC:", round(fit2$bic,2))
@@ -340,7 +349,7 @@ fitEvent <- function(df, event_model = "model averaging",
         title = list(text = "Fitted time to event survival curve"),
         annotations = list(
           x = c(0.75, 0.75, 0.75), y = c(0.95, 0.80, 0.65), xref = "paper",
-          yref = "paper", text = paste('<i>', c(fit2$model, aictext,
+          yref = "paper", text = paste('<i>', c(modeltext, aictext,
                                                 bictext), '</i>'),
           xanchor = "left", font = list(size = 14, color = "red"),
           showarrow = FALSE)) %>%
