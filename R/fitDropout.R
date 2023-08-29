@@ -217,7 +217,8 @@ fitDropout <- function(df, dropout_model = "exponential",
 
     # plot the survival curve
     if (tolower(fit3$model) == "piecewise exponential") {
-      modeltext = cat(paste0(fit3$model, "("), piecewiseDropoutTime, ")")
+      modeltext = paste0(paste0(fit3$model, "("),
+                         paste(piecewiseDropoutTime, collapse = " "), ")")
     } else {
       modeltext = fit3$model
     }
