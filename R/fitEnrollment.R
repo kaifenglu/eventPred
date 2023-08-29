@@ -230,7 +230,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   # plot the survival curve
   if (tolower(fit1$model) == "piecewise poisson") {
-    modeltext = cat(paste0(fit1$model, "("), accrualTime, ")")
+    modeltext = paste0(paste0(fit1$model, "("),
+                       paste(accrualTime, collapse = " "), ")")
   } else if (tolower(fit1$model) == "b-spline") {
     modeltext = paste0(fit1$model, "(nknots = ", nknots, ")")
   } else {
