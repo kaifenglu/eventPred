@@ -321,7 +321,8 @@ fitEvent <- function(df, event_model = "model averaging",
 
     # plot the survival curve
     if (tolower(fit2$model) == "piecewise exponential") {
-      modeltext = cat(paste0(fit2$model, "("), piecewiseSurvivalTime, ")")
+      modeltext = paste0(paste0(fit2$model, "("),
+                         paste(piecewiseSurvivalTime, collapse = " "), ")")
     } else if (tolower(fit2$model) == "spline") {
       modeltext = paste0(fit2$model, "(k = ", k, ", ", "scale = '",
                          scale, "')")
