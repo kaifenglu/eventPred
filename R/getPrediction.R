@@ -31,7 +31,8 @@
 #' @param event_model The event model used to analyze the event data
 #'   which can be set to one of the following options:
 #'   "exponential", "Weibull", "log-logistic", "log-normal",
-#'   "piecewise exponential", or "model averaging". The model averaging
+#'   "piecewise exponential", "model averaging", or "spline".
+#'   The model averaging
 #'   uses the \code{exp(-bic/2)} weighting and combines Weibull and
 #'   log-normal models. By default, it is set to "model
 #'   averaging".
@@ -52,7 +53,7 @@
 #'   modeled as a spline function.
 #' @param event_prior The prior of event model parameters.
 #' @param dropout_model The dropout model used to analyze the dropout data
-#'   which can be set to one of the following options: "exponential",
+#'   which can be set to one of the following options: "none", "exponential",
 #'   "Weibull", "log-logistic", "log-normal", or "piecewise exponential".
 #'   By default, it is set to "exponential".
 #' @param piecewiseDropoutTime A vector that specifies the time
