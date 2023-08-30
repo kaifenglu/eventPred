@@ -360,7 +360,8 @@ enrollmentPanel <- tabPanel(
 
                numericInput(
                  "lags",
-                 label = paste("How many days before cutoff to average",
+                 label = paste("How many days before the last enrollment",
+                               "date to average",
                                "the enrollment rate over for prediction?"),
                  value = 30,
                  min = 0, max = 365, step = 1)
@@ -1316,8 +1317,8 @@ server <- function(input, output, session) {
   weibull_dropout <- reactive({
     req(k())
     param = input[[paste0("weibull_dropout_", k())]]
-    shape = as.numeric(-param[2,])
-    scale = as.numeric(param[1,])
+    shape = as.numeric(param[1,])
+    scale = as.numeric(param[2,])
 
     valid1 = all(shape > 0)
     if (!valid1) {
