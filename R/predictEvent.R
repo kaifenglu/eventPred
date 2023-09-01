@@ -650,7 +650,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       treatmentNew = newSubjects$treatment[newSubjects$draw == i]
       treatment_descriptionNew = newSubjects$treatment_description[
         newSubjects$draw == i]
-      time0New = rep(0, n1)
+      time0New = rep(1, n1)
     }
 
     # concatenate ongoing and new subjects
