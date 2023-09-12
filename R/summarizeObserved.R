@@ -55,11 +55,11 @@ summarizeObserved <- function(df, to_predict = "event only",
   n0 = nrow(df)  # current number of subjects enrolled
 
   if (any(df$randdt < trialsdt)) {
-    stop("randdt must be greater than or equal to trialsdt.")
+    stop("randdt must be greater than or equal to trialsdt")
   }
 
   if (any(df$randdt > cutoffdt)) {
-    stop("randdt must be less than or equal to cutoffdt.")
+    stop("randdt must be less than or equal to cutoffdt")
   }
 
   if (grepl("event", to_predict, ignore.case = TRUE)) {
@@ -72,15 +72,15 @@ summarizeObserved <- function(df, to_predict = "event only",
                !(df$event | df$dropout))
 
     if (any(df$time < 1)) {
-      stop("time must be greater than or equal to 1.")
+      stop("time must be greater than or equal to 1")
     }
 
     if (any(df$event == 1 & df$dropout == 1)) {
-      stop("event and dropout cannot both be equal to 1 simultaneously.")
+      stop("event and dropout cannot both be equal to 1 simultaneously")
     }
 
     if (any(df$time > as.numeric(cutoffdt - df$randdt + 1))) {
-      stop("time must be less than or equal to cutoffdt - randdt + 1.")
+      stop("time must be less than or equal to cutoffdt - randdt + 1")
     }
 
     ongoingSubjects <- df %>%
