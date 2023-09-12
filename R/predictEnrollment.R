@@ -153,6 +153,11 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     by_treatment = FALSE
   }
 
+  if (!is.null(treatment_label) && length(treatment_label) != ngroups) {
+    stop(paste("length of treatment_label must be equal to",
+               "the number of treatments"))
+  }
+
 
   if (!is.null(df)) {
     df <- dplyr::as_tibble(df)
