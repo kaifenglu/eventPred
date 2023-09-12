@@ -29,13 +29,13 @@
 #' If prior information exists on the model parameters, it can
 #' be combined with the likelihood to yield the posterior distribution.
 #'
-#' The \code{eventPred} package also offers several time-to-event
-#' models, including exponential, Weibull, log-logistic, log-normal, piecewise
+#' The \code{eventPred} package also offers several time-to-event models,
+#' including exponential, Weibull, log-logistic, log-normal, piecewise
 #' exponential, model-averaging of Weibull and log-normal, and spline.
-#' For time to dropout, exponential, Weibull, log-logistic, log-normal, and
-#' piecewise exponential distributions are considered. If enrollment
-#' is complete, ongoing subjects who have not had the event of interest
-#' or dropped out of the study before the data cut contribute
+#' For time to dropout, exponential, Weibull, log-logistic, log-normal,
+#' piecewise exponential, and spline distributions are considered.
+#' If enrollment is complete, ongoing subjects who have not had the event
+#' of interest or dropped out of the study before the data cut contribute
 #' additional events in the future. Their event times are generated
 #' from the conditional distribution given that they have survived
 #' at the data cut. For new subjects that need to be enrolled,
