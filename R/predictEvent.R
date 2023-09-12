@@ -128,7 +128,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   erify::check_n(target_d)
   if (!is.null(newSubjects)) erify::check_class(newSubjects, "data.frame")
   if (is.null(df) && is.null(newSubjects)) {
-    stop("At least one of df and newSubjects must be specified.")
+    stop("At least one of df and newSubjects must be specified")
   }
 
   erify::check_bool(by_treatment)
@@ -146,7 +146,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     if (!is.null(df) && !is.null(newSubjects) &&
         length(table(df$treatment)) != length(table(newSubjects$treatment))) {
-      stop("Number of treatments must match between df and newSubjects.")
+      stop("Number of treatments must match between df and newSubjects")
     }
 
     if (!is.null(df)) {
@@ -195,7 +195,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   }
 
   if (length(event_fit) != ngroups) {
-    stop("event_fit must be a list with one element per treatment.")
+    stop("event_fit must be a list with one element per treatment")
   }
 
   # check event_fit model
@@ -261,7 +261,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     }
 
     if (length(dropout_fit) != ngroups) {
-      stop("dropout_fit must be a list with one element per treatment.")
+      stop("dropout_fit must be a list with one element per treatment")
     }
 
     # check dropout_fit model
@@ -322,7 +322,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   erify::check_bool(showplot)
 
   if (!(showEnrollment | showEvent | showDropout | showOngoing)) {
-    stop("At least one parameter must be given for prediction plot.")
+    stop("At least one parameter must be given for prediction plot")
   }
 
 
@@ -339,23 +339,23 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     t0 = as.numeric(cutoffdt - trialsdt + 1)
 
     if (any(df$randdt < trialsdt)) {
-      stop("randdt must be greater than or equal to trialsdt.")
+      stop("randdt must be greater than or equal to trialsdt")
     }
 
     if (any(df$randdt > cutoffdt)) {
-      stop("randdt must be less than or equal to cutoffdt.")
+      stop("randdt must be less than or equal to cutoffdt")
     }
 
     if (any(df$time < 1)) {
-      stop("time must be greater than or equal to 1.")
+      stop("time must be greater than or equal to 1")
     }
 
     if (any(df$event == 1 & df$dropout == 1)) {
-      stop("event and dropout cannot both be equal to 1 simultaneously.")
+      stop("event and dropout cannot both be equal to 1 simultaneously")
     }
 
     if (any(df$time > as.numeric(cutoffdt - df$randdt + 1))) {
-      stop("time must be less than or equal to cutoffdt - randdt + 1.")
+      stop("time must be less than or equal to cutoffdt - randdt + 1")
     }
 
     df <- df %>%
