@@ -1,5 +1,3 @@
-
-
 # eventPred 0.2.0
 
 - allow the use of treatment labels for by-treatment prediction
