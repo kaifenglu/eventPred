@@ -7,12 +7,25 @@
 #'   for fitting the dropout model by treatment.
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options: "exponential",
-#'   "Weibull", "log-logistic", "log-normal", or "piecewise exponential".
+#'   "Weibull", "log-logistic", "log-normal", "piecewise exponential",
+#'   or "spline". The spline model of Royston and Parmer (2022) assumes
+#'   that a transformation of the survival function is modeled as a
+#'   natural cubic spline function of log time.
 #'   By default, it is set to "exponential".
 #' @param piecewiseDropoutTime A vector that specifies the time
 #'   intervals for the piecewise exponential dropout distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
 #'   event intervals: [0, 60) and [60, Inf). By default, it is set to 0.
+#' @param k_dropout The number of inner knots of the spline. The default
+#'   \code{k_dropout=0} gives a Weibull, log-logistic or log-normal model,
+#'   if \code{scale_dropout} is "hazard", "odds", or "normal", respectively.
+#'   The knots are chosen as equally-spaced quantiles of the log
+#'   uncensored survival times. The boundary knots are chosen as the
+#'   minimum and maximum log uncensored survival times.
+#' @param scale_dropout If "hazard", the log cumulative hazard is modeled
+#'   as a spline function. If "odds", the log cumulative odds is
+#'   modeled as a spline function. If "normal", -qnorm(S(t)) is
+#'   modeled as a spline function.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the fitted time-to-dropout survival curve. By default, it is
 #'   set to \code{TRUE}.
@@ -21,20 +34,23 @@
 #'   it is set to \code{FALSE}.
 #'
 #' @return A list of results from the model fit including key information
-#'   such as the dropout model, \code{model}, the estimated model parameters,
-#'   \code{theta}, the covariance matrix, \code{vtheta}, as well as the
-#'   Akaike Information Criterion, \code{aic},
-#'   and Bayesian Information Criterion, \code{bic}.
+#' such as the dropout model, \code{model}, the estimated model parameters,
+#' \code{theta}, the covariance matrix, \code{vtheta}, as well as the
+#' Akaike Information Criterion, \code{aic},
+#' and Bayesian Information Criterion, \code{bic}.
 #'
-#'   If the piecewise exponential model is used, the location
-#'   of knots used in the model, \code{piecewiseDropoutTime}, will
-#'   be included in the list of results.
+#' If the piecewise exponential model is used, the location
+#' of knots used in the model, \code{piecewiseDropoutTime}, will
+#' be included in the list of results.
 #'
-#'   When fitting the dropout model by treatment, the outcome is presented
-#'   as a list of lists, where each list element corresponds to a
-#'   specific treatment group.
+#' If the spline option is chosen, the \code{knots} and
+#' \code{scale} will be included in the list of results.
 #'
-#'   The fitted time-to-dropout survival curve is also returned.
+#' When fitting the dropout model by treatment, the outcome is presented
+#' as a list of lists, where each list element corresponds to a
+#' specific treatment group.
+#'
+#' The fitted time-to-dropout survival curve is also returned.
 #'
 #' @examples
 #'
@@ -43,13 +59,15 @@
 #' @export
 #'
 fitDropout <- function(df, dropout_model = "exponential",
-                       piecewiseDropoutTime = 0, showplot = TRUE,
-                       by_treatment = FALSE) {
+                       piecewiseDropoutTime = 0,
+                       k_dropout = 0, scale_dropout = "hazard",
+                       showplot = TRUE, by_treatment = FALSE) {
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(dropout_model),
                        c("exponential", "weibull", "log-logistic",
-                         "log-normal", "piecewise exponential"))
+                         "log-normal", "piecewise exponential",
+                         "spline"))
 
   if (piecewiseDropoutTime[1] != 0) {
     stop("piecewiseDropoutTime must start with 0");
@@ -58,6 +76,9 @@ fitDropout <- function(df, dropout_model = "exponential",
       any(diff(piecewiseDropoutTime) <= 0)) {
     stop("piecewiseDropoutTime should be increasing")
   }
+
+  erify::check_n(k_dropout, zero = TRUE)
+  erify::check_content(tolower(scale_dropout), c("hazard", "odds", "normal"))
 
   erify::check_bool(showplot)
   erify::check_bool(by_treatment)
@@ -76,6 +97,11 @@ fitDropout <- function(df, dropout_model = "exponential",
     ngroups = 1
     df <- df %>% dplyr::mutate(treatment = 1)
   }
+
+  if (ngroups == 1) {
+    by_treatment = FALSE
+  }
+
 
   # fit by treatment group
   dropout_fit <- list()
@@ -110,7 +136,6 @@ fitDropout <- function(df, dropout_model = "exponential",
       dffit3 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
         surv = pexp(.data$time, rate = exp(fit3$theta), lower.tail = FALSE))
-
     } else if (tolower(dropout_model) == "weibull") {
       # lambda(t) = kappa/lambda*(t/lambda)^(kappa-1)
       # S(t) = exp(-(t/lambda)^kappa)
@@ -212,13 +237,39 @@ fitDropout <- function(df, dropout_model = "exponential",
       surv = exp(-m)
 
       dffit3 <- dplyr::tibble(time, surv)
+    } else if (tolower(dropout_model) == "spline") {
+      # g(S(t)) = gamma_0 +gamma_1*x +gamma_2*v_1(x) +... +gamma_{m+1}*v_m(x)
+
+      spl <- flexsurv::flexsurvspline(survival::Surv(time, dropout) ~ 1,
+                                      data = df1, k = k_dropout,
+                                      scale = scale_dropout,
+                                      method = "Nelder-Mead")
+
+      fit3 <- list(model = "Spline",
+                   theta = spl$coefficients,
+                   vtheta = spl$cov,
+                   aic = -2*spl$loglik + 2*(k_dropout+2),
+                   bic = -2*spl$loglik + (k_dropout+2)*log(n0),
+                   knots = spl$knots,
+                   scale = spl$scale)
+
+      # fitted survival curve
+      dffit3 <- dplyr::tibble(
+        time = seq(0, max(df1$time)),
+        surv = flexsurv::psurvspline(.data$time, gamma = spl$coefficients,
+                                     knots = spl$knots, scale = spl$scale,
+                                     lower.tail = FALSE))
     }
+
 
 
     # plot the survival curve
     if (tolower(fit3$model) == "piecewise exponential") {
       modeltext = paste0(paste0(fit3$model, "("),
                          paste(piecewiseDropoutTime, collapse = " "), ")")
+    } else if (tolower(fit3$model) == "spline") {
+      modeltext = paste0(fit3$model, "(k = ", k_dropout, ", ", "scale = '",
+                         scale_dropout, "')")
     } else {
       modeltext = fit3$model
     }
@@ -263,7 +314,7 @@ fitDropout <- function(df, dropout_model = "exponential",
     g1[[i]] = fittedDropout
   }
 
-  if (!by_treatment || ngroups == 1) {
+  if (!by_treatment) {
     dropout_fit = fit3
     dropout_fit_plot = fittedDropout
   } else {
