@@ -138,11 +138,11 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       alloc = rep(1, ngroups)
     } else {
       if (length(alloc) != ngroups) {
-        stop("length of alloc must be equal to the number of treatments.")
+        stop("length of alloc must be equal to the number of treatments")
       }
 
       if (any(alloc <= 0 | alloc != round(alloc))) {
-        stop("elements of alloc must be positive integers.")
+        stop("elements of alloc must be positive integers")
       }
     }
   } else {
@@ -167,11 +167,11 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     t0 = as.numeric(cutoffdt - trialsdt + 1)
 
     if (any(df$randdt < trialsdt)) {
-      stop("randdt must be greater than or equal to trialsdt.")
+      stop("randdt must be greater than or equal to trialsdt")
     }
 
     if (any(df$randdt > cutoffdt)) {
-      stop("randdt must be less than or equal to cutoffdt.")
+      stop("randdt must be less than or equal to cutoffdt")
     }
 
     df <- df %>%
@@ -259,7 +259,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
     newSubjects <- newEnrollment_td(t0, n1, theta, nreps)
   } else if (tolower(enroll_fit$model) == "b-spline") {
     if (is.null(df)) {
-      stop("B-spline enrollment model cannot be used at the design stage.")
+      stop("B-spline enrollment model cannot be used at the design stage")
     }
 
     # draw parameter from posterior distribution
