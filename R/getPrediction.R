@@ -874,8 +874,8 @@ getPrediction <- function(
               u = event_prior1$piecewiseSurvivalTime
               ucut = c(u, Inf)
 
-              d = rep(NA, l2)  # number of events in each interval
-              ex = rep(NA, l2) # total exposure in each interval
+              d = rep(-1, l2)  # number of events in each interval
+              ex = rep(-1, l2) # total exposure in each interval
               for (l in l1:l2) {
                 d[l] = sum(df$time > ucut[l] & df$time <= ucut[l+1] &
                              df$event == 1)
@@ -914,6 +914,9 @@ getPrediction <- function(
                               ex0 = ex[l],
                               theta0 = event_prior1$theta[l],
                               vtheta0 = event_prior1$vtheta[l,l],
+                              method = "Brent",
+                              lower = event_prior1$theta[l]-100,
+                              upper = event_prior1$theta[l],
                               control = c(fnscale = -1))  # maximization
                 event_fit1$theta[l] = opt1$par
                 event_fit1$vtheta[l,l] = solve(-optimHess(
@@ -962,8 +965,8 @@ getPrediction <- function(
                 u = event_prior1[[j]]$piecewiseSurvivalTime
                 ucut = c(u, Inf)
 
-                d = rep(NA, l2)  # number of events in each interval
-                ex = rep(NA, l2) # total exposure in each interval
+                d = rep(-1, l2)  # number of events in each interval
+                ex = rep(-1, l2) # total exposure in each interval
                 for (l in l1:l2) {
                   d[l] = sum(df1$time > ucut[l] & df1$time <= ucut[l+1] &
                                df1$event == 1)
@@ -1001,6 +1004,9 @@ getPrediction <- function(
                                 ex0 = ex[l],
                                 theta0 = event_prior1[[j]]$theta[l],
                                 vtheta0 = event_prior1[[j]]$vtheta[l,l],
+                                method = "Brent",
+                                lower = event_prior1[[j]]$theta[l]-100,
+                                upper = event_prior1[[j]]$theta[l],
                                 control = c(fnscale = -1))  # maximization
                   event_fit1[[j]]$theta[l] = opt1$par
                   event_fit1[[j]]$vtheta[l,l] = solve(-optimHess(
@@ -1052,6 +1058,9 @@ getPrediction <- function(
                           ex0 = ex,
                           theta0 = event_prior1$theta,
                           vtheta0 = event_prior1$vtheta,
+                          method = "Brent",
+                          lower = event_prior1$theta-100,
+                          upper = event_prior1$theta,
                           control = c(fnscale = -1))  # maximization
             event_fit1$model = "Exponential"
             event_fit1$theta = opt1$par
@@ -1116,7 +1125,7 @@ getPrediction <- function(
             u = event_prior1$piecewiseSurvivalTime
             ucut = c(u, Inf)
 
-            ex = rep(NA, l2) # total exposure in each interval
+            ex = rep(-1, l2) # total exposure in each interval
             for (l in 1:l2) {
               ex[l] = sum(pmax(0, pmin(df$time, ucut[l+1]) - ucut[l]))
             }
@@ -1129,6 +1138,9 @@ getPrediction <- function(
                             ex0 = ex[l],
                             theta0 = event_prior1$theta[l],
                             vtheta0 = event_prior1$vtheta[l,l],
+                            method = "Brent",
+                            lower = event_prior1$theta[l]-100,
+                            upper = event_prior1$theta[l],
                             control = c(fnscale = -1))  # maximization
               event_fit1$theta[l] = opt1$par
               event_fit1$vtheta[l,l] = solve(-optimHess(
@@ -1156,6 +1168,9 @@ getPrediction <- function(
                               ex0 = ex,
                               theta0 = event_prior1[[j]]$theta,
                               vtheta0 = event_prior1[[j]]$vtheta,
+                              method = "Brent",
+                              lower = event_prior1[[j]]$theta-100,
+                              upper = event_prior1[[j]]$theta,
                               control = c(fnscale = -1))  # maximization
                 event_fit12$model = "Exponential"
                 event_fit12$theta = opt1$par
@@ -1220,7 +1235,7 @@ getPrediction <- function(
                 u = event_prior1[[j]]$piecewiseSurvivalTime
                 ucut = c(u, Inf)
 
-                ex = rep(NA, l2) # total exposure in each interval
+                ex = rep(-1, l2) # total exposure in each interval
                 for (l in 1:l2) {
                   ex[l] = sum(pmax(0, pmin(df1$time, ucut[l+1]) - ucut[l]))
                 }
@@ -1233,6 +1248,9 @@ getPrediction <- function(
                                 ex0 = ex[l],
                                 theta0 = event_prior1[[j]]$theta[l],
                                 vtheta0 = event_prior1[[j]]$vtheta[l,l],
+                                method = "Brent",
+                                lower = event_prior1[[j]]$theta[l]-100,
+                                upper = event_prior1[[j]]$theta[l],
                                 control = c(fnscale = -1))  # maximization
                   event_fit12$theta[l] = opt1$par
                   event_fit12$vtheta[l,l] = solve(-optimHess(
@@ -1272,8 +1290,8 @@ getPrediction <- function(
                 u = event_prior1[[j]]$piecewiseSurvivalTime
                 ucut = c(u, Inf)
 
-                d = rep(NA, l2)  # number of events in each interval
-                ex = rep(NA, l2) # total exposure in each interval
+                d = rep(-1, l2)  # number of events in each interval
+                ex = rep(-1, l2) # total exposure in each interval
                 for (l in l1:l2) {
                   d[l] = sum(df1$time > ucut[l] & df1$time <= ucut[l+1] &
                                df1$event == 1)
@@ -1312,6 +1330,9 @@ getPrediction <- function(
                                 ex0 = ex[l],
                                 theta0 = event_prior1[[j]]$theta[l],
                                 vtheta0 = event_prior1[[j]]$vtheta[l,l],
+                                method = "Brent",
+                                lower = event_prior1[[j]]$theta[l]-100,
+                                upper = event_prior1[[j]]$theta[l],
                                 control = c(fnscale = -1))  # maximization
                   event_fit12$theta[l] = opt1$par
                   event_fit12$vtheta[l,l] = solve(-optimHess(
@@ -1600,8 +1621,8 @@ getPrediction <- function(
                 u = dropout_prior1$piecewiseDropoutTime
                 ucut = c(u, Inf)
 
-                d = rep(NA, l2)  # number of dropouts in each interval
-                ex = rep(NA, l2) # total exposure in each interval
+                d = rep(-1, l2)  # number of dropouts in each interval
+                ex = rep(-1, l2) # total exposure in each interval
                 for (l in l1:l2) {
                   d[l] = sum(df$time > ucut[l] & df$time <= ucut[l+1] &
                                df$dropout == 1)
@@ -1640,6 +1661,9 @@ getPrediction <- function(
                                 ex0 = ex[l],
                                 theta0 = dropout_prior1$theta[l],
                                 vtheta0 = dropout_prior1$vtheta[l,l],
+                                method = "Brent",
+                                lower = dropout_prior1$theta[l]-100,
+                                upper = dropout_prior1$theta[l],
                                 control = c(fnscale = -1))  # maximization
                   dropout_fit1$theta[l] = opt1$par
                   dropout_fit1$vtheta[l,l] = solve(-optimHess(
@@ -1690,8 +1714,8 @@ getPrediction <- function(
                   u = dropout_prior1[[j]]$piecewiseDropoutTime
                   ucut = c(u, Inf)
 
-                  d = rep(NA, l2)  # number of dropouts in each interval
-                  ex = rep(NA, l2) # total exposure in each interval
+                  d = rep(-1, l2)  # number of dropouts in each interval
+                  ex = rep(-1, l2) # total exposure in each interval
                   for (l in l1:l2) {
                     d[l] = sum(df1$time > ucut[l] & df1$time <= ucut[l+1] &
                                  df1$dropout == 1)
@@ -1729,6 +1753,9 @@ getPrediction <- function(
                                   ex0 = ex[l],
                                   theta0 = dropout_prior1[[j]]$theta[l],
                                   vtheta0 = dropout_prior1[[j]]$vtheta[l,l],
+                                  method = "Brent",
+                                  lower = dropout_prior1[[j]]$theta[l]-100,
+                                  upper = dropout_prior1[[j]]$theta[l],
                                   control = c(fnscale = -1))  # maximization
                     dropout_fit1[[j]]$theta[l] = opt1$par
                     dropout_fit1[[j]]$vtheta[l,l] = solve(-optimHess(
@@ -1780,6 +1807,9 @@ getPrediction <- function(
                             ex0 = ex,
                             theta0 = dropout_prior1$theta,
                             vtheta0 = dropout_prior1$vtheta,
+                            method = "Brent",
+                            lower = dropout_prior1$theta-100,
+                            upper = dropout_prior1$theta,
                             control = c(fnscale = -1))  # maximization
               dropout_fit1$model = "Exponential"
               dropout_fit1$theta = opt1$par
@@ -1844,7 +1874,7 @@ getPrediction <- function(
               u = dropout_prior1$piecewiseDropoutTime
               ucut = c(u, Inf)
 
-              ex = rep(NA, l2) # total exposure in each interval
+              ex = rep(-1, l2) # total exposure in each interval
               for (l in 1:l2) {
                 ex[l] = sum(pmax(0, pmin(df$time, ucut[l+1]) - ucut[l]))
               }
@@ -1857,6 +1887,9 @@ getPrediction <- function(
                               ex0 = ex[l],
                               theta0 = dropout_prior1$theta[l],
                               vtheta0 = dropout_prior1$vtheta[l,l],
+                              method = "Brent",
+                              lower = dropout_prior1$theta[l]-100,
+                              upper = dropout_prior1$theta[l],
                               control = c(fnscale = -1))  # maximization
                 dropout_fit1$theta[l] = opt1$par
                 dropout_fit1$vtheta[l,l] = solve(-optimHess(
@@ -1884,6 +1917,9 @@ getPrediction <- function(
                                 ex0 = ex,
                                 theta0 = dropout_prior1[[j]]$theta,
                                 vtheta0 = dropout_prior1[[j]]$vtheta,
+                                method = "Brent",
+                                lower = dropout_prior1[[j]]$theta-100,
+                                upper = dropout_prior1[[j]]$theta,
                                 control = c(fnscale = -1))  # maximization
                   dropout_fit12$model = "Exponential"
                   dropout_fit12$theta = opt1$par
@@ -1948,7 +1984,7 @@ getPrediction <- function(
                   u = dropout_prior1[[j]]$piecewiseDropoutTime
                   ucut = c(u, Inf)
 
-                  ex = rep(NA, l2) # total exposure in each interval
+                  ex = rep(-1, l2) # total exposure in each interval
                   for (l in 1:l2) {
                     ex[l] = sum(pmax(0, pmin(df1$time, ucut[l+1]) - ucut[l]))
                   }
@@ -1961,6 +1997,9 @@ getPrediction <- function(
                                   ex0 = ex[l],
                                   theta0 = dropout_prior1[[j]]$theta[l],
                                   vtheta0 = dropout_prior1[[j]]$vtheta[l,l],
+                                  method = "Brent",
+                                  lower = dropout_prior1[[j]]$theta[l]-100,
+                                  upper = dropout_prior1[[j]]$theta[l],
                                   control = c(fnscale = -1))  # maximization
                     dropout_fit12$theta[l] = opt1$par
                     dropout_fit12$vtheta[l,l] = solve(-optimHess(
@@ -2000,8 +2039,8 @@ getPrediction <- function(
                   u = dropout_prior1[[j]]$piecewiseDropoutTime
                   ucut = c(u, Inf)
 
-                  d = rep(NA, l2)  # number of dropouts in each interval
-                  ex = rep(NA, l2) # total exposure in each interval
+                  d = rep(-1, l2)  # number of dropouts in each interval
+                  ex = rep(-1, l2) # total exposure in each interval
                   for (l in l1:l2) {
                     d[l] = sum(df1$time > ucut[l] & df1$time <= ucut[l+1] &
                                  df1$dropout == 1)
@@ -2040,6 +2079,9 @@ getPrediction <- function(
                                   ex0 = ex[l],
                                   theta0 = dropout_prior1[[j]]$theta[l],
                                   vtheta0 = dropout_prior1[[j]]$vtheta[l,l],
+                                  method = "Brent",
+                                  lower = dropout_prior1[[j]]$theta[l]-100,
+                                  upper = dropout_prior1[[j]]$theta[l],
                                   control = c(fnscale = -1))  # maximization
                     dropout_fit12$theta[l] = opt1$par
                     dropout_fit12$vtheta[l,l] = solve(-optimHess(
