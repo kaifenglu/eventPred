@@ -6,12 +6,9 @@
 - add log-logistic event model and log-logistic dropout model
 - change parameterization of Weibull distribution to be consistent with log-logistic and log-normal distributions in the AFT family 
 - add AIC to enrollment, event and dropout model fits
+- check the required number of events/dropouts for event/dropout model fits 
 - add "spline" as a dropout_model option
-- update enroll_fit for piecewise Poisson enrollment model with prior
-- update event_fit for piecewise exponential event model with prior
-- update dropout_fit for piecewise exponential dropout model with prior
-- update event_fit with prior if there is no observed event
-- update dropout_fit with prior if there is no observed dropout
+- update enroll_fit, event_fit, and dropout_fit for prior incorporation
 
 
 # eventPred 0.1.5
