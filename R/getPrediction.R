@@ -949,7 +949,7 @@ getPrediction <- function(
 
             d = rep(NA, l2)  # number of events in each interval
             ex = rep(NA, l2) # total exposure in each interval
-            for (l in l1:l2) {
+            for (l in 1:l2) {
               d[l] = sum(df1$time > ucut[l] & df1$time <= ucut[l+1] &
                            df1$event == 1)
               ex[l] = sum(pmax(0, pmin(df1$time, ucut[l+1]) - ucut[l]))
@@ -1300,7 +1300,7 @@ getPrediction <- function(
 
               d = rep(NA, l2)  # number of dropouts in each interval
               ex = rep(NA, l2) # total exposure in each interval
-              for (l in l1:l2) {
+              for (l in 1:l2) {
                 d[l] = sum(df1$time > ucut[l] & df1$time <= ucut[l+1] &
                              df1$dropout == 1)
                 ex[l] = sum(pmax(0, pmin(df1$time, ucut[l+1]) - ucut[l]))
