@@ -137,10 +137,11 @@
 #' @importFrom rstpm2 vuniroot
 #' @importFrom numDeriv grad
 #' @importFrom tmvtnsim rtnorm
-#' @importFrom stats loess.smooth optim
+#' @importFrom stats dweibull dlnorm loess.smooth optim
 #'   optimHess pexp plnorm plogis pnorm pweibull qlogis qnorm quantile
 #'   rbinom reorder rexp rlnorm rmultinom rnorm runif rweibull uniroot var
 #' @importFrom flexsurv flexsurvspline psurvspline qsurvspline rsurvspline
+#'   dllogis pllogis
 #' @importFrom erify check_bool check_class check_content check_n
 #'   check_positive
 #' @importFrom rlang .data
