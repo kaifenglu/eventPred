@@ -123,15 +123,15 @@ fitEvent <- function(df, event_model = "model averaging",
     d0 = sum(df1$event)
     ex0 = sum(df1$time)
 
-    erify::check_positive(d0, supplement = paste(
-      "The number of events must be positive to fit an event model."))
-
     kmfit <- survival::survfit(survival::Surv(time, event) ~ 1, data = df1)
     kmdf <- dplyr::tibble(time = kmfit$time, surv = kmfit$surv)
     kmdf <- dplyr::tibble(time = 0, surv = 1) %>%
       dplyr::bind_rows(kmdf)
 
     if (tolower(event_model) == "exponential") {
+      erify::check_positive(d0, supplement = paste(
+        "The number of events must be >= 1 to fit an exponential model."))
+
       # lambda(t) = lambda
       # S(t) = exp(-lambda*t)
 
@@ -146,6 +146,9 @@ fitEvent <- function(df, event_model = "model averaging",
         time = seq(0, max(df1$time)),
         surv = pexp(.data$time, rate = exp(fit2$theta), lower.tail = FALSE))
     } else if (tolower(event_model) == "weibull") {
+      erify::check_positive(d0 - 1, supplement = paste(
+        "The number of events must be >= 2 to fit a Weibull model."))
+
       # lambda(t) = kappa/lambda*(t/lambda)^(kappa-1)
       # S(t) = exp(-(t/lambda)^kappa)
 
@@ -167,7 +170,11 @@ fitEvent <- function(df, event_model = "model averaging",
         surv = pweibull(.data$time, shape = exp(-fit2$theta[2]),
                         scale = exp(fit2$theta[1]), lower.tail = FALSE))
     } else if (tolower(event_model) == "log-logistic") {
+      erify::check_positive(d0 - 1, supplement = paste(
+        "The number of events must be >= 2 to fit a log-logistic model."))
+
       # S(t) = 1/(1 + (t/lambda)^kappa)
+
       reg <- survival::survreg(survival::Surv(time, event) ~ 1,
                                data = df1, dist = "loglogistic")
 
@@ -186,7 +193,11 @@ fitEvent <- function(df, event_model = "model averaging",
         surv = plogis(log(.data$time), location = fit2$theta[1],
                       scale = exp(fit2$theta[2]), lower.tail = FALSE))
     } else if (tolower(event_model) == "log-normal") {
+      erify::check_positive(d0 - 1, supplement = paste(
+        "The number of events must be >= 2 to fit a log-normal model."))
+
       # S(t) = 1 - Phi((log(t) - meanlog)/sdlog)
+
       reg <- survival::survreg(survival::Surv(time, event) ~ 1,
                                data = df1, dist = "lognormal")
 
@@ -206,6 +217,7 @@ fitEvent <- function(df, event_model = "model averaging",
     } else if (tolower(event_model) == "piecewise exponential") {
       # lambda(t) = lambda[j] for ucut[j] < t <= ucut[j+1], j = 1,...,J
       # where ucut[1]=0< ucut[2]< ...< ucut[J]< ucut[J+1]=Inf are the knots
+
       u = piecewiseSurvivalTime[piecewiseSurvivalTime < max(df1$time)]
       ucut = c(u, max(df1$time))
       J = length(u)
@@ -216,6 +228,11 @@ fitEvent <- function(df, event_model = "model averaging",
         d[j] = sum((df1$time > ucut[j]) * (df1$time <= ucut[j+1]) *
                      (df1$event == 1))
         ex[j] = sum(pmax(0, pmin(df1$time, ucut[j+1]) - ucut[j]))
+      }
+
+      if (any(d == 0)) {
+        stop(paste("The number of events must be >= 1 in each interval",
+             "to fit a piecewise exponential model."))
       }
 
       # maximum likelihood estimates and covariance matrix
@@ -247,6 +264,9 @@ fitEvent <- function(df, event_model = "model averaging",
 
       dffit2 <- dplyr::tibble(time, surv)
     } else if (tolower(event_model) == "model averaging") {
+      erify::check_positive(d0 - 1, supplement = paste(
+        "The number of events must be >= 2 to fit a model-averaging model."))
+
       reg1 <- survival::survreg(survival::Surv(time, event) ~ 1,
                                 data = df1, dist = "weibull")
       reg2 <- survival::survreg(survival::Surv(time, event) ~ 1,
@@ -296,6 +316,9 @@ fitEvent <- function(df, event_model = "model averaging",
         time = seq(0, max(df1$time)),
         surv = pmodavg(.data$time, theta, w1, lower.tail = FALSE))
     } else if (tolower(event_model) == "spline") {
+      erify::check_positive(d0 - k - 1, supplement = paste(
+        "The number of events must be >=", k + 2, "to fit a spline model."))
+
       # g(S(t)) = gamma_0 +gamma_1*x +gamma_2*v_1(x) +... +gamma_{m+1}*v_m(x)
 
       spl <- flexsurv::flexsurvspline(survival::Surv(time, event) ~ 1,

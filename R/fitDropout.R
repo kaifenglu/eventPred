@@ -114,15 +114,15 @@ fitDropout <- function(df, dropout_model = "exponential",
     c0 = sum(df1$dropout)
     ex0 = sum(df1$time)
 
-    erify::check_positive(c0, supplement = paste(
-      "The number of dropouts must be positive to fit a dropout model."))
-
     kmfit <- survival::survfit(survival::Surv(time, dropout) ~ 1, data = df1)
     kmdf <- dplyr::tibble(time = kmfit$time, surv = kmfit$surv)
     kmdf <- dplyr::tibble(time = 0, surv = 1) %>%
       dplyr::bind_rows(kmdf)
 
     if (tolower(dropout_model) == "exponential") {
+      erify::check_positive(c0, supplement = paste(
+        "The number of dropouts must be >= 1 to fit an exponential model."))
+
       # lambda(t) = lambda
       # S(t) = exp(-lambda*t)
 
@@ -137,6 +137,9 @@ fitDropout <- function(df, dropout_model = "exponential",
         time = seq(0, max(df1$time)),
         surv = pexp(.data$time, rate = exp(fit3$theta), lower.tail = FALSE))
     } else if (tolower(dropout_model) == "weibull") {
+      erify::check_positive(c0 - 1, supplement = paste(
+        "The number of dropouts must be >= 2 to fit a Weibull model."))
+
       # lambda(t) = kappa/lambda*(t/lambda)^(kappa-1)
       # S(t) = exp(-(t/lambda)^kappa)
 
@@ -158,7 +161,11 @@ fitDropout <- function(df, dropout_model = "exponential",
         surv = pweibull(.data$time, shape = exp(-fit3$theta[2]),
                         scale = exp(fit3$theta[1]), lower.tail = FALSE))
     } else if (tolower(dropout_model) == "log-logistic") {
+      erify::check_positive(c0 - 1, supplement = paste(
+        "The number of dropouts must be >= 2 to fit a log-logistic model."))
+
       # S(t) = 1/(1 + (t/lambda)^kappa)
+
       reg <- survival::survreg(survival::Surv(time, dropout) ~ 1,
                                data = df1, dist = "loglogistic")
 
@@ -177,7 +184,11 @@ fitDropout <- function(df, dropout_model = "exponential",
         surv = plogis(log(.data$time), location = fit3$theta[1],
                       scale = exp(fit3$theta[2]), lower.tail = FALSE))
     } else if (tolower(dropout_model) == "log-normal") {
+      erify::check_positive(c0 - 1, supplement = paste(
+        "The number of dropouts must be >= 2 to fit a log-normal model."))
+
       # S(t) = 1 - Phi((log(t) - meanlog)/sdlog)
+
       reg <- survival::survreg(survival::Surv(time, dropout) ~ 1,
                                data = df1, dist = "lognormal")
 
@@ -197,6 +208,7 @@ fitDropout <- function(df, dropout_model = "exponential",
     } else if (tolower(dropout_model) == "piecewise exponential") {
       # lambda(t) = lambda[j] for ucut[j] < t <= ucut[j+1], j = 1,...,J
       # where ucut[1]=0< ucut[2]< ...< ucut[J]< ucut[J+1]=Inf are the knots
+
       u = piecewiseDropoutTime[piecewiseDropoutTime < max(df1$time)]
       ucut = c(u, max(df1$time))
       J = length(u)
@@ -207,6 +219,11 @@ fitDropout <- function(df, dropout_model = "exponential",
         d[j] = sum((df1$time > ucut[j]) * (df1$time <= ucut[j+1]) *
                      (df1$dropout == 1))
         ex[j] = sum(pmax(0, pmin(df1$time, ucut[j+1]) - ucut[j]))
+      }
+
+      if (any(d == 0)) {
+        stop(paste("The number of dropouts must be >= 1 in each interval",
+                   "to fit a piecewise exponential model."))
       }
 
       # maximum likelihood estimates and covariance matrix
@@ -238,6 +255,10 @@ fitDropout <- function(df, dropout_model = "exponential",
 
       dffit3 <- dplyr::tibble(time, surv)
     } else if (tolower(dropout_model) == "spline") {
+      erify::check_positive(c0 - k_dropout - 1, supplement = paste(
+        "The number of dropouts must be >=", k_dropout + 2,
+        "to fit a spline model."))
+
       # g(S(t)) = gamma_0 +gamma_1*x +gamma_2*v_1(x) +... +gamma_{m+1}*v_m(x)
 
       spl <- flexsurv::flexsurvspline(survival::Surv(time, dropout) ~ 1,
