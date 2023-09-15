@@ -873,6 +873,8 @@ getPrediction <- function(
           event_prior2 = event_prior1
         }
 
+        event_fit1 <- list()
+
         for (j in 1:ngroups) {
           df1 = df %>% dplyr::filter(.data$treatment == j)
 
@@ -1221,6 +1223,8 @@ getPrediction <- function(
           } else {
             dropout_prior2 = dropout_prior1
           }
+
+          dropout_fit1 <- list()
 
           for (j in 1:ngroups) {
             df1 = df %>% dplyr::filter(.data$treatment == j)
