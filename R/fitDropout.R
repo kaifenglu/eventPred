@@ -6,12 +6,14 @@
 #'   coded as 1, 2, and so on, and \code{treatment_description}
 #'   for fitting the dropout model by treatment.
 #' @param dropout_model The dropout model used to analyze the dropout data
-#'   which can be set to one of the following options: "exponential",
-#'   "Weibull", "log-logistic", "log-normal", "piecewise exponential",
-#'   or "spline". The spline model of Royston and Parmer (2022) assumes
-#'   that a transformation of the survival function is modeled as a
-#'   natural cubic spline function of log time.
-#'   By default, it is set to "exponential".
+#'   which can be set to one of the following options:
+#'   "exponential", "Weibull", "log-logistic", "log-normal",
+#'   "piecewise exponential", "model averaging", or "spline".
+#'   The model averaging uses the \code{exp(-bic/2)} weighting and
+#'   combines Weibull and log-normal models. The spline model of
+#'   Royston and Parmar (2002) assumes that a transformation of
+#'   the survival function is modeled as a natural cubic spline
+#'   function of log time. By default, it is set to "exponential".
 #' @param piecewiseDropoutTime A vector that specifies the time
 #'   intervals for the piecewise exponential dropout distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2
@@ -36,15 +38,18 @@
 #' @return A list of results from the model fit including key information
 #' such as the dropout model, \code{model}, the estimated model parameters,
 #' \code{theta}, the covariance matrix, \code{vtheta}, as well as the
-#' Akaike Information Criterion, \code{aic},
-#' and Bayesian Information Criterion, \code{bic}.
+#' Akaike Information Criterion, \code{aic}, and
+#' Bayesian Information Criterion, \code{bic}.
 #'
 #' If the piecewise exponential model is used, the location
 #' of knots used in the model, \code{piecewiseDropoutTime}, will
 #' be included in the list of results.
 #'
-#' If the spline option is chosen, the \code{knots} and
-#' \code{scale} will be included in the list of results.
+#' If the model averaging option is chosen, the weight assigned
+#' to the Weibull component is indicated by the \code{w1} variable.
+#'
+#' If the spline option is chosen, the \code{knots} and \code{scale}
+#' will be included in the list of results.
 #'
 #' When fitting the dropout model by treatment, the outcome is presented
 #' as a list of lists, where each list element corresponds to a
@@ -67,7 +72,7 @@ fitDropout <- function(df, dropout_model = "exponential",
   erify::check_content(tolower(dropout_model),
                        c("exponential", "weibull", "log-logistic",
                          "log-normal", "piecewise exponential",
-                         "spline"))
+                         "model averaging", "spline"))
 
   if (piecewiseDropoutTime[1] != 0) {
     stop("piecewiseDropoutTime must start with 0");
@@ -254,6 +259,59 @@ fitDropout <- function(df, dropout_model = "exponential",
       surv = exp(-m)
 
       dffit3 <- dplyr::tibble(time, surv)
+    } else if (tolower(dropout_model) == "model averaging") {
+      erify::check_positive(c0 - 1, supplement = paste(
+        "The number of dropouts must be >= 2 to fit",
+        "a model averaging model."))
+
+      reg1 <- survival::survreg(survival::Surv(time, dropout) ~ 1,
+                                data = df1, dist = "weibull")
+      reg2 <- survival::survreg(survival::Surv(time, dropout) ~ 1,
+                                data = df1, dist = "lognormal")
+      aic1 <- -2*reg1$loglik[1] + 4
+      aic2 <- -2*reg2$loglik[1] + 4
+      bic1 <- -2*reg1$loglik[1] + 2*log(n0)
+      bic2 <- -2*reg2$loglik[1] + 2*log(n0)
+
+      w1 = 1/(1 + exp(-0.5*(bic2 - bic1)))
+
+
+      # model parameters from weibull and log-normal
+      theta = c(as.numeric(reg1$coefficients), log(reg1$scale),
+                as.numeric(reg2$coefficients), log(reg2$scale))
+
+      # variance-covariance matrix, noting that the covariances
+      # between the two sets of parameters are zero as they are estimated
+      # from different likelihood functions
+      vtheta = as.matrix(Matrix::bdiag(reg1$var, reg2$var))
+
+      # model fit, assuming fixed weight w1
+      fit3 <- list(model = "Model averaging",
+                   theta = theta,
+                   vtheta = vtheta,
+                   aic = w1*aic1 + (1-w1)*aic2,
+                   bic = w1*bic1 + (1-w1)*bic2,
+                   w1 = w1)
+
+      # distribution function for model averaging of Weibull and log-normal
+      pmodavg <- function(t, theta, w1, lower.tail = TRUE, log.p = FALSE) {
+        shape = exp(-theta[2])
+        scale = exp(theta[1])
+        meanlog = theta[3]
+        sdlog = exp(theta[4])
+
+        p1 = pweibull(pmax(0,t), shape, scale)
+        p2 = plnorm(pmax(0,t), meanlog, sdlog)
+        p = w1*p1 + (1-w1)*p2
+
+        if (!lower.tail) p = 1 - p
+        if (log.p) p = log(p)
+        p
+      }
+
+      dffit3 <- dplyr::tibble(
+        time = seq(0, max(df1$time)),
+        surv = pmodavg(.data$time, theta, w1, lower.tail = FALSE))
     } else if (tolower(dropout_model) == "spline") {
       erify::check_positive(c0 - k_dropout - 1, supplement = paste(
         "The number of dropouts must be >=", k_dropout + 2,
@@ -283,7 +341,6 @@ fitDropout <- function(df, dropout_model = "exponential",
     }
 
 
-
     # plot the survival curve
     if (tolower(fit3$model) == "piecewise exponential") {
       modeltext = paste0(paste0(fit3$model, "("),
@@ -295,10 +352,14 @@ fitDropout <- function(df, dropout_model = "exponential",
       modeltext = fit3$model
     }
 
-    aictext = paste("AIC:", round(fit3$aic,2))
-    bictext = paste("BIC:", round(fit3$bic,2))
+    if (tolower(dropout_model) == "model averaging") {
+      aictext = paste("Weighted AIC:", round(fit3$aic,2))
+      bictext = paste("Weighted BIC:", round(fit3$bic,2))
+    } else {
+      aictext = paste("AIC:", round(fit3$aic,2))
+      bictext = paste("BIC:", round(fit3$bic,2))
+    }
 
-    # plot the survival curve
     fittedDropout <- plotly::plot_ly() %>%
       plotly::add_lines(
         data=kmdf, x=~time, y=~surv, name="Kaplan-Meier",
@@ -323,7 +384,7 @@ fitDropout <- function(df, dropout_model = "exponential",
           x = 0.5, y = 1,
           text = paste0("<b>", df1$treatment_description[1], "</b>"),
           xanchor = "center", yanchor = "middle", showarrow = FALSE,
-          xref='paper', yref='paper'))
+          xref = 'paper', yref = 'paper'))
     }
 
     if (by_treatment) {

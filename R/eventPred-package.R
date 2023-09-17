@@ -31,9 +31,8 @@
 #'
 #' The \code{eventPred} package also offers several time-to-event models,
 #' including exponential, Weibull, log-logistic, log-normal, piecewise
-#' exponential, model-averaging of Weibull and log-normal, and spline.
-#' For time to dropout, exponential, Weibull, log-logistic, log-normal,
-#' piecewise exponential, and spline distributions are considered.
+#' exponential, model averaging of Weibull and log-normal, and spline.
+#' For time to dropout, the same set of model options are considered.
 #' If enrollment is complete, ongoing subjects who have not had the event
 #' of interest or dropped out of the study before the data cut contribute
 #' additional events in the future. Their event times are generated

@@ -7,7 +7,7 @@
 - change parameterization of Weibull distribution to be consistent with log-logistic and log-normal distributions in the AFT family 
 - add AIC to enrollment, event and dropout model fits
 - check the required number of events/dropouts for event/dropout model fits 
-- add "spline" as a dropout_model option
+- add "model averaging" and "spline" as additional dropout_model options
 - update enroll_fit, event_fit, and dropout_fit for prior incorporation
 
 

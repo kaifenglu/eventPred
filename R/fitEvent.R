@@ -35,9 +35,7 @@
 #'   fit the time-to-event data by treatment group. By default,
 #'   it is set to \code{FALSE}.
 #'
-#'
-#' @return
-#' A list of results from the model fit including key information
+#' @return A list of results from the model fit including key information
 #' such as the event model, \code{model}, the estimated model parameters,
 #' \code{theta}, the covariance matrix, \code{vtheta}, as well as the
 #' Akaike Information Criterion, \code{aic}, and
@@ -265,7 +263,7 @@ fitEvent <- function(df, event_model = "model averaging",
       dffit2 <- dplyr::tibble(time, surv)
     } else if (tolower(event_model) == "model averaging") {
       erify::check_positive(d0 - 1, supplement = paste(
-        "The number of events must be >= 2 to fit a model-averaging model."))
+        "The number of events must be >= 2 to fit a model averaging model."))
 
       reg1 <- survival::survreg(survival::Surv(time, event) ~ 1,
                                 data = df1, dist = "weibull")
@@ -385,7 +383,7 @@ fitEvent <- function(df, event_model = "model averaging",
           x = 0.5, y = 1,
           text = paste0("<b>", df1$treatment_description[1], "</b>"),
           xanchor = "center", yanchor = "middle", showarrow = FALSE,
-          xref='paper', yref='paper'))
+          xref = 'paper', yref = 'paper'))
     }
 
     if (by_treatment) {
