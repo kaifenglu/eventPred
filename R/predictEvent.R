@@ -59,30 +59,18 @@
 #' To ensure successful event prediction at the design stage, it is
 #' important to provide the \code{newSubjects} data set.
 #'
-#' To specify the event model used during the design-stage event
-#' prediction, the \code{event_fit} be a list with one element
-#' per treatment. For each treatment, the element should include \code{w}
-#' to specify the weight of the treatment in a randomization block,
-#' \code{model} to specify the event model
-#' (exponential, weibull, log-logistic, log-normal,
-#' or piecewise exponential), \code{theta} and \code{vtheta} to indicate
-#' the parameter values and the covariance matrix.
-#' For the piecewise exponential event model, the list
-#' should also include \code{piecewiseSurvivalTime} to indicate
+#' To specify the event (dropout) model used during the design-stage event
+#' prediction, the \code{event_fit} (\code{dropout_fit}) be a list with
+#' one element per treatment. For each treatment, the element should
+#' include \code{w} to specify the weight of the treatment in a
+#' randomization block, \code{model} to specify the event model
+#' (exponential, weibull, log-logistic, log-normal, or piecewise
+#' exponential), \code{theta} and \code{vtheta} to indicate
+#' the parameter values and the covariance matrix. For the piecewise
+#' exponential event (dropout) model, the list should also include
+#' \code{piecewiseSurvivalTime} \code{piecewiseDropoutTime} to indicate
 #' the location of knots. It should be noted that the model averaging
 #' and spline options are not appropriate for use during the design stage.
-#'
-#' To specify the dropout model used during the design stage
-#' event prediction, the \code{dropout_fit} should be a list
-#' with one element per treatment. For each treatment, the element
-#' should include \code{w} to specify the weight of the treatment
-#' in a randomization block, \code{model} to specify the dropout model
-#' (exponential, weibull, log-logistic, log-normal,
-#' or piecewise exponential), \code{theta} and \code{vtheta} to indicate
-#' the parameter values and the covariance matrix.
-#' For the piecewise exponential dropout model, the list
-#' should also include \code{piecewiseDropoutTime} to indicate
-#' the location of knots.
 #'
 #' Following the commencement of the trial, we obtain the event
 #' model fit and the dropout model fit based on the observed data,
