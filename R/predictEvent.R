@@ -256,7 +256,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     for (j in 1:ngroups) {
       erify::check_content(tolower(dropout_fit[[j]]$model),
                            c("exponential", "weibull", "log-logistic",
-                             "log-normal", "piecewise exponential"))
+                             "log-normal", "piecewise exponential",
+                             "model averaging", "spline"))
     }
 
     # check dropout_fit parameters
