@@ -220,7 +220,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         (model == "log-logistic" && p != 2) ||
         (model == "log-normal" && p != 2) ||
         (model == "piecewise exponential" &&
-         p != length(event_fit[[j]]$piecewiseSurvivalTime))) {
+         p != length(event_fit[[j]]$piecewiseSurvivalTime)) ||
+        (model == "model averaging" && p != 4) ||
+        (model == "spline" && p != length(event_fit[[j]]$knots) + 2)) {
       stop(paste("Length of theta must be compatible with model",
                  "in event_fit"))
     }
@@ -253,11 +255,19 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     }
 
     # check dropout_fit model
-    for (j in 1:ngroups) {
-      erify::check_content(tolower(dropout_fit[[j]]$model),
-                           c("exponential", "weibull", "log-logistic",
-                             "log-normal", "piecewise exponential",
-                             "model averaging", "spline"))
+    if (!is.null(df)) {
+      for (j in 1:ngroups) {
+        erify::check_content(tolower(dropout_fit[[j]]$model),
+                             c("exponential", "weibull", "log-logistic",
+                               "log-normal", "piecewise exponential",
+                               "model averaging", "spline"))
+      }
+    } else {
+      for (j in 1:ngroups) {
+        erify::check_content(tolower(dropout_fit[[j]]$model),
+                             c("exponential", "weibull", "log-logistic",
+                               "log-normal", "piecewise exponential"))
+      }
     }
 
     # check dropout_fit parameters
@@ -278,7 +288,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           (model == "log-logistic" && p != 2) ||
           (model == "log-normal" && p != 2) ||
           (model == "piecewise exponential" &&
-           p != length(dropout_fit[[j]]$piecewiseDropoutTime))) {
+           p != length(dropout_fit[[j]]$piecewiseDropoutTime)) ||
+          (model == "model averaging" && p != 4) ||
+          (model == "spline" && p != length(dropout_fit[[j]]$knots) + 2)) {
         stop(paste("Length of theta must be compatible with model",
                    "in dropout_fit"))
       }
@@ -723,8 +735,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           w1 = event_fit[[j]]$w1
 
           # draw component indicator
-          p1 = w1*pweibull(time0[cols], shape, scale, lower.tail = FALSE)
-          p2 = (1-w1)*plnorm(time0[cols], meanlog, sdlog, lower.tail = FALSE)
+          p1 = w1*pweibull(time0[cols], shape, scale, lower.tail = F)
+          p2 = (1-w1)*plnorm(time0[cols], meanlog, sdlog, lower.tail = F)
           w = (runif(ncols) < p1/(p1+p2))
           nw1 = sum(w)
           nw0 = ncols - nw1
@@ -746,12 +758,11 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           scale = event_fit[[j]]$scale
 
           st0 = flexsurv::psurvspline(
-            time0[cols], gamma, knots = knots, scale = scale,
-            lower.tail = FALSE)
+            time0[cols], gamma, knots = knots, scale = scale, lower.tail = F)
 
           survivalTime[cols] = flexsurv::qsurvspline(
             runif(ncols)*st0, gamma, knots = knots, scale = scale,
-            lower.tail = FALSE)
+            lower.tail = F)
         }
       }
     }
@@ -809,6 +820,44 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             # find the interval containing time
             j1 = findInterval(rhs, psum)
             dropoutTime[cols] = u[j1] + (rhs - psum[j1])/lambda[j1]
+          } else if (model == "model averaging") {
+            theta = theta3[[j]][i,]
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
+            meanlog = theta[3]
+            sdlog = exp(theta[4])
+            w1 = dropout_fit[[j]]$w1
+
+            # draw component indicator
+            p1 = w1*pweibull(time0[cols], shape, scale, lower.tail = F)
+            p2 = (1-w1)*plnorm(time0[cols], meanlog, sdlog, lower.tail = F)
+            w = (runif(ncols) < p1/(p1+p2))
+            nw1 = sum(w)
+            nw0 = ncols - nw1
+
+            # draw from the corresponding component distribution
+            if (nw1 > 0) {
+              dropoutTime[cols][w==1] = (rexp(nw1)*scale^shape +
+                                           time0[cols][w==1]^shape)^(1/shape)
+            }
+
+            if (nw0 > 0) {
+              dropoutTime[cols][w==0] = exp(tmvtnsim::rtnorm(
+                mean = rep(meanlog, nw0), sd = sdlog,
+                lower = log(time0[cols][w==0]), upper = rep(Inf, nw0)))
+            }
+          } else if (model == "spline") {
+            gamma = theta3[[j]][i,]
+            knots = dropout_fit[[j]]$knots
+            scale = dropout_fit[[j]]$scale
+
+            st0 = flexsurv::psurvspline(
+              time0[cols], gamma, knots = knots, scale = scale,
+              lower.tail = F)
+
+            dropoutTime[cols] = flexsurv::qsurvspline(
+              runif(ncols)*st0, gamma, knots = knots, scale = scale,
+              lower.tail = F)
           }
         }
       }
