@@ -344,7 +344,7 @@ fitDropout <- function(df, dropout_model = "exponential",
     # plot the survival curve
     if (tolower(fit3$model) == "piecewise exponential") {
       modeltext = paste0(paste0(fit3$model, "("),
-                         paste(piecewiseDropoutTime, collapse = " "), ")")
+                         paste(piecewiseDropoutTime, collapse = ","), ")")
     } else if (tolower(fit3$model) == "spline") {
       modeltext = paste0(fit3$model, "(k = ", k_dropout, ", ", "scale = '",
                          scale_dropout, "')")
@@ -371,7 +371,7 @@ fitDropout <- function(df, dropout_model = "exponential",
         yaxis = list(title = "Survival probability", zeroline = FALSE),
         title = list(text = "Fitted time to dropout survival curve"),
         annotations = list(
-          x = c(0.75, 0.75, 0.75), y = c(0.95, 0.80, 0.65), xref = "paper",
+          x = c(0.7, 0.7, 0.7), y = c(0.95, 0.80, 0.65), xref = "paper",
           yref = "paper", text = paste('<i>', c(modeltext, aictext,
                                                 bictext), '</i>'),
           xanchor = "left", font = list(size = 14, color = "red"),

@@ -343,7 +343,7 @@ fitEvent <- function(df, event_model = "model averaging",
     # plot the survival curve
     if (tolower(fit2$model) == "piecewise exponential") {
       modeltext = paste0(paste0(fit2$model, "("),
-                         paste(piecewiseSurvivalTime, collapse = " "), ")")
+                         paste(piecewiseSurvivalTime, collapse = ","), ")")
     } else if (tolower(fit2$model) == "spline") {
       modeltext = paste0(fit2$model, "(k = ", k, ", ", "scale = '",
                          scale, "')")
@@ -370,7 +370,7 @@ fitEvent <- function(df, event_model = "model averaging",
         yaxis = list(title = "Survival probability", zeroline = FALSE),
         title = list(text = "Fitted time to event survival curve"),
         annotations = list(
-          x = c(0.75, 0.75, 0.75), y = c(0.95, 0.80, 0.65), xref = "paper",
+          x = c(0.7, 0.7, 0.7), y = c(0.95, 0.80, 0.65), xref = "paper",
           yref = "paper", text = paste('<i>', c(modeltext, aictext,
                                                 bictext), '</i>'),
           xanchor = "left", font = list(size = 14, color = "red"),
