@@ -532,7 +532,9 @@ dropoutPanel <- tabPanel(
                     "Weibull",
                     "Log-logistic",
                     "Log-normal",
-                    "Piecewise exponential"),
+                    "Piecewise exponential",
+                    "Model averaging",
+                    "Spline"),
         selected = "Exponential",
         inline = FALSE)
       ),
@@ -556,6 +558,23 @@ dropoutPanel <- tabPanel(
                             label=NULL, icon=icon("plus")),
                actionButton("del_piecewiseDropoutTime",
                             label=NULL, icon=icon("minus"))
+             ),
+
+             conditionalPanel(
+               condition = "input.dropout_model == 'Spline'",
+
+               numericInput(
+                 "spline_k_dropout",
+                 label = "How many inner knots to use?",
+                 value = 0,
+                 min = 0, max = 10, step = 1),
+
+               radioButtons(
+                 "spline_scale_dropout",
+                 label = "Which scale to model as a spline function?",
+                 choices = c("hazard", "odds", "normal"),
+                 selected = "hazard",
+                 inline = TRUE)
              )
       )
     ),
@@ -1418,6 +1437,18 @@ server <- function(input, output, session) {
   })
 
 
+  spline_k_dropout <- reactive({
+    req(input$spline_k_dropout)
+    valid = (input$spline_k_dropout >= 0 &&
+               input$spline_k_dropout == round(input$spline_k_dropout))
+    shinyFeedback::feedbackWarning(
+      "spline_k_dropout", !valid,
+      "Number of inner knots must be a nonnegative integer")
+    req(valid)
+    as.numeric(input$spline_k_dropout)
+  })
+
+
   # input data set
   df <- reactive({
     # input$file1 will be NULL initially. After the user selects
@@ -1508,6 +1539,7 @@ server <- function(input, output, session) {
       }
 
       fitDropout(df(), input$dropout_model, piecewiseDropoutTime(),
+                 spline_k_dropout(), input$spline_scale_dropout,
                  showplot = FALSE, input$by_treatment)
     }
   })
@@ -1720,6 +1752,8 @@ server <- function(input, output, session) {
           scale = input$spline_scale,
           dropout_model = input$dropout_model,
           piecewiseDropoutTime = piecewiseDropoutTime(),
+          k_dropout = spline_k_dropout(),
+          scale_dropout = input$spline_scale_dropout,
           pilevel = pilevel(),
           nyears = nyears(),
           nreps = nreps(),
@@ -1752,6 +1786,8 @@ server <- function(input, output, session) {
           scale = input$spline_scale,
           dropout_model = input$dropout_model,
           piecewiseDropoutTime = piecewiseDropoutTime(),
+          k_dropout = spline_k_dropout(),
+          scale_dropout = input$spline_scale_dropout,
           pilevel = pilevel(),
           nyears = nyears(),
           nreps = nreps(),
@@ -2441,7 +2477,7 @@ server <- function(input, output, session) {
   observeEvent(input$add_accrualTime, {
     a = matrix(as.numeric(input$accrualTime),
                ncol=ncol(input$accrualTime))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
+    b = matrix(a[nrow(a),] + 90, nrow=1)
     c = rbind(a, b)
     rownames(c) = paste("Interval", seq(1,nrow(c)))
     colnames(c) = colnames(input$accrualTime)
@@ -2465,7 +2501,7 @@ server <- function(input, output, session) {
     a = matrix(as.numeric(input$piecewise_poisson_rate),
                ncol=ncol(input$piecewise_poisson_rate))
     b = matrix(a[nrow(a),], nrow=1)
-    b[1,1] = b[1,1] + 1
+    b[1,1] = b[1,1] + 90
     c = rbind(a, b)
     rownames(c) = paste("Interval", seq(1,nrow(c)))
     colnames(c) = colnames(input$piecewise_poisson_rate)
@@ -2488,7 +2524,7 @@ server <- function(input, output, session) {
   observeEvent(input$add_piecewiseSurvivalTime, {
     a = matrix(as.numeric(input$piecewiseSurvivalTime),
                ncol=ncol(input$piecewiseSurvivalTime))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
+    b = matrix(a[nrow(a),] + 90, nrow=1)
     c = rbind(a, b)
     rownames(c) = paste("Interval", seq(1,nrow(c)))
     colnames(c) = colnames(input$piecewiseSurvivalTime)
@@ -2513,7 +2549,7 @@ server <- function(input, output, session) {
     observeEvent(input[[paste0("add_piecewise_exponential_survival_", i)]], {
       a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
       b = matrix(a[nrow(a),], nrow=1)
-      b[1,1] = b[1,1] + 1
+      b[1,1] = b[1,1] + 90
       c = rbind(a, b)
       rownames(c) = paste("Interval", seq(1,nrow(c)))
       colnames(c) = colnames(input[[pwexp]])
@@ -2539,7 +2575,7 @@ server <- function(input, output, session) {
   observeEvent(input$add_piecewiseDropoutTime, {
     a = matrix(as.numeric(input$piecewiseDropoutTime),
                ncol=ncol(input$piecewiseDropoutTime))
-    b = matrix(a[nrow(a),] + 1, nrow=1)
+    b = matrix(a[nrow(a),] + 90, nrow=1)
     c = rbind(a, b)
     rownames(c) = paste("Interval", seq(1,nrow(c)))
     colnames(c) = colnames(input$piecewiseDropoutTime)
@@ -2564,7 +2600,7 @@ server <- function(input, output, session) {
     observeEvent(input[[paste0("add_piecewise_exponential_dropout_", i)]], {
       a = matrix(as.numeric(input[[pwexp]]), ncol=ncol(input[[pwexp]]))
       b = matrix(a[nrow(a),], nrow=1)
-      b[1,1] = b[1,1] + 1
+      b[1,1] = b[1,1] + 90
       c = rbind(a, b)
       rownames(c) = paste("Interval", seq(1,nrow(c)))
       colnames(c) = colnames(input[[pwexp]])
@@ -2664,6 +2700,8 @@ server <- function(input, output, session) {
           dimnames = list(paste("Interval",
                                 1:length(piecewiseDropoutTime())),
                           "Starting time")),
+        spline_k_dropout = spline_k_dropout(),
+        spline_scale_dropout = input$spline_scale_dropout,
         stage = input$stage,
         to_predict = input$to_predict,
         to_predict2 = input$to_predict2,
@@ -2816,7 +2854,13 @@ server <- function(input, output, session) {
         if (x$dropout_model == "Piecewise exponential") {
           updateMatrixInput(
             session, "piecewiseDropoutTime", value=x$piecewiseDropoutTime)
+        } else if (x$dropout_model == "Spline") {
+          updateNumericInput(session, "spline_k_dropout",
+                             value=x$spline_k_dropout)
+          updateRadioButtons(session, "spline_scale_dropout",
+                             selected=x$spline_scale_dropout)
         }
+
       }
     }
 
