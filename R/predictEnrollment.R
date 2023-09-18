@@ -101,7 +101,8 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
   if ((model == "poisson" && p != 1) ||
       (model == "time-decay" && p != 2) ||
       (model == "piecewise poisson" &&
-       p != length(enroll_fit$accrualTime))) {
+       p != length(enroll_fit$accrualTime)) ||
+      (model == "b-spline" && p != ncol(enroll_fit$x))) {
     stop(paste("Length of theta must be compatible with model",
                "in enroll_fit"))
   }
