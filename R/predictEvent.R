@@ -222,7 +222,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         (model == "piecewise exponential" &&
          p != length(event_fit[[j]]$piecewiseSurvivalTime)) ||
         (model == "model averaging" && p != 4) ||
-        (model == "spline" && p != length(event_fit[[j]]$knots) + 2)) {
+        (model == "spline" && p != length(event_fit[[j]]$knots))) {
       stop(paste("Length of theta must be compatible with model",
                  "in event_fit"))
     }
@@ -290,7 +290,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           (model == "piecewise exponential" &&
            p != length(dropout_fit[[j]]$piecewiseDropoutTime)) ||
           (model == "model averaging" && p != 4) ||
-          (model == "spline" && p != length(dropout_fit[[j]]$knots) + 2)) {
+          (model == "spline" && p != length(dropout_fit[[j]]$knots))) {
         stop(paste("Length of theta must be compatible with model",
                    "in dropout_fit"))
       }
