@@ -637,10 +637,10 @@ getPrediction <- function(
       }
 
       llik_lnorm <- function(theta, event0, time0, theta0, vtheta0) {
-        k = exp(-theta[2])
-        l = exp(theta[1])
-        sum(event0*dlnorm(time0, k, l, log = T) +
-              (1 - event0)*plnorm(time0, k, l, lower.tail = F, log.p = T)) -
+        m = theta[1]
+        s = exp(theta[2])
+        sum(event0*dlnorm(time0, m, s, log = T) +
+              (1 - event0)*plnorm(time0, m, s, lower.tail = F, log.p = T)) -
           1/2*(theta - theta0) %*% solve(vtheta0, theta - theta0)
       }
 
