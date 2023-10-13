@@ -1,3 +1,8 @@
+# eventPred 0.2.1
+
+- remove the factor attribute of the treatment_description variable
+- add pilevel in the output data set for prediction interval level
+
 # eventPred 0.2.0
 
 - allow the use of treatment labels for by-treatment prediction

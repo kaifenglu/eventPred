@@ -351,10 +351,6 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
           treatment_description = paste0("Treatment ", .data$treatment))
       }
 
-      # order treatment description based on treatment
-      df$treatment_description = stats::reorder(
-        as.factor(df$treatment_description), df$treatment)
-
       treatment_mapping <- df %>%
         dplyr::select(.data$treatment, .data$treatment_description) %>%
         dplyr::arrange(.data$treatment) %>%
@@ -393,9 +389,6 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
             paste0("Treatment ", 1:ngroups), "Overall"),
             n0 = 0)
       }
-
-      sum_by_trt$treatment_description = stats::reorder(
-        as.factor(sum_by_trt$treatment_description), sum_by_trt$treatment)
     }
   }
 
@@ -441,6 +434,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       dplyr::summarise(nenrolled = sum(.data$arrivalTime <= .data$t) + n0,
                        .groups = "drop_last") %>%
       dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
+                       pilevel = pilevel,
                        lower = quantile(.data$nenrolled, probs = plower),
                        upper = quantile(.data$nenrolled, probs = pupper),
                        mean = mean(.data$nenrolled),
@@ -449,17 +443,19 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
     if (!is.null(df)) {
       # day 1
-      df0 <- dplyr::tibble(t = 1, n = 0, lower = NA, upper = NA,
-                           mean = 0, var = 0)
+      df0 <- dplyr::tibble(t = 1, n = 0, pilevel = pilevel,
+                           lower = NA, upper = NA, mean = 0, var = 0)
 
       # arrival time for subjects already enrolled before data cut
       dfa1 <- df %>%
-        dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
+        dplyr::mutate(pievel = pilevel, lower = NA, upper = NA,
+                      mean = .data$n, var = 0) %>%
         dplyr::bind_rows(df0) %>%
-        dplyr::bind_rows(dplyr::tibble(t = t0, n = n0, lower = NA,
-                                       upper = NA, mean = n0, var= 0)) %>%
-        dplyr::select(.data$t, .data$n, .data$lower, .data$upper,
-                      .data$mean, .data$var) %>%
+        dplyr::bind_rows(dplyr::tibble(t = t0, n = n0, pilevel = pilevel,
+                                       lower = NA, upper = NA,
+                                       mean = n0, var= 0)) %>%
+        dplyr::select(.data$t, .data$n, .data$pilevel, .data$lower,
+                      .data$upper, .data$mean, .data$var) %>%
         dplyr::group_by(.data$t) %>%
         dplyr::slice(dplyr::n()) %>%
         dplyr::ungroup()
@@ -530,6 +526,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
                        by = c("treatment", "treatment_description")) %>%
       dplyr::mutate(nenrolled = .data$nenrolled + .data$n0) %>%
       dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
+                       pilevel = pilevel,
                        lower = quantile(.data$nenrolled, probs = plower),
                        upper = quantile(.data$nenrolled, probs = pupper),
                        mean = mean(.data$nenrolled),
@@ -541,7 +538,8 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       # day 1
       df0 <- sum_by_trt %>%
         dplyr::select(.data$treatment, .data$treatment_description) %>%
-        dplyr::mutate(t = 1, n = 0, lower = NA, upper = NA, mean = 0, var = 0)
+        dplyr::mutate(t = 1, n = 0, pilevel = pilevel, lower = NA,
+                      upper = NA, mean = 0, var = 0)
 
       # arrival time for subjects already enrolled before data cut
       dfa1 <- df2 %>%
@@ -549,14 +547,16 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
         dplyr::arrange(.data$randdt) %>%
         dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
                       n = dplyr::row_number()) %>%
-        dplyr::mutate(lower = NA, upper = NA, mean = .data$n, var = 0) %>%
+        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
+                      mean = .data$n, var = 0) %>%
         dplyr::bind_rows(df0) %>%
         dplyr::bind_rows(sum_by_trt %>%
-                           dplyr::mutate(t = t0, n = n0, lower = NA,
-                                         upper = NA, mean = n0, var = 0)) %>%
+                           dplyr::mutate(t = t0, n = n0, pilevel = pilevel,
+                                         lower = NA, upper = NA,
+                                         mean = n0, var = 0)) %>%
         dplyr::select(.data$treatment, .data$treatment_description,
-                      .data$t, .data$n, .data$lower, .data$upper,
-                      .data$mean, .data$var) %>%
+                      .data$t, .data$n, .data$pilevel, .data$lower,
+                      .data$upper, .data$mean, .data$var) %>%
         dplyr::group_by(.data$treatment, .data$treatment_description,
                         .data$t) %>%
         dplyr::slice(dplyr::n()) %>%
