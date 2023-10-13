@@ -1319,7 +1319,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
                       mean = .data$n, var = 0) %>%
         dplyr::select(.data$treatment, .data$treatment_description,
-                      .data$t, .data$n, .data$pievel, .data$lower,
+                      .data$t, .data$n, .data$pilevel, .data$lower,
                       .data$upper, .data$mean, .data$var) %>%
         dplyr::bind_rows(df0) %>%
         dplyr::filter(.data$t <= tp) %>%

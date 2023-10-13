@@ -455,7 +455,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
       # arrival time for subjects already enrolled before data cut
       dfa1 <- df %>%
-        dplyr::mutate(pievel = pilevel, lower = NA, upper = NA,
+        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
                       mean = .data$n, var = 0) %>%
         dplyr::bind_rows(df0) %>%
         dplyr::bind_rows(dplyr::tibble(t = t0, n = n0, pilevel = pilevel,
