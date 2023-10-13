@@ -37,6 +37,8 @@
 #'   among the treatment groups.
 #' @param treatment_label The treatment labels for treatments in a
 #'   randomization block for design stage prediction.
+#'   It is replaced with the treatment_description
+#'   in the observed data if \code{df} is not \code{NULL}.
 #'
 #' @details
 #' The \code{enroll_fit} variable can be used for enrollment prediction
@@ -132,7 +134,28 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
   if (by_treatment) {
     if (!is.null(df)) {
-      ngroups = length(table(df$treatment))
+      if (!("treatment_description" %in% names(df))) {
+        df <- df %>% dplyr::mutate(
+          treatment_description = paste0("Treatment ", .data$treatment))
+      }
+
+      treatment_mapping <- df %>%
+        dplyr::select(.data$treatment, .data$treatment_description) %>%
+        dplyr::arrange(.data$treatment) %>%
+        dplyr::group_by(.data$treatment) %>%
+        dplyr::slice(dplyr::n())
+
+      ngroups = nrow(treatment_mapping)
+      treatment_label = treatment_mapping$treatment_description
+    } else if (!is.null(treatment_label)) {
+      treatment_mapping <- dplyr::tibble(
+        treatment = 1:ngroups, treatment_description = treatment_label)
+    } else {
+      treatment_mapping <- dplyr::tibble(
+        treatment = 1:ngroups,
+        treatment_description = paste0("Treatment ", .data$treatment))
+
+      treatment_label = treatment_mapping$treatment_description
     }
 
     if (is.null(alloc)) {
@@ -346,17 +369,6 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
     # summary of observed data by treatment
     if (!is.null(df)) {
-      if (!("treatment_description" %in% names(df))) {
-        df <- df %>% dplyr::mutate(
-          treatment_description = paste0("Treatment ", .data$treatment))
-      }
-
-      treatment_mapping <- df %>%
-        dplyr::select(.data$treatment, .data$treatment_description) %>%
-        dplyr::arrange(.data$treatment) %>%
-        dplyr::group_by(.data$treatment) %>%
-        dplyr::slice(dplyr::n())
-
       newSubjects <- newSubjects %>%
         dplyr::left_join(treatment_mapping, by = "treatment")
 
@@ -368,11 +380,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       sum_by_trt <- df2 %>%
         dplyr::group_by(.data$treatment, .data$treatment_description) %>%
         dplyr::summarise(n0 = dplyr::n(), .groups = "drop")
-    } else {
-      if (!is.null(treatment_label)) {
-        treatment_mapping <- dplyr::tibble(
-          treatment = 1:ngroups, treatment_description = treatment_label)
-
+    } else if (!is.null(treatment_label)) {
         newSubjects <- newSubjects %>%
           dplyr::left_join(treatment_mapping, by = "treatment")
 
@@ -388,7 +396,6 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
           dplyr::mutate(treatment_description = c(
             paste0("Treatment ", 1:ngroups), "Overall"),
             n0 = 0)
-      }
     }
   }
 

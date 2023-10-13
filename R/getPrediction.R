@@ -112,6 +112,8 @@
 #'   among the treatment groups.
 #' @param treatment_label The treatment labels for treatments in a
 #'   randomization block for design stage prediction.
+#'   It is replaced with the treatment_description
+#'   in the observed data if \code{df} is not \code{NULL}.
 #'
 #' @details
 #' For the time-decay model, the mean function is

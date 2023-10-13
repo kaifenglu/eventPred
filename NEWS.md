@@ -2,6 +2,7 @@
 
 - remove the factor attribute of the treatment_description variable
 - add pilevel in the output data set for prediction interval level
+- replace treatment_label with treatment_description in observed data for enrollment prediction
 
 # eventPred 0.2.0
 
