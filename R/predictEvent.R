@@ -1174,8 +1174,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           data = dfa, x = ~date, y = ~n, color = ~parameter,
           line = list(shape="hv", width=2)) %>%
         plotly::add_lines(
-          x = rep(cutoffdt, 2), y = range(dfs$n), name = "cutoff",
-          line = list(dash="dash"), showlegend = FALSE) %>%
+          x = rep(cutoffdt, 2), y = c(min(dfa$n), max(dfb$upper)),
+          name = "cutoff", line = list(dash="dash"),
+          showlegend = FALSE) %>%
         plotly::layout(
           annotations = list(
             x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
@@ -1188,7 +1189,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       if (tp < t0) {
         g1 <- g1 %>%
           plotly::add_lines(
-            x = rep(cutofftpdt, 2), y = range(dfs$n),
+            x = rep(cutofftpdt, 2), y = c(min(dfa$n), max(dfb$upper)),
             name = "prediction start",
             line = list(dash="dash", color="grey"), showlegend = FALSE) %>%
           plotly::layout(
@@ -1457,8 +1458,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             data = dfai, x = ~date, y = ~n, color = ~parameter,
             line = list(shape="hv", width=2)) %>%
           plotly::add_lines(
-            x = rep(cutoffdt, 2), y = range(dfsi$n), name = "cutoff",
-            line = list(dash="dash"), showlegend = FALSE) %>%
+            x = rep(cutoffdt, 2), y = c(min(dfai$n), max(dfbi$upper)),
+            name = "cutoff", line = list(dash="dash"),
+            showlegend = FALSE) %>%
           plotly::layout(
             xaxis = list(title = "", zeroline = FALSE),
             yaxis = list(zeroline = FALSE),
@@ -1475,7 +1477,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         if (tp < t0) {
           g[[(i+1) %% 9999]] <- g[[(i+1) %% 9999]] %>%
             plotly::add_lines(
-              x = rep(cutofftpdt, 2), y = range(dfsi$n),
+              x = rep(cutofftpdt, 2), y = c(min(dfai$n), max(dfbi$upper)),
               name = "prediction start",
               line = list(dash="dash", color="grey"), showlegend = FALSE)
         }

@@ -491,12 +491,14 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
           data = dfa, x = ~date, y = ~n, name = "observed",
           line = list(shape="hv", width=2)) %>%
         plotly::add_lines(
-          x = rep(cutoffdt, 2), y = range(dfs$n), name = "cutoff",
-          line = list(dash="dash"), showlegend = FALSE) %>%
+          x = rep(cutoffdt, 2), y = c(min(dfa$n), max(dfb$upper)),
+          name = "cutoff", line = list(dash="dash"),
+          showlegend = FALSE) %>%
         plotly::layout(
           annotations = list(
             x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
-            yanchor = "bottom", font = list(size=12), showarrow = FALSE),
+            yanchor = "bottom", font = list(size=12),
+            showarrow = FALSE),
           xaxis = list(title = "", zeroline = FALSE),
           yaxis = list(title = "Subjects", zeroline = FALSE),
           legend = list(x = 0, y = 1.05, yanchor = "bottom",
@@ -601,8 +603,9 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
             data = dfai, x = ~date, y = ~n, name = "observed",
             line = list(shape="hv", width=2)) %>%
           plotly::add_lines(
-            x = rep(cutoffdt, 2), y = range(dfsi$n), name = "cutoff",
-            line = list(dash="dash"), showlegend = FALSE) %>%
+            x = rep(cutoffdt, 2), y = c(min(dfai$n), max(dfbi$upper)),
+            name = "cutoff", line = list(dash="dash"),
+            showlegend = FALSE) %>%
           plotly::layout(
             xaxis = list(title = "", zeroline = FALSE),
             yaxis = list(title = "Subjects", zeroline = FALSE),
