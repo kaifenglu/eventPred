@@ -85,6 +85,8 @@
 #' The data for the prediction plot is also included
 #' within this list.
 #'
+#' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
+#'
 #' @examples
 #'
 #' # Event prediction after enrollment completion
@@ -907,7 +909,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   # calculate total time since trial start
   newEvents <- newEvents %>%
-    dplyr::mutate(totalTime = .data$arrivalTime + .data$time - 1)
+    dplyr::mutate(time = pmax(round(.data$time), 1),
+                  totalTime = .data$arrivalTime + .data$time - 1)
 
   if (!is.null(df)) {
     # combined stopped, ongoing and new subjects

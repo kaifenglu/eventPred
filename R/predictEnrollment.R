@@ -64,6 +64,8 @@
 #' enrollment data for new subjects. The data for the
 #' prediction plot is also included within the list.
 #'
+#' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
+#'
 #' @examples
 #' # Enrollment prediction at the design stage
 #'
@@ -356,6 +358,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
   # assign usubjid for new subjects
   newSubjects$usubjid <- rep(paste0("Z-", 100000 + (1:n1)), nreps)
+  newSubjects$arrivalTime <- pmax(round(newSubjects$arrivalTime), 1)
 
 
   if (by_treatment) {
