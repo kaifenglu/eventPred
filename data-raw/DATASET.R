@@ -1,10 +1,9 @@
-library(magrittr)
+library(dplyr)
 
-uniroot(function(t) lrstat::accrual(
-  time = t, accrualTime = seq(0, 8),
-  accrualIntensity = c(26/9*seq(1, 9)),
-  accrualDuration = 22) - 300,
-  c(1, 22))
+lrstat::getAccrualDuration(
+  nsubjects = 300,
+  accrualTime = seq(0, 8),
+  accrualIntensity = c(26/9*seq(1, 9)))
 
 lrstat::lrsamplesize(
   beta = 0.2, kMax = 1,
@@ -95,9 +94,16 @@ finalData <- dfcomplete %>%
                 time = pmin(time, followupTime),
                 randdt = as.Date(arrivalTime - 1, origin = trialsdt),
                 cutoffdt = as.Date(cutoff - 1, origin = trialsdt)) %>%
-  dplyr::select(trialsdt, randdt, cutoffdt, treatment,
-                time, event, dropout) %>%
-  dplyr::arrange(randdt)
+  dplyr::arrange(randdt) %>%
+  dplyr::mutate(usubjid = paste0("A-", 100000 + dplyr::row_number()),
+                treatment_description = ifelse(treatment == 1, "Arm A",
+                                               "Arm B")) %>%
+  dplyr::select(trialsdt, usubjid, randdt, treatment, treatment_description,
+                time, event, dropout, cutoffdt)
+
+
+
+
 
 trialsdt = min(finalData$randdt)
 
@@ -117,7 +123,8 @@ interimData1 <- finalData %>%
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
                 time = pmin(time, followupTime)) %>%
-  dplyr::select(trialsdt, randdt, cutoffdt, treatment, time, event, dropout)
+  dplyr::select(trialsdt, usubjid, randdt, treatment, treatment_description,
+                time, event, dropout, cutoffdt)
 
 
 # partial data after enrollment completion
@@ -140,7 +147,8 @@ interimData2 <- finalData %>%
                 event = ifelse(time <= followupTime, event, 0),
                 dropout = ifelse(time <= followupTime, dropout, 0),
                 time = pmin(time, followupTime)) %>%
-  dplyr::select(trialsdt, randdt, cutoffdt, treatment, time, event, dropout)
+  dplyr::select(trialsdt, usubjid, randdt, treatment, treatment_description,
+                time, event, dropout, cutoffdt)
 
 
 # save to data/ folder
