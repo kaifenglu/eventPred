@@ -4,6 +4,9 @@
 - add pilevel in the output data set for prediction interval level
 - replace treatment_label with treatment_description in observed data for enrollment prediction
 - update the upper bound of the cutoff reference line in prediction plot
+- retain the plots of enroll_fit, event_fit, and dropout_fit in getPrediction output
+- add usubjid and treatment_description to the internal data sets 
+- round the simulated arrivalTime and time so that the time can be interpreted in days
 
 # eventPred 0.2.0
 
