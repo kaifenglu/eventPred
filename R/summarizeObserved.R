@@ -24,6 +24,8 @@
 #' @return A list that includes a range of summary statistics,
 #' data sets, and plots depending on the value of \code{to_predict}.
 #'
+#' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
+#'
 #' @examples
 #'
 #' observed1 <- summarizeObserved(df = interimData1,

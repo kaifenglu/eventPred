@@ -34,6 +34,8 @@
 #'
 #' The fitted enrollment curve is also returned.
 #'
+#' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
+#'
 #' @examples
 #'
 #' enroll_fit <- fitEnrollment(df = interimData1, enroll_model = "b-spline",

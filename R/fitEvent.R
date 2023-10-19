@@ -57,6 +57,8 @@
 #'
 #' The fitted time-to-event survival curve is also returned.
 #'
+#' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
+#'
 #' @examples
 #'
 #' event_fit <- fitEvent(df = interimData2,

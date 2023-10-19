@@ -57,6 +57,8 @@
 #'
 #' The fitted time-to-dropout survival curve is also returned.
 #'
+#' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
+#'
 #' @examples
 #'
 #' dropout_fit <- fitDropout(df = interimData2, dropout_model = "exponential")
