@@ -139,11 +139,10 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     delta0 = mu0/beta  # beta is the asymptotic slope
     theta <- c(log(mu0), log(delta0))
     opt1 <- optim(theta, llik_td, gr = NULL, t = t0, df = df1,
-                  control = c(fnscale = -1))  # maximization
+                  control = c(fnscale = -1), hessian = TRUE)  # maximization
     fit1 <- list(model = "Time-decay",
                  theta = opt1$par,
-                 vtheta = solve(-optimHess(opt1$par, llik_td, gr = NULL,
-                                           t = t0, df = df1)),
+                 vtheta = solve(-opt1$hessian),
                  aic = -2*opt1$value + 4,
                  bic = -2*opt1$value + 2*log(n0))
 
@@ -172,11 +171,10 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     # maximum likelihood estimation with initial value from OLS
     theta = as.vector(solve(t(x) %*% x, t(x) %*% log(pmax(n, 0.1))))
     opt1 <- optim(theta, llik_bs, gr = NULL, n = n, x = x,
-                  control = c(fnscale = -1))
+                  control = c(fnscale = -1), hessian = TRUE)
     fit1 <- list(model = "B-spline",
                  theta = opt1$par,
-                 vtheta = solve(-optimHess(opt1$par, llik_bs, gr = NULL,
-                                           n = n, x = x)),
+                 vtheta = solve(-opt1$hessian),
                  aic = -2*opt1$value + 2*(K+4),
                  bic = -2*opt1$value + (K+4)*log(n0),
                  x = x)

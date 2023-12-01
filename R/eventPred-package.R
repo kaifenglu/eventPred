@@ -135,10 +135,11 @@
 #' @importFrom mvtnorm rmvnorm
 #' @importFrom rstpm2 vuniroot
 #' @importFrom numDeriv grad
-#' @importFrom tmvtnsim rtnorm
-#' @importFrom stats dweibull dlnorm loess.smooth optim
-#'   optimHess pexp plnorm plogis pnorm pweibull qlogis qnorm quantile
-#'   rbinom reorder rexp rlnorm rmultinom rnorm runif rweibull uniroot var
+#' @importFrom purrr list_c map map_dbl
+#' @importFrom stats as.formula dweibull dlnorm loess.smooth model.matrix
+#'   optim optimHess pexp plnorm plogis pnorm pweibull qlogis qlnorm qnorm
+#'   quantile rbinom reorder rexp rlnorm rlogis rmultinom rnorm runif
+#'   rweibull uniroot var
 #' @importFrom flexsurv flexsurvspline psurvspline qsurvspline rsurvspline
 #'   dllogis pllogis
 #' @importFrom erify check_bool check_class check_content check_n

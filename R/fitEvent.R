@@ -34,6 +34,9 @@
 #' @param by_treatment A Boolean variable to control whether or not to
 #'   fit the time-to-event data by treatment group. By default,
 #'   it is set to \code{FALSE}.
+#' @param covariates The names of baseline covariates from the input
+#'   data frame to include in the event model, e.g., c("age", "sex").
+#'   Factor variables need to be declared in the input data frame.
 #'
 #' @return A list of results from the model fit including key information
 #' such as the event model, \code{model}, the estimated model parameters,
@@ -70,7 +73,9 @@
 fitEvent <- function(df, event_model = "model averaging",
                      piecewiseSurvivalTime = 0,
                      k = 0, scale = "hazard",
-                     showplot = TRUE, by_treatment = FALSE) {
+                     showplot = TRUE, by_treatment = FALSE,
+                     covariates = NULL) {
+
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(event_model),
@@ -91,6 +96,20 @@ fitEvent <- function(df, event_model = "model averaging",
 
   erify::check_bool(showplot)
   erify::check_bool(by_treatment)
+
+  # construct the formula for survival analysis
+  if (!is.null(covariates)) {
+    if (!all(covariates %in% colnames(df))) {
+      stop("All covariates must exist in df")
+    }
+
+    covariates <- tolower(covariates)
+    xnames = paste(covariates, collapse = "+")
+    formula = as.formula(paste("survival::Surv(time, event) ~", xnames))
+  } else {
+    formula = survival::Surv(time, event) ~ 1
+  }
+
 
   df <- dplyr::as_tibble(df)
   names(df) <- tolower(names(df))
@@ -123,37 +142,47 @@ fitEvent <- function(df, event_model = "model averaging",
     d0 = sum(df1$event)
     ex0 = sum(df1$time)
 
+    x = model.matrix(formula, df1)
+    q = ncol(x) - 1
+
     kmfit <- survival::survfit(survival::Surv(time, event) ~ 1, data = df1)
     kmdf <- dplyr::tibble(time = kmfit$time, surv = kmfit$surv)
     kmdf <- dplyr::tibble(time = 0, surv = 1) %>%
       dplyr::bind_rows(kmdf)
 
     if (tolower(event_model) == "exponential") {
-      erify::check_positive(d0, supplement = paste(
-        "The number of events must be >= 1 to fit an exponential model."))
+      erify::check_positive(d0 - q, supplement = paste(
+        "The number of events must be >=", q + 1,
+        "to fit an exponential model."))
 
       # lambda(t) = lambda
       # S(t) = exp(-lambda*t)
 
+      reg <- survival::survreg(formula, data = df1, dist = "exponential")
+
       fit2 <- list(model = 'Exponential',
-                   theta = log(d0/ex0),
-                   vtheta = 1/d0,
-                   aic = -2*(-d0 + d0*log(d0/ex0)) + 2,
-                   bic = -2*(-d0 + d0*log(d0/ex0)) + log(n0))
+                   theta = as.numeric(reg$coefficients),
+                   vtheta = reg$var,
+                   aic = -2*reg$loglik[1] + 2*(q+1),
+                   bic = -2*reg$loglik[1] + (q+1)*log(n0))
 
       # fitted survival curve
+      rate = exp(-as.numeric(x %*% fit2$theta))
+
       dffit2 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
-        surv = pexp(.data$time, rate = exp(fit2$theta), lower.tail = FALSE))
+        surv = sapply(.data$time, function(t)
+          mean(pexp(t, rate, lower.tail = FALSE))))
+
     } else if (tolower(event_model) == "weibull") {
-      erify::check_positive(d0 - 1, supplement = paste(
-        "The number of events must be >= 2 to fit a Weibull model."))
+      erify::check_positive(d0 - q - 1, supplement = paste(
+        "The number of events must be >=", q+2,
+        "to fit a Weibull model."))
 
       # lambda(t) = kappa/lambda*(t/lambda)^(kappa-1)
       # S(t) = exp(-(t/lambda)^kappa)
 
-      reg <- survival::survreg(survival::Surv(time, event) ~ 1,
-                               data = df1, dist = "weibull")
+      reg <- survival::survreg(formula, data = df1, dist = "weibull")
 
       # weibull$shape = 1/reg$scale, weibull$scale = exp(reg$coefficients)
       # we define theta = (log(weibull$scale), -log(weibull$shape))
@@ -161,22 +190,26 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = "Weibull",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
-                   aic = -2*reg$loglik[1] + 4,
-                   bic = -2*reg$loglik[1] + 2*log(n0))
+                   aic = -2*reg$loglik[1] + 2*(q+2),
+                   bic = -2*reg$loglik[1] + (q+2)*log(n0))
 
       # fitted survival curve
+      shape = exp(-fit2$theta[q+2])
+      scale = exp(as.numeric(x %*% fit2$theta[1:(q+1)]))
+
       dffit2 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
-        surv = pweibull(.data$time, shape = exp(-fit2$theta[2]),
-                        scale = exp(fit2$theta[1]), lower.tail = FALSE))
+        surv = sapply(.data$time, function(t)
+          mean(pweibull(t, shape, scale, lower.tail = FALSE))))
+
     } else if (tolower(event_model) == "log-logistic") {
-      erify::check_positive(d0 - 1, supplement = paste(
-        "The number of events must be >= 2 to fit a log-logistic model."))
+      erify::check_positive(d0 - q - 1, supplement = paste(
+        "The number of events must be >=", q+2,
+        "to fit a log-logistic model."))
 
       # S(t) = 1/(1 + (t/lambda)^kappa)
 
-      reg <- survival::survreg(survival::Surv(time, event) ~ 1,
-                               data = df1, dist = "loglogistic")
+      reg <- survival::survreg(formula, data = df1, dist = "loglogistic")
 
       # llogis$shape = 1/reg$scale, llogis$scale = exp(reg$coefficients)
       # we define theta = (log(llogis$scale), -log(llogis$shape))
@@ -184,100 +217,81 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2 <- list(model = "Log-logistic",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
-                   aic = -2*reg$loglik[1] + 4,
-                   bic = -2*reg$loglik[1] + 2*log(n0))
+                   aic = -2*reg$loglik[1] + 2*(q+2),
+                   bic = -2*reg$loglik[1] + (q+2)*log(n0))
 
       # fitted survival curve
+      location = as.numeric(x %*% fit2$theta[1:(q+1)])
+      scale = exp(fit2$theta[q+2])
+
       dffit2 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
-        surv = plogis(log(.data$time), location = fit2$theta[1],
-                      scale = exp(fit2$theta[2]), lower.tail = FALSE))
+        surv = sapply(.data$time, function(t)
+          mean(plogis(log(t), location, scale, lower.tail = FALSE))))
+
     } else if (tolower(event_model) == "log-normal") {
-      erify::check_positive(d0 - 1, supplement = paste(
-        "The number of events must be >= 2 to fit a log-normal model."))
+      erify::check_positive(d0 - q - 1, supplement = paste(
+        "The number of events must be >=", q + 2,
+        "to fit a log-normal model."))
 
       # S(t) = 1 - Phi((log(t) - meanlog)/sdlog)
 
-      reg <- survival::survreg(survival::Surv(time, event) ~ 1,
-                               data = df1, dist = "lognormal")
+      reg <- survival::survreg(formula, data = df1, dist = "lognormal")
 
       # we use parameterization theta = (meanlog, log(sdlog))
       # reg$var is for theta = c(reg$coefficients, log(reg$scale))
       fit2 <- list(model = "Log-normal",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
-                   aic = -2*reg$loglik[1] + 4,
-                   bic = -2*reg$loglik[1] + 2*log(n0))
+                   aic = -2*reg$loglik[1] + 2*(q+2),
+                   bic = -2*reg$loglik[1] + (q+2)*log(n0))
 
       # fitted survival curve
+      meanlog = as.numeric(x %*% fit2$theta[1:(q+1)])
+      sdlog = exp(fit2$theta[q+2])
+
       dffit2 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
-        surv = plnorm(.data$time, meanlog = fit2$theta[1],
-                      sdlog = exp(fit2$theta[2]), lower.tail = FALSE))
+        surv = sapply(.data$time, function(t)
+          mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))
+
     } else if (tolower(event_model) == "piecewise exponential") {
-      # lambda(t) = lambda[j] for ucut[j] < t <= ucut[j+1], j = 1,...,J
-      # where ucut[1]=0< ucut[2]< ...< ucut[J]< ucut[J+1]=Inf are the knots
+      # lambda_0(t) = lambda[j] for ucut[j] < t <= ucut[j+1], j = 1,...,J
+      # where ucut[1]=0 < ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
+      J = length(piecewiseSurvivalTime)
 
-      u = piecewiseSurvivalTime[piecewiseSurvivalTime < max(df1$time)]
-      ucut = c(u, max(df1$time))
-      J = length(u)
-
-      d = rep(NA, J)  # number of events in each interval
-      ex = rep(NA, J) # total exposure in each interval
-      for (j in 1:J) {
-        d[j] = sum((df1$time > ucut[j]) * (df1$time <= ucut[j+1]) *
-                     (df1$event == 1))
-        ex[j] = sum(pmax(0, pmin(df1$time, ucut[j+1]) - ucut[j]))
-      }
-
-      if (any(d == 0)) {
-        stop(paste("The number of events must be >= 1 in each interval",
-             "to fit a piecewise exponential model."))
-      }
+      erify::check_positive(d0 - J - q - 1, supplement = paste(
+        "The number of events must be >=", J + q,
+        "to fit a piecewise exponential model."))
 
       # maximum likelihood estimates and covariance matrix
-      if (J > 1) {
-        vtheta = diag(1/d)
-      } else {
-        vtheta = 1/d*diag(1)
-      }
-
-      fit2 <- list(model = "Piecewise exponential",
-                   theta = log(d/ex),
-                   vtheta = vtheta,
-                   aic = -2*sum(-d + d*log(d/ex)) + 2*J,
-                   bic = -2*sum(-d + d*log(d/ex)) + J*log(n0),
-                   piecewiseSurvivalTime = u)
+      fit2 <- pwexpreg(df1, piecewiseSurvivalTime, event = "event",
+                       covariates)
+      J = length(fit2$piecewiseSurvivalTime)
 
       # fitted survival curve
       time = seq(0, max(df1$time))
 
-      lambda = d/ex
-      if (J>1) {
-        psum = c(0, cumsum(lambda[1:(J-1)] * diff(u)))
-      } else {
-        psum = 0
-      }
-      j = findInterval(time, u)
-      m = psum[j] + lambda[j]*(time - u[j])
-      surv = exp(-m)
+      surv = purrr::map(1:n0, function(l)
+        ppwexp(time, fit2$theta, J, fit2$piecewiseSurvivalTime,
+               q, x[l,-1], lower.tail = FALSE))
+      surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
       dffit2 <- dplyr::tibble(time, surv)
-    } else if (tolower(event_model) == "model averaging") {
-      erify::check_positive(d0 - 1, supplement = paste(
-        "The number of events must be >= 2 to fit a model averaging model."))
 
-      reg1 <- survival::survreg(survival::Surv(time, event) ~ 1,
-                                data = df1, dist = "weibull")
-      reg2 <- survival::survreg(survival::Surv(time, event) ~ 1,
-                                data = df1, dist = "lognormal")
-      aic1 <- -2*reg1$loglik[1] + 4
-      aic2 <- -2*reg2$loglik[1] + 4
-      bic1 <- -2*reg1$loglik[1] + 2*log(n0)
-      bic2 <- -2*reg2$loglik[1] + 2*log(n0)
+    } else if (tolower(event_model) == "model averaging") {
+      erify::check_positive(d0 - q - 1, supplement = paste(
+        "The number of events must be >=", q + 2,
+        "to fit a model averaging model."))
+
+      reg1 <- survival::survreg(formula, data = df1, dist = "weibull")
+      reg2 <- survival::survreg(formula, data = df1, dist = "lognormal")
+      aic1 <- -2*reg1$loglik[1] + 2*(q+2)
+      aic2 <- -2*reg2$loglik[1] + 2*(q+2)
+      bic1 <- -2*reg1$loglik[1] + (q+2)*log(n0)
+      bic2 <- -2*reg2$loglik[1] + (q+2)*log(n0)
 
       w1 = 1/(1 + exp(-0.5*(bic2 - bic1)))
-
 
       # model parameters from weibull and log-normal
       theta = c(as.numeric(reg1$coefficients), log(reg1$scale),
@@ -296,49 +310,51 @@ fitEvent <- function(df, event_model = "model averaging",
                    bic = w1*bic1 + (1-w1)*bic2,
                    w1 = w1)
 
-      # distribution function for model averaging of Weibull and log-normal
-      pmodavg <- function(t, theta, w1, lower.tail = TRUE, log.p = FALSE) {
-        shape = exp(-theta[2])
-        scale = exp(theta[1])
-        meanlog = theta[3]
-        sdlog = exp(theta[4])
+      # fitted survival curve
+      time = seq(0, max(df1$time))
 
-        p1 = pweibull(pmax(0,t), shape, scale)
-        p2 = plnorm(pmax(0,t), meanlog, sdlog)
-        p = w1*p1 + (1-w1)*p2
+      surv = purrr::map(1:n0, function(l)
+        pmodavg(time, fit2$theta, w1, q, x[l,-1], lower.tail = FALSE))
+      surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-        if (!lower.tail) p = 1 - p
-        if (log.p) p = log(p)
-        p
-      }
+      dffit2 <- dplyr::tibble(time, surv)
 
-      dffit2 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = pmodavg(.data$time, theta, w1, lower.tail = FALSE))
     } else if (tolower(event_model) == "spline") {
-      erify::check_positive(d0 - k - 1, supplement = paste(
-        "The number of events must be >=", k + 2, "to fit a spline model."))
+      erify::check_positive(d0 - k - q - 1, supplement = paste(
+        "The number of events must be >=", k + q + 2,
+        "to fit a spline model."))
 
       # g(S(t)) = gamma_0 +gamma_1*x +gamma_2*v_1(x) +... +gamma_{m+1}*v_m(x)
 
-      spl <- flexsurv::flexsurvspline(survival::Surv(time, event) ~ 1,
-                                      data = df1, k = k, scale = scale,
-                                      method = "Nelder-Mead")
+      spl <- flexsurv::flexsurvspline(
+        formula, data = df1, k = k, scale = scale, method = "Nelder-Mead")
 
       fit2 <- list(model = "Spline",
-                   theta = spl$coefficients,
+                   theta = as.numeric(spl$coefficients),
                    vtheta = spl$cov,
-                   aic = -2*spl$loglik + 2*(k+2),
-                   bic = -2*spl$loglik + (k+2)*log(n0),
+                   aic = -2*spl$loglik + 2*(k+q+2),
+                   bic = -2*spl$loglik + (k+q+2)*log(n0),
                    knots = spl$knots,
                    scale = spl$scale)
 
       # fitted survival curve
-      dffit2 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = flexsurv::psurvspline(.data$time, gamma = spl$coefficients,
-                                     knots = spl$knots, scale = spl$scale,
-                                     lower.tail = FALSE))
+      time = seq(0, max(df1$time))
+
+      if (q > 0) {
+        xbeta = as.numeric(as.matrix(x[,-1]) %*% fit2$theta[(k+3):(k+q+2)])
+
+        surv = purrr::map(1:n0, function(l)
+          flexsurv::psurvspline(
+            time, gamma = fit2$theta[1:(k+2)], knots = fit2$knots,
+            scale = fit2$scale, offset = xbeta[l], lower.tail = FALSE))
+        surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
+      } else {
+        surv = flexsurv::psurvspline(
+          time, gamma = fit2$theta, knots = fit2$knots, scale = fit2$scale,
+          lower.tail = FALSE)
+      }
+
+      dffit2 <- dplyr::tibble(time, surv)
     }
 
 

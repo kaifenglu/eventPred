@@ -53,15 +53,24 @@
 #' @param by_treatment A Boolean variable to control whether or not to
 #'   predict event by treatment group. By default,
 #'   it is set to \code{FALSE}.
-#'
+#' @param covariates_event The names of baseline covariates in
+#'   the input data frame to fit event model, e.g., c("age", "sex").
+#'   Factor variables need to be declared in the input data frame.
+#' @param event_fit_with_covariates The pre-fitted event model with
+#'   covariates used to generate predictions for ongoing subjects.
+#' @param covariates_dropout The names of baseline covariates in
+#'   the input data frame to fit dropout model, e.g., c("age", "sex").
+#'   Factor variables need to be declared in the input data frame.
+#' @param dropout_fit_with_covariates The pre-fitted dropout model with
+#'   covariates used to generate predictions for ongoing subjects.
 #'
 #' @details
 #' To ensure successful event prediction at the design stage, it is
 #' important to provide the \code{newSubjects} data set.
 #'
 #' To specify the event (dropout) model used during the design-stage event
-#' prediction, the \code{event_fit} (\code{dropout_fit}) be a list with
-#' one element per treatment. For each treatment, the element should
+#' prediction, the \code{event_fit} (\code{dropout_fit}) should be a list
+#' with one element per treatment. For each treatment, the element should
 #' include \code{w} to specify the weight of the treatment in a
 #' randomization block, \code{model} to specify the event model
 #' (exponential, weibull, log-logistic, log-normal, or piecewise
@@ -106,13 +115,17 @@
 #' @export
 #'
 predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
-                         event_fit, dropout_fit = NULL,
+                         event_fit = NULL, dropout_fit = NULL,
                          fixedFollowup = FALSE, followupTime = 365,
                          pilevel = 0.90, nyears = 4, nreps = 500,
                          showEnrollment = TRUE, showEvent = TRUE,
                          showDropout = FALSE, showOngoing = FALSE,
                          showsummary = TRUE, showplot = TRUE,
-                         by_treatment = FALSE) {
+                         by_treatment = FALSE,
+                         covariates_event = NULL,
+                         event_fit_with_covariates = NULL,
+                         covariates_dropout = NULL,
+                         dropout_fit_with_covariates = NULL) {
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_d)
@@ -170,71 +183,74 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   }
 
 
-  erify::check_class(event_fit, "list")
+  if (!is.null(event_fit)) {
+    erify::check_class(event_fit, "list")
 
-  if (!by_treatment) {  # convert event_fit to a list with 1 list element
-    list1 = event_fit
-    event_fit = list()
-    event_fit[[1]] = list1
-  }
-
-  if (length(event_fit) != ngroups) {
-    stop("event_fit must be a list with one element per treatment")
-  }
-
-  # check event_fit model
-  if (!is.null(df)) {
-    for (j in 1:ngroups) {
-      erify::check_content(tolower(event_fit[[j]]$model),
-                           c("exponential", "weibull", "log-logistic",
-                             "log-normal", "piecewise exponential",
-                             "model averaging", "spline"))
-    }
-  } else {
-    for (j in 1:ngroups) {
-      erify::check_content(tolower(event_fit[[j]]$model),
-                           c("exponential", "weibull", "log-logistic",
-                             "log-normal", "piecewise exponential"))
-    }
-  }
-
-  # check event_fit parameters
-  for (j in 1:ngroups) {
-    model = tolower(event_fit[[j]]$model)
-    p = length(event_fit[[j]]$theta)
-    vtheta = event_fit[[j]]$vtheta
-
-    if ((p > 1 && (!is.matrix(vtheta) || nrow(vtheta) != p ||
-                   ncol(vtheta) != p)) ||
-        (p == 1 && length(c(vtheta)) != 1)) {
-      stop(paste("Dimensions of vtheta must be compatible with the length",
-                 "of theta in event_fit"))
+    if (!by_treatment) {  # convert event_fit to a list with 1 list element
+      list1 = event_fit
+      event_fit = list()
+      event_fit[[1]] = list1
     }
 
-    if ((model == "exponential" && p != 1) ||
-        (model == "weibull" && p != 2) ||
-        (model == "log-logistic" && p != 2) ||
-        (model == "log-normal" && p != 2) ||
-        (model == "piecewise exponential" &&
-         p != length(event_fit[[j]]$piecewiseSurvivalTime)) ||
-        (model == "model averaging" && p != 4) ||
-        (model == "spline" && p != length(event_fit[[j]]$knots))) {
-      stop(paste("Length of theta must be compatible with model",
-                 "in event_fit"))
+    if (length(event_fit) != ngroups) {
+      stop("event_fit must be a list with one element per treatment")
     }
 
-    if (model == "piecewise exponential") {
-      if (event_fit[[j]]$piecewiseSurvivalTime[1] != 0) {
-        stop(paste("piecewiseSurvivalTime must start with 0",
-                   "in event_fit"))
+    # check event_fit model
+    if (!is.null(df)) {
+      for (j in 1:ngroups) {
+        erify::check_content(tolower(event_fit[[j]]$model),
+                             c("exponential", "weibull", "log-logistic",
+                               "log-normal", "piecewise exponential",
+                               "model averaging", "spline"))
       }
-      if (length(event_fit[[j]]$piecewiseSurvivalTime) > 1 &&
-          any(diff(event_fit[[j]]$piecewiseSurvivalTime) <= 0)) {
-        stop(paste("piecewiseSurvivalTime should be increasing",
-                   "in event_fit"))
+    } else {
+      for (j in 1:ngroups) {
+        erify::check_content(tolower(event_fit[[j]]$model),
+                             c("exponential", "weibull", "log-logistic",
+                               "log-normal", "piecewise exponential"))
       }
     }
+
+    # check event_fit parameters
+    for (j in 1:ngroups) {
+      model = tolower(event_fit[[j]]$model)
+      p = length(event_fit[[j]]$theta)
+      vtheta = event_fit[[j]]$vtheta
+
+      if ((p > 1 && (!is.matrix(vtheta) || nrow(vtheta) != p ||
+                     ncol(vtheta) != p)) ||
+          (p == 1 && length(c(vtheta)) != 1)) {
+        stop(paste("Dimensions of vtheta must be compatible with the length",
+                   "of theta in event_fit"))
+      }
+
+      if ((model == "exponential" && p != 1) ||
+          (model == "weibull" && p != 2) ||
+          (model == "log-logistic" && p != 2) ||
+          (model == "log-normal" && p != 2) ||
+          (model == "piecewise exponential" &&
+           p != length(event_fit[[j]]$piecewiseSurvivalTime)) ||
+          (model == "model averaging" && p != 4) ||
+          (model == "spline" && p != length(event_fit[[j]]$knots))) {
+        stop(paste("Length of theta must be compatible with model",
+                   "in event_fit"))
+      }
+
+      if (model == "piecewise exponential") {
+        if (event_fit[[j]]$piecewiseSurvivalTime[1] != 0) {
+          stop(paste("piecewiseSurvivalTime must start with 0",
+                     "in event_fit"))
+        }
+        if (length(event_fit[[j]]$piecewiseSurvivalTime) > 1 &&
+            any(diff(event_fit[[j]]$piecewiseSurvivalTime) <= 0)) {
+          stop(paste("piecewiseSurvivalTime should be increasing",
+                     "in event_fit"))
+        }
+      }
+    }
   }
+
 
 
   if (!is.null(dropout_fit)) {
@@ -323,6 +339,188 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   }
 
 
+  event_fit_w_x <- event_fit_with_covariates
+  if (!is.null(covariates_event)) {
+    if (is.null(df)) {
+      stop("df must be provided in the presence of covariates_event")
+    }
+
+    if (!all(covariates_event %in% colnames(df))) {
+      stop("All covariates_event must exist in df")
+    }
+
+    xnames = paste(covariates_event, collapse = "+")
+    formula = as.formula(paste("~", xnames))
+    x_event = model.matrix(formula, df)  # design matrix with intercept
+    q_event = ncol(x_event) - 1
+
+
+    if (is.null(event_fit_w_x)) {
+      stop("event_fit_with_covariates must be provided")
+    }
+
+    erify::check_class(event_fit_w_x, "list")
+
+    if (!by_treatment) { # convert event_fit_w_x to a list with 1 element
+      list1 = event_fit_w_x
+      event_fit_w_x = list()
+      event_fit_w_x[[1]] = list1
+    }
+
+    if (length(event_fit_w_x) != ngroups) {
+      stop(paste("event_fit_with_covariates must be a list with",
+                 "one element per treatment"))
+    }
+
+    # check event_fit_with_covariates model
+    if (!is.null(df)) {
+      for (j in 1:ngroups) {
+        erify::check_content(tolower(event_fit_w_x[[j]]$model),
+                             c("exponential", "weibull", "log-logistic",
+                               "log-normal", "piecewise exponential",
+                               "model averaging", "spline"))
+      }
+    } else {
+      for (j in 1:ngroups) {
+        erify::check_content(tolower(event_fit_w_x[[j]]$model),
+                             c("exponential", "weibull", "log-logistic",
+                               "log-normal", "piecewise exponential"))
+      }
+    }
+
+    # check event_fit_with_covariates parameters
+    for (j in 1:ngroups) {
+      model = tolower(event_fit_w_x[[j]]$model)
+      p = length(event_fit_w_x[[j]]$theta)
+      vtheta = event_fit_w_x[[j]]$vtheta
+
+      if ((p > 1 && (!is.matrix(vtheta) || nrow(vtheta) != p ||
+                     ncol(vtheta) != p)) ||
+          (p == 1 && length(c(vtheta)) != 1)) {
+        stop(paste("Dimensions of vtheta must be compatible with the length",
+                   "of theta in event_fit_with_covariates"))
+      }
+
+      if ((model == "exponential" && p != 1 + q_event) ||
+          (model == "weibull" && p != 2 + q_event) ||
+          (model == "log-logistic" && p != 2 + q_event) ||
+          (model == "log-normal" && p != 2 + q_event) ||
+          (model == "piecewise exponential" &&
+           p != length(event_fit_w_x[[j]]$piecewiseSurvivalTime) +
+           q_event) ||
+          (model == "model averaging" && p != 2*(2 + q_event)) ||
+          (model == "spline" && p != length(event_fit_w_x[[j]]$knots) +
+           q_event)) {
+        stop(paste("Length of theta must be compatible with model",
+                   "in event_fit_with_covariates"))
+      }
+
+      if (model == "piecewise exponential") {
+        if (event_fit_w_x[[j]]$piecewiseSurvivalTime[1] != 0) {
+          stop(paste("piecewiseSurvivalTime must start with 0",
+                     "in event_fit_with_covariates"))
+        }
+        if (length(event_fit_w_x[[j]]$piecewiseSurvivalTime) > 1 &&
+            any(diff(event_fit_w_x[[j]]$piecewiseSurvivalTime) <= 0)) {
+          stop(paste("piecewiseSurvivalTime should be increasing",
+                     "in event_fit_with_covariates"))
+        }
+      }
+    }
+  }
+
+
+  dropout_fit_w_x <- dropout_fit_with_covariates
+  if (!is.null(covariates_dropout)) {
+    if (is.null(df)) {
+      stop("df must be provided in the presence of covariates_dropout")
+    }
+
+    if (!all(covariates_dropout %in% colnames(df))) {
+      stop("All covariates_dropout must exist in df")
+    }
+
+    xnames = paste(covariates_dropout, collapse = "+")
+    formula = as.formula(paste("~", xnames))
+    x_dropout = model.matrix(formula, df)  # design matrix with intercept
+    q_dropout = ncol(x_dropout) - 1
+
+
+    if (is.null(dropout_fit_w_x)) {
+      stop("dropout_fit_with_covariates must be provided")
+    }
+
+    erify::check_class(dropout_fit_w_x, "list")
+
+    if (!by_treatment) { # convert dropout_fit_w_x to a list with 1 element
+      list1 = dropout_fit_w_x
+      dropout_fit_w_x = list()
+      dropout_fit_w_x[[1]] = list1
+    }
+
+    if (length(dropout_fit_w_x) != ngroups) {
+      stop(paste("dropout_fit_with_covariates must be a list with",
+                 "one element per treatment"))
+    }
+
+    # check dropout_fit_with_covariates model
+    if (!is.null(df)) {
+      for (j in 1:ngroups) {
+        erify::check_content(tolower(dropout_fit_w_x[[j]]$model),
+                             c("exponential", "weibull", "log-logistic",
+                               "log-normal", "piecewise exponential",
+                               "model averaging", "spline"))
+      }
+    } else {
+      for (j in 1:ngroups) {
+        erify::check_content(tolower(dropout_fit_w_x[[j]]$model),
+                             c("exponential", "weibull", "log-logistic",
+                               "log-normal", "piecewise exponential"))
+      }
+    }
+
+    # check dropout_fit_with_covariates parameters
+    for (j in 1:ngroups) {
+      model = tolower(dropout_fit_w_x[[j]]$model)
+      p = length(dropout_fit_w_x[[j]]$theta)
+      vtheta = dropout_fit_w_x[[j]]$vtheta
+
+      if ((p > 1 && (!is.matrix(vtheta) || nrow(vtheta) != p ||
+                     ncol(vtheta) != p)) ||
+          (p == 1 && length(c(vtheta)) != 1)) {
+        stop(paste("Dimensions of vtheta must be compatible with the length",
+                   "of theta in dropout_fit_with_covariates"))
+      }
+
+      if ((model == "exponential" && p != 1 + q_dropout) ||
+          (model == "weibull" && p != 2 + q_dropout) ||
+          (model == "log-logistic" && p != 2 + q_dropout) ||
+          (model == "log-normal" && p != 2 + q_dropout) ||
+          (model == "piecewise exponential" &&
+           p != length(dropout_fit_w_x[[j]]$piecewiseDropoutTime) +
+           q_dropout) ||
+          (model == "model averaging" && p != 2*(2 + q_dropout)) ||
+          (model == "spline" && p != length(dropout_fit_w_x[[j]]$knots) +
+           q_dropout)) {
+        stop(paste("Length of theta must be compatible with model",
+                   "in dropout_fit_with_covariates"))
+      }
+
+      if (model == "piecewise exponential") {
+        if (dropout_fit_w_x[[j]]$piecewiseDropoutTime[1] != 0) {
+          stop(paste("piecewiseDropoutTime must start with 0",
+                     "in dropout_fit_with_covariates"))
+        }
+        if (length(dropout_fit_w_x[[j]]$piecewiseDropoutTime) > 1 &&
+            any(diff(dropout_fit_w_x[[j]]$piecewiseDropoutTime) <= 0)) {
+          stop(paste("piecewiseDropoutTime should be increasing",
+                     "in dropout_fit_with_covariates"))
+        }
+      }
+    }
+  }
+
+
   # check input data and extract ongoing subjects
   if (!is.null(df)) {
     df <- dplyr::as_tibble(df)
@@ -366,6 +564,14 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     # subset to extract ongoing subjects
     ongoingSubjects <- df %>%
       dplyr::filter(.data$event == 0 & .data$dropout == 0)
+
+    iOngoing = which(df$event == 0 & df$dropout == 0)
+    if (!is.null(covariates_event)) {
+      x_eventOngoing <- x_event[iOngoing,]
+    }
+    if (!is.null(covariates_dropout)) {
+      x_dropoutOngoing = x_dropout[iOngoing,]
+    }
 
     usubjidOngoing <- ongoingSubjects$usubjid
     arrivalTimeOngoing <- ongoingSubjects$arrivalTime
@@ -496,7 +702,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         dplyr::summarise(n0 = dplyr::n(),
                          d0 = sum(.data$event),
                          c0 = sum(.data$dropout),
-                         r0 = sum(!(.data$event | .data$dropout)),
+                         r0 = sum(!(.data$event == 1 | .data$dropout == 1)),
                          .groups = "drop")
     }
 
@@ -595,15 +801,18 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
 
   # extract posterior draws of model parameters
-  theta2 <- list()
-  for (j in 1:ngroups) {
-    if (length(event_fit[[j]]$theta) == 1) {
-      theta2[[j]] <- matrix(rnorm(nreps, mean = event_fit[[j]]$theta,
-                                  sd = sqrt(event_fit[[j]]$vtheta)),
-                            ncol=1)
-    } else {
-      theta2[[j]] = mvtnorm::rmvnorm(nreps, mean = event_fit[[j]]$theta,
-                                     sigma = event_fit[[j]]$vtheta)
+  if (!is.null(event_fit)) {
+    theta2 <- list()
+    for (j in 1:ngroups) {
+      if (length(event_fit[[j]]$theta) == 1) {
+        theta2[[j]] <- matrix(rnorm(
+          nreps, mean = event_fit[[j]]$theta,
+          sd = sqrt(event_fit[[j]]$vtheta)), ncol=1)
+      } else {
+        theta2[[j]] = mvtnorm::rmvnorm(
+          nreps, mean = event_fit[[j]]$theta,
+          sigma = event_fit[[j]]$vtheta)
+      }
     }
   }
 
@@ -612,12 +821,44 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     theta3 <- list()
     for (j in 1:ngroups) {
       if (length(dropout_fit[[j]]$theta) == 1) {
-        theta3[[j]] <- matrix(rnorm(nreps, mean = dropout_fit[[j]]$theta,
-                                    sd = sqrt(dropout_fit[[j]]$vtheta)),
-                              ncol=1)
+        theta3[[j]] <- matrix(rnorm(
+          nreps, mean = dropout_fit[[j]]$theta,
+          sd = sqrt(dropout_fit[[j]]$vtheta)), ncol=1)
       } else {
-        theta3[[j]] = mvtnorm::rmvnorm(nreps, mean = dropout_fit[[j]]$theta,
-                                       sigma = dropout_fit[[j]]$vtheta)
+        theta3[[j]] = mvtnorm::rmvnorm(
+          nreps, mean = dropout_fit[[j]]$theta,
+          sigma = dropout_fit[[j]]$vtheta)
+      }
+    }
+  }
+
+
+  if (!is.null(event_fit_w_x)) {
+    theta2_w_x <- list()
+    for (j in 1:ngroups) {
+      if (length(event_fit_w_x[[j]]$theta) == 1) {
+        theta2_w_x[[j]] <- matrix(rnorm(
+          nreps, mean = event_fit_w_x[[j]]$theta,
+          sd = sqrt(event_fit_w_x[[j]]$vtheta)), ncol=1)
+      } else {
+        theta2_w_x[[j]] = mvtnorm::rmvnorm(
+          nreps, mean = event_fit_w_x[[j]]$theta,
+          sigma = event_fit_w_x[[j]]$vtheta)
+      }
+    }
+  }
+
+  if (!is.null(dropout_fit_w_x)) {
+    theta3_w_x <- list()
+    for (j in 1:ngroups) {
+      if (length(dropout_fit_w_x[[j]]$theta) == 1) {
+        theta3_w_x[[j]] <- matrix(rnorm(
+          nreps, mean = dropout_fit_w_x[[j]]$theta,
+          sd = sqrt(dropout_fit_w_x[[j]]$vtheta)), ncol=1)
+      } else {
+        theta3_w_x[[j]] = mvtnorm::rmvnorm(
+          nreps, mean = dropout_fit_w_x[[j]]$theta,
+          sigma = dropout_fit_w_x[[j]]$vtheta)
       }
     }
   }
@@ -649,11 +890,11 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # usubjid, arrival time, treatment, and time offset for new subjects
     if (n1 > 0) {
-      usubjidNew = newSubjects$usubjid[newSubjects$draw == i]
-      arrivalTimeNew = newSubjects$arrivalTime[newSubjects$draw == i]
-      treatmentNew = newSubjects$treatment[newSubjects$draw == i]
-      treatment_descriptionNew = newSubjects$treatment_description[
-        newSubjects$draw == i]
+      newSubjects1 <- newSubjects %>% filter(.data$draw == i)
+      usubjidNew = newSubjects1$usubjid
+      arrivalTimeNew = newSubjects1$arrivalTime
+      treatmentNew = newSubjects1$treatment
+      treatment_descriptionNew = newSubjects1$treatment_description
       time0New = rep(0, n1)
     }
 
@@ -680,151 +921,294 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     }
 
 
-    # draw event time for ongoing and new subjects
-    survivalTime = rep(NA, m)
+    # draw event time for new subjects
+    if (n1 > 0) {
+      survivalTimeNew = rep(NA, n1)
 
-    for (j in 1:ngroups) {
-      cols = which(treatment == j)
-      ncols = length(cols)
+      for (j in 1:ngroups) {
+        cols = which(treatmentNew == j)
+        ncols = length(cols)
 
-      if (ncols > 0) {
-        model = tolower(event_fit[[j]]$model)
+        theta = theta2[[j]][i,]
 
-        if (model == "exponential") {
-          rate = exp(theta2[[j]][i,])
-          survivalTime[cols] = rexp(ncols, rate) + time0[cols]
-        } else if (model == "weibull") {
-          shape = exp(-theta2[[j]][i,2])
-          scale = exp(theta2[[j]][i,1])
-          survivalTime[cols] = (rexp(ncols)*scale^shape +
-                                  time0[cols]^shape)^(1/shape)
-        } else if (model == "log-logistic") {
-          location = theta2[[j]][i,1]
-          scale = exp(theta2[[j]][i,2])
-          p = plogis((log(time0[cols]) - location)/scale, lower.tail = F)
-          survivalTime[cols] = exp(location + scale*qlogis(
-            runif(ncols)*p, lower.tail = F))
-        } else if (model == "log-normal") {
-          meanlog = theta2[[j]][i,1]
-          sdlog = exp(theta2[[j]][i,2])
-          survivalTime[cols] = exp(tmvtnsim::rtnorm(
-            mean = rep(meanlog, ncols), sd = sdlog,
-            lower = log(time0[cols]), upper = rep(Inf, ncols)))
-        } else if (model == "piecewise exponential") {
-          lambda = exp(theta2[[j]][i,]) # hazard rates in the intervals
-          J = length(lambda) # number of intervals
-          u = event_fit[[j]]$piecewiseSurvivalTime # left end points
+        if (ncols > 0) {
+          model = tolower(event_fit[[j]]$model)
 
-          # partial sums of lambda*interval_width
-          if (J > 1) {
-            psum = c(0, cumsum(lambda[1:(J-1)] * diff(u)))
-          } else {
-            psum = 0
+          if (model == "exponential") {
+            rate = exp(-theta)
+            survivalTimeNew[cols] = rexp(ncols, rate)
+          } else if (model == "weibull") {
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
+            survivalTimeNew[cols] = rweibull(ncols, shape, scale)
+          } else if (model == "log-logistic") {
+            location = theta[1]
+            scale = exp(theta[2])
+            survivalTimeNew[cols] = exp(rlogis(ncols, location, scale))
+          } else if (model == "log-normal") {
+            meanlog = theta[1]
+            sdlog = exp(theta[2])
+            survivalTimeNew[cols] = rlnorm(ncols, meanlog, sdlog)
+          } else if (model == "piecewise exponential") {
+            J = length(theta)
+            tcut = event_fit[[j]]$piecewiseSurvivalTime
+            survivalTimeNew[cols] = qpwexp(
+              runif(ncols), theta, J, tcut, lower.tail = FALSE)
+          } else if (model == "model averaging") {
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
+            meanlog = theta[3]
+            sdlog = exp(theta[4])
+            w1 = event_fit[[j]]$w1
+
+            # draw component indicator
+            w = (runif(ncols) < w1)
+            nw1 = sum(w)
+            nw0 = ncols - nw1
+
+            # draw from the corresponding component distribution
+            if (nw1 > 0) {
+              survivalTimeNew[cols][w==1] = rweibull(nw1, shape, scale)
+            }
+
+            if (nw0 > 0) {
+              survivalTimeNew[cols][w==0] = rlnorm(nw0, meanlog, sdlog)
+            }
+          } else if (model == "spline") {
+            gamma = theta
+            knots = event_fit[[j]]$knots
+            scale = event_fit[[j]]$scale
+
+            survivalTimeNew[cols] = flexsurv::rsurvspline(
+              ncols, gamma, knots = knots, scale = scale)
           }
-
-          # find the interval containing time0
-          j0 = findInterval(time0[cols], u)
-          rhs = psum[j0] + lambda[j0]*(time0[cols] - u[j0]) + rexp(ncols)
-
-          # find the interval containing time
-          j1 = findInterval(rhs, psum)
-          survivalTime[cols] = u[j1] + (rhs - psum[j1])/lambda[j1]
-        } else if (model == "model averaging") {
-          theta = theta2[[j]][i,]
-          shape = exp(-theta[2])
-          scale = exp(theta[1])
-          meanlog = theta[3]
-          sdlog = exp(theta[4])
-          w1 = event_fit[[j]]$w1
-
-          # draw component indicator
-          p1 = w1*pweibull(time0[cols], shape, scale, lower.tail = F)
-          p2 = (1-w1)*plnorm(time0[cols], meanlog, sdlog, lower.tail = F)
-          w = (runif(ncols) < p1/(p1+p2))
-          nw1 = sum(w)
-          nw0 = ncols - nw1
-
-          # draw from the corresponding component distribution
-          if (nw1 > 0) {
-            survivalTime[cols][w==1] = (rexp(nw1)*scale^shape +
-                                          time0[cols][w==1]^shape)^(1/shape)
-          }
-
-          if (nw0 > 0) {
-            survivalTime[cols][w==0] = exp(tmvtnsim::rtnorm(
-              mean = rep(meanlog, nw0), sd = sdlog,
-              lower = log(time0[cols][w==0]), upper = rep(Inf, nw0)))
-          }
-        } else if (model == "spline") {
-          gamma = theta2[[j]][i,]
-          knots = event_fit[[j]]$knots
-          scale = event_fit[[j]]$scale
-
-          st0 = flexsurv::psurvspline(
-            time0[cols], gamma, knots = knots, scale = scale, lower.tail = F)
-
-          survivalTime[cols] = flexsurv::qsurvspline(
-            runif(ncols)*st0, gamma, knots = knots, scale = scale,
-            lower.tail = F)
         }
       }
     }
 
-    # new subjects start with day 1 on arrival
-    if (n1 > 0) survivalTime[(r0+1):m] = survivalTime[(r0+1):m] + 1
 
+    # draw event time for ongoing subjects
+    if (r0 > 0 && is.null(event_fit_w_x)) {
+      survivalTimeOngoing = rep(NA, r0)
 
-    # draw dropout time for ongoing and new subjects
-    if (!is.null(dropout_fit)) {
-      dropoutTime = rep(NA, m)
       for (j in 1:ngroups) {
-        cols = which(treatment == j)
+        cols = which(treatmentOngoing == j)
         ncols = length(cols)
+
+        u0 = time0[cols]
+        theta = theta2[[j]][i,]
+
+        if (ncols > 0) {
+          model = tolower(event_fit[[j]]$model)
+
+          if (model == "exponential") {
+            rate = exp(-theta)
+            survivalTimeOngoing[cols] = rexp(ncols, rate) + u0
+          } else if (model == "weibull") {
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
+            survivalTimeOngoing[cols] =
+              (rexp(ncols)*scale^shape + u0^shape)^(1/shape)
+          } else if (model == "log-logistic") {
+            location = theta[1]
+            scale = exp(theta[2])
+            p = plogis(log(u0), location, scale, lower.tail = FALSE)
+            survivalTimeOngoing[cols] =
+              exp(qlogis(runif(ncols)*p, location, scale, lower.tail = FALSE))
+          } else if (model == "log-normal") {
+            meanlog = theta[1]
+            sdlog = exp(theta[2])
+            p = plnorm(u0, meanlog, sdlog, lower.tail = FALSE)
+            survivalTimeOngoing[cols] =
+              qlnorm(runif(ncols)*p, meanlog, sdlog, lower.tail = FALSE)
+          } else if (model == "piecewise exponential") {
+            J = length(theta)
+            tcut = event_fit[[j]]$piecewiseSurvivalTime
+            p = ppwexp(u0, theta, J, tcut, lower.tail = FALSE)
+            survivalTimeOngoing[cols] = qpwexp(
+              runif(ncols)*p, theta, J, tcut, lower.tail = FALSE)
+          } else if (model == "model averaging") {
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
+            meanlog = theta[3]
+            sdlog = exp(theta[4])
+            w1 = event_fit[[j]]$w1
+
+            # draw component indicator
+            p1 = w1*pweibull(u0, shape, scale, lower.tail = FALSE)
+            p2 = (1-w1)*plnorm(u0, meanlog, sdlog, lower.tail = FALSE)
+
+            # p1/(p1+p2) is the posterior probability of w = 1 | T >= t0
+            w = (runif(ncols) < p1/(p1+p2))
+            nw1 = sum(w)
+            nw0 = ncols - nw1
+
+            # draw from the corresponding component distribution
+            if (nw1 > 0) {
+              survivalTimeOngoing[cols][w==1] =
+                (rexp(nw1)*scale^shape + u0[w==1]^shape)^(1/shape)
+            }
+
+            if (nw0 > 0) {
+              p = plnorm(u0[w==0], meanlog, sdlog, lower.tail = FALSE)
+              survivalTimeOngoing[cols][w==0] =
+                qlnorm(runif(nw0)*p, meanlog, sdlog, lower.tail = FALSE)
+            }
+          } else if (model == "spline") {
+            gamma = theta
+            knots = event_fit[[j]]$knots
+            scale = event_fit[[j]]$scale
+
+            p = flexsurv::psurvspline(
+              u0, gamma, knots = knots, scale = scale, lower.tail = FALSE)
+
+            survivalTimeOngoing[cols] = flexsurv::qsurvspline(
+              runif(ncols)*p, gamma, knots = knots, scale = scale,
+              lower.tail = FALSE)
+          }
+        }
+      }
+    }
+
+
+    if (r0 > 0 && !is.null(event_fit_w_x)) {
+      survivalTimeOngoing = rep(NA, r0)
+
+      for (j in 1:ngroups) {
+        cols = which(treatmentOngoing == j)
+        ncols = length(cols)
+
+        u0 = time0[cols]
+        theta = theta2_w_x[[j]][i,]
+        x1 = x_eventOngoing[cols,]
+
+        if (ncols > 0) {
+          model = tolower(event_fit_w_x[[j]]$model)
+
+          if (model == "exponential") {
+            rate = exp(-as.numeric(x1 %*% theta))
+            survivalTimeOngoing[cols] = rexp(ncols, rate) + u0
+          } else if (model == "weibull") {
+            shape = exp(-theta[q_event+2])
+            scale = exp(as.numeric(x1 %*% theta[1:(q_event+1)]))
+            survivalTimeOngoing[cols] =
+              (rexp(ncols)*scale^shape + u0^shape)^(1/shape)
+          } else if (model == "log-logistic") {
+            location = as.numeric(x1 %*% theta[1:(q_event+1)])
+            scale = exp(theta[q_event+2])
+            p = plogis(log(u0), location, scale, lower.tail = FALSE)
+            survivalTimeOngoing[cols] =
+              exp(qlogis(runif(ncols)*p, location, scale, lower.tail = FALSE))
+          } else if (model == "log-normal") {
+            meanlog = as.numeric(x1 %*% theta[1:(q_event+1)])
+            sdlog = exp(theta[q_event+2])
+            p = plnorm(u0, meanlog, sdlog, lower.tail = FALSE)
+            survivalTimeOngoing[cols] =
+              qlnorm(runif(ncols)*p, meanlog, sdlog, lower.tail = FALSE)
+          } else if (model == "piecewise exponential") {
+            J = length(theta) - q_event    # number of intervals
+            gamma = theta[1:J]
+            tcut = event_fit[[j]]$piecewiseSurvivalTime
+            xbeta = as.numeric(as.matrix(x1[,-1]) %*%
+                                 theta[(J+1):(J+q_event)])
+            p = ppwexp(u0, gamma, J, tcut, lower.tail = FALSE)
+            survivalTimeOngoing[cols] = qpwexp(
+              runif(ncols)^exp(-xbeta)*p, gamma, J, tcut, lower.tail = FALSE)
+          } else if (model == "model averaging") {
+            shape = exp(-theta[q_event+2])
+            scale = exp(as.numeric(x1 %*% theta[1:(q_event+1)]))
+            meanlog = as.numeric(x1 %*% theta[(q_event+3):(2*q_event+3)])
+            sdlog = exp(theta[2*q_event+4])
+            w1 = event_fit_w_x[[j]]$w1
+
+            # draw component indicator
+            p1 = w1*pweibull(u0, shape, scale, lower.tail = FALSE)
+            p2 = (1-w1)*plnorm(u0, meanlog, sdlog, lower.tail = FALSE)
+
+            # p1/(p1+p2) is the posterior probability of w = 1 | T >= t0
+            w = (runif(ncols) < p1/(p1+p2))
+            nw1 = sum(w)
+            nw0 = ncols - nw1
+
+            # draw from the corresponding component distribution
+            if (nw1 > 0) {
+              survivalTimeOngoing[cols][w==1] =
+                (rexp(nw1)*scale[w==1]^shape + u0[w==1]^shape)^(1/shape)
+            }
+
+            if (nw0 > 0) {
+              p = plnorm(u0[w==0], meanlog, sdlog, lower.tail = FALSE)
+              survivalTimeOngoing[cols][w==0] =
+                qlnorm(runif(nw0)*p, meanlog, sdlog, lower.tail = FALSE)
+            }
+          } else if (model == "spline") {
+            k = length(theta) - q_event - 2
+            gamma = theta[1:(k+2)]
+            knots = event_fit_w_x[[j]]$knots
+            scale = event_fit_w_x[[j]]$scale
+
+            xbeta = as.numeric(as.matrix(x1[,-1]) %*%
+                                 theta[(k+3):(k+q_event+2)])
+            u1 = runif(ncols)
+
+            survivalTimeOngoing[cols] = purrr::map_dbl(1:ncols, function(l) {
+              p = flexsurv::psurvspline(
+                u0[l], gamma, knots = knots, scale = scale,
+                offset = xbeta[l], lower.tail = FALSE)
+              flexsurv::qsurvspline(
+                u1[l]*p, gamma, knots = knots, scale = scale,
+                offset = xbeta[l], lower.tail = FALSE)
+            })
+          }
+        }
+      }
+    }
+
+
+    if (r0 == 0 && n1 > 0) {  # design stage
+      survivalTime = survivalTimeNew
+    } else if (r0 > 0 && n1 > 0) { # enrollment stage
+      survivalTime = c(survivalTimeOngoing, survivalTimeNew)
+    } else if (r0 > 0 && n1 == 0) { # follow-up stage
+      survivalTime = survivalTimeOngoing
+    }
+
+
+
+    # draw dropout time for new subjects
+    if (n1 > 0) {
+      dropoutTimeNew = rep(NA, n1)
+
+      for (j in 1:ngroups) {
+        cols = which(treatmentNew == j)
+        ncols = length(cols)
+
+        theta = theta3[[j]][i,]
 
         if (ncols > 0) {
           model = tolower(dropout_fit[[j]]$model)
 
           if (model == "exponential") {
-            rate = exp(theta3[[j]][i,])
-            dropoutTime[cols] = rexp(ncols, rate) + time0[cols]
+            rate = exp(-theta)
+            dropoutTimeNew[cols] = rexp(ncols, rate)
           } else if (model == "weibull") {
-            shape = exp(-theta3[[j]][i,2])
-            scale = exp(theta3[[j]][i,1])
-            dropoutTime[cols] = (rexp(ncols)*scale^shape +
-                                   time0[cols]^shape)^(1/shape)
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
+            dropoutTimeNew[cols] = rweibull(ncols, shape, scale)
           } else if (model == "log-logistic") {
-            location = theta3[[j]][i,1]
-            scale = exp(theta3[[j]][i,2])
-            p = plogis((log(time0[cols]) - location)/scale, lower.tail = F)
-            dropoutTime[cols] = exp(location + scale*qlogis(
-              runif(ncols)*p, lower.tail = F))
+            location = theta[1]
+            scale = exp(theta[2])
+            dropoutTimeNew[cols] = exp(rlogis(ncols, location, scale))
           } else if (model == "log-normal") {
-            meanlog = theta3[[j]][i,1]
-            sdlog = exp(theta3[[j]][i,2])
-            dropoutTime[cols] = exp(tmvtnsim::rtnorm(
-              mean = rep(meanlog, ncols), sd = sdlog,
-              lower = log(time0[cols]), upper = rep(Inf, ncols)))
+            meanlog = theta[1]
+            sdlog = exp(theta[2])
+            dropoutTimeNew[cols] = rlnorm(ncols, meanlog, sdlog)
           } else if (model == "piecewise exponential") {
-            lambda = exp(theta3[[j]][i,]) # hazard rates in the intervals
-            J = length(lambda) # number of intervals
-            u = dropout_fit[[j]]$piecewiseDropoutTime # left end points
-
-            # partial sums of lambda*interval_width
-            if (J > 1) {
-              psum = c(0, cumsum(lambda[1:(J-1)] * diff(u)))
-            } else {
-              psum = 0
-            }
-
-            # find the interval containing time0
-            j0 = findInterval(time0[cols], u)
-            rhs = psum[j0] + lambda[j0]*(time0[cols] - u[j0]) + rexp(ncols)
-
-            # find the interval containing time
-            j1 = findInterval(rhs, psum)
-            dropoutTime[cols] = u[j1] + (rhs - psum[j1])/lambda[j1]
+            J = length(theta)
+            tcut = dropout_fit[[j]]$piecewiseDropoutTime
+            dropoutTimeNew[cols] = qpwexp(
+              runif(ncols), theta, J, tcut, lower.tail = FALSE)
           } else if (model == "model averaging") {
-            theta = theta3[[j]][i,]
             shape = exp(-theta[2])
             scale = exp(theta[1])
             meanlog = theta[3]
@@ -832,42 +1216,218 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             w1 = dropout_fit[[j]]$w1
 
             # draw component indicator
-            p1 = w1*pweibull(time0[cols], shape, scale, lower.tail = F)
-            p2 = (1-w1)*plnorm(time0[cols], meanlog, sdlog, lower.tail = F)
+            w = (runif(ncols) < w1)
+            nw1 = sum(w)
+            nw0 = ncols - nw1
+
+            # draw from the corresponding component distribution
+            if (nw1 > 0) {
+              dropoutTimeNew[cols][w==1] = rweibull(nw1, shape, scale)
+            }
+
+            if (nw0 > 0) {
+              dropoutTimeNew[cols][w==0] = rlnorm(nw0, meanlog, sdlog)
+            }
+          } else if (model == "spline") {
+            gamma = theta
+            knots = dropout_fit[[j]]$knots
+            scale = dropout_fit[[j]]$scale
+
+            dropoutTimeNew[cols] = flexsurv::rsurvspline(
+              ncols, gamma, knots = knots, scale = scale)
+          }
+        }
+      }
+    }
+
+
+    # draw dropout time for ongoing subjects
+    if (r0 > 0 && is.null(dropout_fit_w_x)) {
+      dropoutTimeOngoing = rep(NA, r0)
+
+      for (j in 1:ngroups) {
+        cols = which(treatmentOngoing == j)
+        ncols = length(cols)
+
+        u0 = time0[cols]
+        theta = theta3[[j]][i,]
+
+        if (ncols > 0) {
+          model = tolower(dropout_fit[[j]]$model)
+
+          if (model == "exponential") {
+            rate = exp(-theta)
+            dropoutTimeOngoing[cols] = rexp(ncols, rate) + u0
+          } else if (model == "weibull") {
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
+            dropoutTimeOngoing[cols] =
+              (rexp(ncols)*scale^shape + u0^shape)^(1/shape)
+          } else if (model == "log-logistic") {
+            location = theta[1]
+            scale = exp(theta[2])
+            p = plogis(log(u0), location, scale, lower.tail = FALSE)
+            dropoutTimeOngoing[cols] =
+              exp(qlogis(runif(ncols)*p, location, scale, lower.tail = FALSE))
+          } else if (model == "log-normal") {
+            meanlog = theta[1]
+            sdlog = exp(theta[2])
+            p = plnorm(u0, meanlog, sdlog, lower.tail = FALSE)
+            dropoutTimeOngoing[cols] =
+              qlnorm(runif(ncols)*p, meanlog, sdlog, lower.tail = FALSE)
+          } else if (model == "piecewise exponential") {
+            J = length(theta)
+            tcut = dropout_fit[[j]]$piecewiseDropoutTime
+            p = ppwexp(u0, theta, J, tcut, lower.tail = FALSE)
+            dropoutTimeOngoing[cols] = qpwexp(
+              runif(ncols)*p, theta, J, tcut, lower.tail = FALSE)
+          } else if (model == "model averaging") {
+            shape = exp(-theta[2])
+            scale = exp(theta[1])
+            meanlog = theta[3]
+            sdlog = exp(theta[4])
+            w1 = dropout_fit[[j]]$w1
+
+            # draw component indicator
+            p1 = w1*pweibull(u0, shape, scale, lower.tail = FALSE)
+            p2 = (1-w1)*plnorm(u0, meanlog, sdlog, lower.tail = FALSE)
+
+            # p1/(p1+p2) is the posterior probability of w = 1 | T >= t0
             w = (runif(ncols) < p1/(p1+p2))
             nw1 = sum(w)
             nw0 = ncols - nw1
 
             # draw from the corresponding component distribution
             if (nw1 > 0) {
-              dropoutTime[cols][w==1] = (rexp(nw1)*scale^shape +
-                                           time0[cols][w==1]^shape)^(1/shape)
+              dropoutTimeOngoing[cols][w==1] =
+                (rexp(nw1)*scale^shape + u0[w==1]^shape)^(1/shape)
             }
 
             if (nw0 > 0) {
-              dropoutTime[cols][w==0] = exp(tmvtnsim::rtnorm(
-                mean = rep(meanlog, nw0), sd = sdlog,
-                lower = log(time0[cols][w==0]), upper = rep(Inf, nw0)))
+              p = plnorm(u0[w==0], meanlog, sdlog, lower.tail = FALSE)
+              dropoutTimeOngoing[cols][w==0] =
+                qlnorm(runif(nw0)*p, meanlog, sdlog, lower.tail = FALSE)
             }
           } else if (model == "spline") {
-            gamma = theta3[[j]][i,]
+            gamma = theta
             knots = dropout_fit[[j]]$knots
             scale = dropout_fit[[j]]$scale
 
-            st0 = flexsurv::psurvspline(
-              time0[cols], gamma, knots = knots, scale = scale,
-              lower.tail = F)
+            p = flexsurv::psurvspline(
+              u0, gamma, knots = knots, scale = scale, lower.tail = FALSE)
 
-            dropoutTime[cols] = flexsurv::qsurvspline(
-              runif(ncols)*st0, gamma, knots = knots, scale = scale,
-              lower.tail = F)
+            dropoutTimeOngoing[cols] = flexsurv::qsurvspline(
+              runif(ncols)*p, gamma, knots = knots, scale = scale,
+              lower.tail = FALSE)
           }
         }
       }
-
-      # new subjects start with day 1 on arrival
-      if (n1 > 0) dropoutTime[(r0+1):m] = dropoutTime[(r0+1):m] + 1
     }
+
+
+    if (r0 > 0 && !is.null(dropout_fit_w_x)) {
+      dropoutTimeOngoing = rep(NA, r0)
+
+      for (j in 1:ngroups) {
+        cols = which(treatmentOngoing == j)
+        ncols = length(cols)
+
+        u0 = time0[cols]
+        theta = theta3_w_x[[j]][i,]
+        x1 = x_dropoutOngoing[cols,]
+
+        if (ncols > 0) {
+          model = tolower(dropout_fit_w_x[[j]]$model)
+
+          if (model == "exponential") {
+            rate = exp(-as.numeric(x1 %*% theta))
+            dropoutTimeOngoing[cols] = rexp(ncols)/rate + u0
+          } else if (model == "weibull") {
+            shape = exp(-theta[q_dropout+2])
+            scale = exp(as.numeric(x1 %*% theta[1:(q_dropout+1)]))
+            dropoutTimeOngoing[cols] =
+              (rexp(ncols)*scale^shape + u0^shape)^(1/shape)
+          } else if (model == "log-logistic") {
+            location = as.numeric(x1 %*% theta[1:(q_dropout+1)])
+            scale = exp(theta[q_dropout+2])
+            p = plogis(log(u0), location, scale, lower.tail = FALSE)
+            dropoutTimeOngoing[cols] =
+              exp(qlogis(runif(ncols)*p, location, scale, lower.tail = FALSE))
+          } else if (model == "log-normal") {
+            meanlog = as.numeric(x1 %*% theta[1:(q_dropout+1)])
+            sdlog = exp(theta[q_dropout+2])
+            p = plnorm(u0, meanlog, sdlog, lower.tail = FALSE)
+            dropoutTimeOngoing[cols] =
+              qlnorm(runif(ncols)*p, meanlog, sdlog, lower.tail = FALSE)
+          } else if (model == "piecewise exponential") {
+            J = length(theta) - q_dropout    # number of intervals
+            gamma = theta[1:J]
+            tcut = dropout_fit[[j]]$piecewiseDropoutTime
+            xbeta = as.numeric(as.matrix(x1[,-1]) %*%
+                                 theta[(J+1):(J+q_dropout)])
+            p = ppwexp(u0, gamma, J, tcut, lower.tail = FALSE)
+            dropoutTimeOngoing[cols] = qpwexp(
+              runif(ncols)^exp(-xbeta)*p, gamma, J, tcut, lower.tail = FALSE)
+          } else if (model == "model averaging") {
+            shape = exp(-theta[q_dropout+2])
+            scale = exp(as.numeric(x1 %*% theta[1:(q_dropout+1)]))
+            meanlog = as.numeric(x1 %*% theta[(q_dropout+3):(2*q_dropout+3)])
+            sdlog = exp(theta[2*q_dropout+4])
+            w1 = dropout_fit_w_x[[j]]$w1
+
+            # draw component indicator
+            p1 = w1*pweibull(u0, shape, scale, lower.tail = FALSE)
+            p2 = (1-w1)*plnorm(u0, meanlog, sdlog, lower.tail = FALSE)
+
+            # p1/(p1+p2) is the posterior probability of w = 1 | T >= t0
+            w = (runif(ncols) < p1/(p1+p2))
+            nw1 = sum(w)
+            nw0 = ncols - nw1
+
+            # draw from the corresponding component distribution
+            if (nw1 > 0) {
+              dropoutTimeOngoing[cols][w==1] =
+                (rexp(nw1)*scale[w==1]^shape + u0[w==1]^shape)^(1/shape)
+            }
+
+            if (nw0 > 0) {
+              p = plnorm(u0[w==0], meanlog, sdlog, lower.tail = FALSE)
+              dropoutTimeOngoing[cols][w==0] =
+                qlnorm(runif(nw0)*p, meanlog, sdlog, lower.tail = FALSE)
+            }
+          } else if (model == "spline") {
+            k = length(theta) - q_dropout - 2
+            gamma = theta[1:(k+2)]
+            knots = dropout_fit_w_x[[j]]$knots
+            scale = dropout_fit_w_x[[j]]$scale
+
+            xbeta = as.numeric(as.matrix(x1[,-1]) %*%
+                                 theta[(k+3):(k+q_dropout+2)])
+            u1 = runif(ncols)
+
+            dropoutTimeOngoing[cols] = purrr::map_dbl(1:ncols, function(l) {
+              p = flexsurv::psurvspline(
+                u0[l], gamma, knots = knots, scale = scale,
+                offset = xbeta[l], lower.tail = FALSE)
+              flexsurv::qsurvspline(
+                u1[l]*p, gamma, knots = knots, scale = scale,
+                offset = xbeta[l], lower.tail = FALSE)
+            })
+          }
+        }
+      }
+    }
+
+
+    if (r0 == 0 && n1 > 0) {  # design stage
+      dropoutTime = dropoutTimeNew
+    } else if (r0 > 0 && n1 > 0) { # enrollment stage
+      dropoutTime = c(dropoutTimeOngoing, dropoutTimeNew)
+    } else if (r0 > 0 && n1 == 0) { # follow-up stage
+      dropoutTime = dropoutTimeOngoing
+    }
+
+
 
 
     # observed survival time and event indicator
@@ -900,7 +1460,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     newEvents[index, "arrivalTime"] = arrivalTime
     newEvents[index, "treatment"] = treatment
     newEvents[index, "treatment_description"] = treatment_description
-    newEvents[index, "time"] = time
+    newEvents[index, "time"] = ceiling(time)
     newEvents[index, "event"] = event
     newEvents[index, "dropout"] = dropout
     offset = offset + m
@@ -909,8 +1469,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   # calculate total time since trial start
   newEvents <- newEvents %>%
-    dplyr::mutate(time = pmax(round(.data$time), 1),
-                  totalTime = .data$arrivalTime + .data$time - 1)
+    dplyr::mutate(totalTime = .data$arrivalTime + .data$time - 1)
 
   if (!is.null(df)) {
     # combined stopped, ongoing and new subjects
@@ -941,10 +1500,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     mean(sumdata$n < target_d)
   }
 
-  tmax = max(newEvents$totalTime[newEvents$event==1])
+  tmax = max(newEvents$totalTime[newEvents$event == 1])
 
   # obtain the quantiles
-  if (sdf(tmax, target_d, d0, newEvents) == 0) {
+  if (sdf(tmax, target_d, d0, newEvents) == 0) { # target_d reached for all
     new1 <- newEvents %>%
       dplyr::group_by(.data$draw) %>%
       dplyr::filter(.data$event == 1) %>%
@@ -952,13 +1511,13 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dplyr::filter(dplyr::row_number() == target_d - d0)
     pred_day <- ceiling(quantile(new1$totalTime, c(0.5, plower, pupper)))
   } else {
-    q = 1 - c(0.5, plower, pupper)
-    pred_day = rep(NA, length(q))
-    for (j in 1:length(q)) {
+    qs = 1 - c(0.5, plower, pupper)
+    pred_day = rep(NA, 3)
+    for (j in 1:3) {
       # check if the quantile can be estimated from observed data
-      if (sdf(tmax, target_d, d0, newEvents) <= q[j]) {
+      if (sdf(tmax, target_d, d0, newEvents) <= qs[j]) {
         pred_day[j] = uniroot(function(x)
-          sdf(x, target_d, d0, newEvents) - q[j],
+          sdf(x, target_d, d0, newEvents) - qs[j],
           c(tp, tmax), tol = 1)$root
         pred_day[j] = ceiling(pred_day[j])
       }
@@ -1335,11 +1894,11 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         dplyr::cross_join(df2) %>%
         dplyr::group_by(.data$treatment, .data$treatment_description,
                         .data$t) %>%
-        dplyr::summarise(
-          n = sum(.data$arrivalTime <= .data$t &
-                    (.data$totalTime > .data$t |
-                       (.data$event == 0 & .data$dropout == 0))),
-          .groups = "drop_last") %>%
+        dplyr::summarise(n = sum(.data$arrivalTime <= .data$t &
+                                   (.data$totalTime > .data$t |
+                                      (.data$event == 0 &
+                                         .data$dropout == 0))),
+                         .groups = "drop_last") %>%
         dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
                       mean = .data$n, var = 0) %>%
         dplyr::select(.data$treatment, .data$treatment_description,
@@ -1427,6 +1986,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     ongoing_pred_df <- ongoing_pred_df %>%
       dplyr::arrange(.data$treatment, .data$treatment_description, .data$t)
 
+
     dfs <- dplyr::tibble()
     if (showEnrollment) dfs <- dfs %>% dplyr::bind_rows(enroll_pred_df)
     if (showEvent) dfs <- dfs %>% dplyr::bind_rows(event_pred_df)
@@ -1442,12 +2002,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
       g <- list()
       for (i in c(9999, 1:ngroups)) {
-        dfsi <- dfs %>%
-          dplyr::filter(.data$treatment == i)
-        dfbi <- dfb %>%
-          dplyr::filter(.data$treatment == i)
-        dfai <- dfa %>%
-          dplyr::filter(.data$treatment == i)
+        dfsi <- dfs %>% dplyr::filter(.data$treatment == i)
+        dfbi <- dfb %>% dplyr::filter(.data$treatment == i)
+        dfai <- dfa %>% dplyr::filter(.data$treatment == i)
 
         g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
           plotly::add_ribbons(
@@ -1491,8 +2048,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             plotly::layout(
               annotations = list(
                 x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
-                yanchor = "bottom", font = list(size=12),
-                showarrow = FALSE))
+                yanchor = "bottom", font = list(size=12), showarrow = FALSE))
 
           if (tp < t0) {
             g[[1]] <- g[[1]] %>%
@@ -1513,8 +2069,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                 annotations = list(
                   x = 0.95, xref = "paper", y = target_d,
                   text = 'target events', xanchor = "right",
-                  yanchor = "bottom", font = list(size=12),
-                  showarrow = FALSE))
+                  yanchor = "bottom", font = list(size=12), showarrow = FALSE))
           }
         }
       }
@@ -1556,8 +2111,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                 annotations = list(
                   x = 0.95, xref = "paper", y = target_d,
                   text = 'target events', xanchor = "right",
-                  yanchor = "bottom", font = list(size=12),
-                  showarrow = FALSE))
+                  yanchor = "bottom", font = list(size=12), showarrow = FALSE))
           }
         }
       }

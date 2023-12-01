@@ -1,3 +1,40 @@
+# eventPred 0.2.2
+
+- eventPred-package.R
+  -- remove import tmvtnsim rtnorm
+  -- add import purrr list_c map map_dbl
+  -- add import stats as.formula model.matrix qlnorm rlogis
+  
+- utilities.R
+  -- add pmodavg for the distribution of model averaging of Weibull and log-normal
+  -- add ppwexp and qpwexp functions for the piecewise exponential distribution
+  -- add llik_pwexp for the log-likelihood of piecewise exponential regression
+  -- add pwexpreg for the regression analysis of piecewise exponential distribution
+  
+- fitEnrollment.R
+  -- use the hessian option in optim to remove the optimHess call in fitEnrollment
+  
+- fitEvent.R
+  -- add covariates to the fitEvent function to fit regression models
+
+- fitDropout.R
+  -- add covariates to the fitDropout function to fit regression models
+  
+- predictEvent.R
+  -- add covariates_event, event_fit_with_covariates, covariates_dropout, dropout_fit_with_covariates
+  -- fit the event model with covariates if event_fit_with_covariates is not NULL, and fit the event model without covariates otherwise
+  -- fit the dropout model with covariates if dropout_fit_with_covariates is not NULL, and fit the dropout model without covariates otherwise
+  -- generate the event time for new patients separately from the event time for ongoing patients
+  -- generate the dropout time for new patients separately from the dropout time for ongoing patients
+  -- apply ceiling to the derived time after comparison of generated survivalTime and dropoutTime
+
+- getPrediction.R  
+  -- add covariates_event, event_prior_with_covariates, covariates_dropout, dropout_prior_with_covariates
+  -- add penalized log-likelihood (posterior) function with covariates for exponential, Weibull, log-logistic, log-normal, and piecewise exponential distributions
+  -- simplify the algorithm for combining prior distributions across treatments
+  -- fit event/dropout models with or without covarites depending on the study stage and the presence/absence of covariates_event and covariates_dropout
+  
+
 # eventPred 0.2.1
 
 - remove the factor attribute of the treatment_description variable
