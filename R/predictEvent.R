@@ -53,16 +53,16 @@
 #' @param by_treatment A Boolean variable to control whether or not to
 #'   predict event by treatment group. By default,
 #'   it is set to \code{FALSE}.
-#' @param covariates_event The names of baseline covariates in
-#'   the input data frame to fit event model, e.g., c("age", "sex").
+#' @param covariates_event The names of baseline covariates from the input
+#'   data frame to include in the event model, e.g., c("age", "sex").
 #'   Factor variables need to be declared in the input data frame.
 #' @param event_fit_with_covariates The pre-fitted event model with
-#'   covariates used to generate predictions for ongoing subjects.
-#' @param covariates_dropout The names of baseline covariates in
-#'   the input data frame to fit dropout model, e.g., c("age", "sex").
+#'   covariates used to generate event predictions for ongoing subjects.
+#' @param covariates_dropout The names of baseline covariates from the input
+#'   data frame to include in the dropout model, e.g., c("age", "sex").
 #'   Factor variables need to be declared in the input data frame.
 #' @param dropout_fit_with_covariates The pre-fitted dropout model with
-#'   covariates used to generate predictions for ongoing subjects.
+#'   covariates used to generate dropout predictions for ongoing subjects.
 #'
 #' @details
 #' To ensure successful event prediction at the design stage, it is
@@ -77,7 +77,7 @@
 #' exponential), \code{theta} and \code{vtheta} to indicate
 #' the parameter values and the covariance matrix. For the piecewise
 #' exponential event (dropout) model, the list should also include
-#' \code{piecewiseSurvivalTime} \code{piecewiseDropoutTime} to indicate
+#' \code{piecewiseSurvivalTime} (\code{piecewiseDropoutTime}) to indicate
 #' the location of knots. It should be noted that the model averaging
 #' and spline options are not appropriate for use during the design stage.
 #'
