@@ -36,6 +36,10 @@
 #'
 #' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
 #'
+#' @references
+#' Xiaoxi Zhang and Qi Long. Stochastic modeling and prediction for
+#' accrual in clinical trials. Stat in Med. 2010; 29:649-658.
+#'
 #' @examples
 #'
 #' enroll_fit <- fitEnrollment(df = interimData1, enroll_model = "b-spline",

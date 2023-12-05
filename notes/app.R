@@ -2177,7 +2177,8 @@ server <- function(input, output, session) {
               data = dfa, x = ~date, y = ~n, color = ~parameter,
               line = list(shape="hv", width=2)) %>%
             plotly::add_lines(
-              x = rep(observed()$cutoffdt, 2), y = range(dfs$n),
+              x = rep(observed()$cutoffdt, 2),
+              y = c(min(dfa$n), max(dfb$upper)),
               name = "cutoff", line = list(dash="dash"),
               showlegend = FALSE) %>%
             plotly::layout(
@@ -2193,7 +2194,8 @@ server <- function(input, output, session) {
           if (observed()$tp < observed()$t0) {
             g1 <- g1 %>%
               plotly::add_lines(
-                x = rep(observed()$cutofftpdt, 2), y = range(dfs$n),
+                x = rep(observed()$cutofftpdt, 2),
+                y = c(min(dfa$n), max(dfb$upper)),
                 name = "prediction start",
                 line = list(dash="dash", color="grey"),
                 showlegend = FALSE) %>%
@@ -2274,7 +2276,8 @@ server <- function(input, output, session) {
                 data = dfai, x = ~date, y = ~n, color = ~parameter,
                 line = list(shape="hv", width=2)) %>%
               plotly::add_lines(
-                x = rep(observed()$cutoffdt, 2), y = range(dfsi$n),
+                x = rep(observed()$cutoffdt, 2),
+                y = c(min(dfai$n), max(dfbi$upper)),
                 name = "cutoff", line = list(dash="dash"),
                 showlegend = FALSE) %>%
               plotly::layout(
@@ -2293,7 +2296,8 @@ server <- function(input, output, session) {
             if (observed()$tp < observed()$t0) {
               g[[(i+1) %% 9999]] <- g[[(i+1) %% 9999]] %>%
                 plotly::add_lines(
-                  x = rep(observed()$cutofftpdt, 2), y = range(dfsi$n),
+                  x = rep(observed()$cutofftpdt, 2),
+                  y = c(min(dfai$n), max(dfbi$upper)),
                   name = "prediction start",
                   line = list(dash="dash", color="grey"),
                   showlegend = FALSE)
@@ -2423,51 +2427,7 @@ server <- function(input, output, session) {
       paste0("event_subject_data_", Sys.Date(), ".xlsx")
     },
     content = function(file) {
-      if (to_predict() == "Enrollment only") {
-        eventsubjectdata <- pred()$enroll_pred$newSubjects
-        if (input$stage != 'Design stage') {
-          df <- df() %>%
-            dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
-                          totalTime = arrivalTime + time - 1)
-
-          if (input$by_treatment) {
-            eventsubjectdata <- df %>%
-              dplyr::mutate(draw = 0) %>%
-              dplyr::select(draw, usubjid, arrivalTime,
-                            treatment, treatment_description) %>%
-              dplyr::bind_rows(eventsubjectdata)
-          } else {
-            eventsubjectdata <- df %>%
-              dplyr::mutate(draw = 0) %>%
-              dplyr::select(draw, usubjid, arrivalTime) %>%
-              dplyr::bind_rows(eventsubjectdata)
-          }
-        }
-      } else {
-        eventsubjectdata <- pred()$event_pred$newEvents
-        if (input$stage != 'Design stage') {
-          df <- df() %>%
-            dplyr::mutate(arrivalTime = as.numeric(randdt - trialsdt + 1),
-                          totalTime = arrivalTime + time - 1)
-
-          if (input$by_treatment) {
-            eventsubjectdata <- df %>%
-              dplyr::filter(event == 1 | dropout == 1) %>%
-              dplyr::mutate(draw = 0) %>%
-              dplyr::select(draw, usubjid, arrivalTime,
-                            treatment, treatment_description,
-                            time, event, dropout, totalTime) %>%
-              dplyr::bind_rows(eventsubjectdata)
-          } else {
-            eventsubjectdata <- df %>%
-              dplyr::filter(event == 1 | dropout == 1) %>%
-              dplyr::mutate(draw = 0) %>%
-              dplyr::select(draw, usubjid, arrivalTime,
-                            time, event, dropout, totalTime) %>%
-              dplyr::bind_rows(eventsubjectdata)
-          }
-        }
-      }
+      eventsubjectdata <- pred()$subject_data
       writexl::write_xlsx(eventsubjectdata, file)
     }
   )

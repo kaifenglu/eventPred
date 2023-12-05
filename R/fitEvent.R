@@ -62,6 +62,12 @@
 #'
 #' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
 #'
+#' @references
+#' Patrick Royston and Mahesh K. B. Parmar. Flexible parametric
+#' proportional-hazards and proportional-odds models for censored
+#' survival data, with application to prognostic modelling and
+#' estimation of treatment effects. Stat in Med. 2002; 21:2175-2197.
+#'
 #' @examples
 #'
 #' event_fit <- fitEvent(df = interimData2,

@@ -96,6 +96,13 @@
 #'
 #' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
 #'
+#' @references
+#' Emilia Bagiella and Daniel F. Heitjan. Predicting analysis times in
+#' randomized clinical trials. Stat in Med. 2001; 20:2055-2063.
+#'
+#' Gui-shuang Ying and Daniel F. Heitjan. Weibull prediction of event
+#' times in clinical trials. Pharm Stat. 2008; 7:107-120.
+#'
 #' @examples
 #'
 #' # Event prediction after enrollment completion

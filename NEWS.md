@@ -33,6 +33,7 @@
   -- add penalized log-likelihood (posterior) function with covariates for exponential, Weibull, log-logistic, log-normal, and piecewise exponential distributions
   -- simplify the algorithm for combining prior distributions across treatments
   -- fit event/dropout models with or without covarites depending on the study stage and the presence/absence of covariates_event and covariates_dropout
+  -- add subject_data to the output
   
 
 # eventPred 0.2.1
