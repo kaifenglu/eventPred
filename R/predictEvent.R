@@ -1183,7 +1183,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
 
     # draw dropout time for new subjects
-    if (n1 > 0) {
+    if (n1 > 0 && !is.null(dropout_fit)) {
       dropoutTimeNew = rep(NA, n1)
 
       for (j in 1:ngroups) {
@@ -1249,7 +1249,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
 
     # draw dropout time for ongoing subjects
-    if (r0 > 0 && is.null(dropout_fit_w_x)) {
+    if (r0 > 0 && !is.null(dropout_fit) && is.null(dropout_fit_w_x)) {
       dropoutTimeOngoing = rep(NA, r0)
 
       for (j in 1:ngroups) {
@@ -1426,20 +1426,21 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     }
 
 
-    if (r0 == 0 && n1 > 0) {  # design stage
-      dropoutTime = dropoutTimeNew
-    } else if (r0 > 0 && n1 > 0) { # enrollment stage
-      dropoutTime = c(dropoutTimeOngoing, dropoutTimeNew)
-    } else if (r0 > 0 && n1 == 0) { # follow-up stage
-      dropoutTime = dropoutTimeOngoing
+    if (!is.null(dropout_fit) || !is.null(dropout_fit_w_x)) {
+      if (r0 == 0 && n1 > 0) {  # design stage
+        dropoutTime = dropoutTimeNew
+      } else if (r0 > 0 && n1 > 0) { # enrollment stage
+        dropoutTime = c(dropoutTimeOngoing, dropoutTimeNew)
+      } else if (r0 > 0 && n1 == 0) { # follow-up stage
+        dropoutTime = dropoutTimeOngoing
+      }
     }
-
 
 
 
     # observed survival time and event indicator
     if (!fixedFollowup) {
-      if (!is.null(dropout_fit)) {
+      if (!is.null(dropout_fit) || !is.null(dropout_fit_w_x)) {
         time = pmin(survivalTime, dropoutTime)
         event = 1*(time == survivalTime)
         dropout = 1*(time == dropoutTime)
@@ -1449,7 +1450,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
         dropout = 0
       }
     } else {
-      if (!is.null(dropout_fit)) {
+      if (!is.null(dropout_fit) || !is.null(dropout_fit_w_x)) {
         time = pmin(survivalTime, dropoutTime, followupTime)
         event = 1*(time == survivalTime)
         dropout = 1*(time == dropoutTime)
