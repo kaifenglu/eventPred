@@ -1,3 +1,91 @@
+# eventPred 0.2.4
+
+* fitEnrollment.R
+
+    - replace round with formatC to retain the zeros after the decimal point
+
+* fitEvent.R
+
+    - parameterize the exponential distribution in terms of log(rate)
+    
+    - update the requirement for fitting a piecewise exponential model
+    
+    - update the call to the pwexpreg function
+
+    - ensure the sub plots align on the x axis
+    
+    - export the sub plots as a list instead of a plotly subplot object
+    
+    - replace round with formatC to retain the zeros after the decimal point
+    
+* fitDropout.R
+
+    - parameterize the exponential distribution in terms of log(rate)
+
+    - update the requirement for fitting a piecewise exponential model
+    
+    - update the call to the pwexpreg function
+    
+    - ensure the sub plots align on the x axis
+    
+    - export the sub plots as a list instead of a plotly subplot object
+
+    - replace round with formatC to retain the zeros after the decimal point
+    
+* predictEnrollment.R
+
+    - add the 'name' parameter to the Plotly traces to ensure proper legends 
+    
+    - export the sub plots as a list instead of a plotly subplot object
+    
+* predictEvent.R
+
+    - parameterize the exponential distribution in terms of log(rate)
+
+    - ensure simulated time >= 1
+    
+    - add the 'name' parameter to the Plotly traces to ensure proper legends 
+    
+    - export the sub plots as a list instead of a plotly subplot object
+
+* getPrediction.R
+
+    - check the input data to ensure all required columns are present
+    
+    - check the input data to ensure none of the required columns have missing values
+    
+    - add treatment_description to the input data when treatment is present but treatment_description is missing
+    
+    - parameterize the exponential distribution in terms of log(rate)
+    
+    - obtain event_fit (event_fit_with_covariates) without regard of the existence of event_prior (event_prior_with_covariates)
+
+    - obtain dropout_fit (dropout_fit_with covariates) without regard of the existence of dropout_prior (dropout_prior_with_covariates)
+    
+    
+* utilities.R
+    
+    - update the pwexpreg function so that its parameters are consistent with other piecewise exponential functions 
+    
+    - use the Brent method to fit the piecewise exponential regression model with only one interval and no covariates
+
+* launchShinyApp.R
+
+    - newly added to launch the Shiny app for event prediction
+
+* vignettes
+
+    - add event_prediction_at_the_design_stage.Rmd
+    
+    - add event_prediction_before_enrollment_completion.Rmd
+    
+    - add event_prediction_after_enrollment_completion.Rmd
+    
+    - add event_prediction_incorporating_prior_information.Rmd
+    
+    - add event_prediction_incorporating_covariates.Rmd
+    
+
 # eventPred 0.2.3
 
 * predictEvent.R

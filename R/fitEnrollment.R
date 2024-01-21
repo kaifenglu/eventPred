@@ -242,8 +242,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     modeltext = fit1$model
   }
 
-  aictext = paste("AIC:", round(fit1$aic,2))
-  bictext = paste("BIC:", round(fit1$bic,2))
+  aictext = paste("AIC:", formatC(fit1$aic, format = "f", digits = 2))
+  bictext = paste("BIC:", formatC(fit1$bic, format = "f", digits = 2))
 
   # plot the enrollment curve
   fittedEnroll <- plotly::plot_ly() %>%

@@ -166,14 +166,15 @@ fitEvent <- function(df, event_model = "model averaging",
 
       reg <- survival::survreg(formula, data = df1, dist = "exponential")
 
+      # use the more common parameterization for the exponential distribution
       fit2 <- list(model = 'Exponential',
-                   theta = as.numeric(reg$coefficients),
+                   theta = -as.numeric(reg$coefficients),
                    vtheta = reg$var,
                    aic = -2*reg$loglik[1] + 2*(q+1),
                    bic = -2*reg$loglik[1] + (q+1)*log(n0))
 
       # fitted survival curve
-      rate = exp(-as.numeric(x %*% fit2$theta))
+      rate = exp(as.numeric(x %*% fit2$theta))
 
       dffit2 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
@@ -266,14 +267,12 @@ fitEvent <- function(df, event_model = "model averaging",
       # where ucut[1]=0 < ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
       J = length(piecewiseSurvivalTime)
 
-      erify::check_positive(d0 - J - q - 1, supplement = paste(
+      erify::check_positive(d0 - J - q + 1, supplement = paste(
         "The number of events must be >=", J + q,
         "to fit a piecewise exponential model."))
 
       # maximum likelihood estimates and covariance matrix
-      fit2 <- pwexpreg(df1, piecewiseSurvivalTime, event = "event",
-                       covariates)
-      J = length(fit2$piecewiseSurvivalTime)
+      fit2 <- pwexpreg(df1$time, df1$event, J, piecewiseSurvivalTime, q, x)
 
       # fitted survival curve
       time = seq(0, max(df1$time))
@@ -376,11 +375,13 @@ fitEvent <- function(df, event_model = "model averaging",
     }
 
     if (tolower(event_model) == "model averaging") {
-      aictext = paste("Weighted AIC:", round(fit2$aic,2))
-      bictext = paste("Weighted BIC:", round(fit2$bic,2))
+      aictext = paste("Weighted AIC:",
+                      formatC(fit2$aic, format = "f", digits = 2))
+      bictext = paste("Weighted BIC:",
+                      formatC(fit2$bic, format = "f", digits = 2))
     } else {
-      aictext = paste("AIC:", round(fit2$aic,2))
-      bictext = paste("BIC:", round(fit2$bic,2))
+      aictext = paste("AIC:", formatC(fit2$aic, format = "f", digits = 2))
+      bictext = paste("BIC:", formatC(fit2$bic, format = "f", digits = 2))
     }
 
     fittedEvent <- plotly::plot_ly() %>%
@@ -419,12 +420,21 @@ fitEvent <- function(df, event_model = "model averaging",
     g1[[i]] = fittedEvent
   }
 
+
+  # ensure that the sub plots share the same x axis range
+  if (by_treatment) {
+    x_range = range(df$time)
+    for (i in 1:ngroups) {
+      g1[[i]] <- g1[[i]] %>% layout(xaxis = list(range = x_range))
+    }
+  }
+
+
   if (!by_treatment) {
     event_fit = fit2
     event_fit_plot = fittedEvent
   } else {
-    event_fit_plot <- plotly::subplot(g1, nrows = ngroups, titleX = TRUE,
-                                      titleY = TRUE, margin = 0.1)
+    event_fit_plot = g1
   }
 
   if (showplot) print(event_fit_plot)

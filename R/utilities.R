@@ -149,57 +149,63 @@ llik_pwexp <- function(theta, time, event, J, tcut, q, x) {
 #' @description Obtains the maximum likelihood estimates for piecewise
 #' exponential regression.
 #'
-#' @param data The input data frame. It should contain \code{time},
-#'   \code{event}, and variables specified in \code{covariates}.
-#' @param tcut A vector that specifies the time intervals
-#'   for the piecewise exponential survival distribution.
+#' @param time The survival time.
+#' @param event The event indicator.
+#' @param J The number of time intervals.
+#' @param tcut A vector that specifies the endpoints of time intervals
+#'   for the baseline piecewise exponential survival distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2 event
 #'   intervals: [0, 60) and [60, Inf). By default, it is set to 0.
-#' @param event The variable name indicating event, e.g. "event" or
-#'   "dropout".
-#' @param covariates The names of baseline covariates in
-#'   the input data frame, e.g., c("age", "sex").
-#'   Factor variables need to declared in the input data frame.
+#' @param q The number of columns of the covariates matrix.
+#' @param x The covariates matrix (excluding the intercept).
 #'
 #' @return The maximum likelihood estimates and the associated
 #' covariance matrix, AIC and BIC.
 #'
 #' @export
 #'
-pwexpreg <- function(data, tcut = 0, event = "event", covariates = NULL) {
-  if (!is.null(covariates)) {
-    xnames = paste(covariates, collapse = "+")
-    formula = as.formula(paste("~ -1 +", xnames))
-    x = model.matrix(formula, data)
-    q = ncol(x)
+pwexpreg <- function(time, event, J, tcut, q, x) {
+  # get the variable name as a character string
+  if (grepl("dropout", deparse(substitute(event)), ignore.case = TRUE)) {
+    variable_name = "dropout"
   } else {
-    x = 0
-    q = 0
+    variable_name = "event"
   }
 
-  u = tcut[tcut < max(data$time)]
-  J = length(u)
-  ucut = c(u, max(data$time))
+  if (length(tcut) == J) {
+    ucut = c(tcut, Inf)
+  } else {
+    ucut = tcut
+  }
 
   d = rep(0, J)  # number of events in each interval
   for (j in 1:J) {
-    d[j] = sum((data$time > ucut[j]) * (data$time <= ucut[j+1]) * data$event)
+    d[j] = sum((time > ucut[j]) * (time <= ucut[j+1]) * event)
   }
 
   if (any(d == 0)) {
-    stop(paste("The number of", paste0(event, "s"),
+    stop(paste("The number of", paste0(variable_name, "s"),
                "must be >= 1 in each interval",
                "to fit a piecewise exponential model."))
   }
 
-
   theta0 = rep(0, J+q)
 
-  opt1 <- optim(theta0, llik_pwexp, gr = NULL,
-                data$time, data[, event], J, ucut, q, x,
-                control = c(fnscale = -1), hessian = TRUE)
+  if (J+q > 1) {
+    theta0 = rep(0, J+q)
+    opt1 <- optim(theta0, llik_pwexp, gr = NULL,
+                  time, event, J, ucut, q, x,
+                  control = c(fnscale = -1), hessian = TRUE)
+  } else { # exponential distribution with no covariates
+    theta0 = log(sum(event)/sum(time))
+    opt1 <- optim(theta0, llik_pwexp, gr = NULL,
+                  time, event, J, ucut, q, x,
+                  method = "Brent",
+                  lower = theta0 - 2, upper = theta0 + 2,
+                  control = c(fnscale = -1), hessian = TRUE)
+  }
 
-  n = nrow(data)
+  n = length(time)
 
   fit <- list(model = "Piecewise exponential",
               theta = opt1$par,
@@ -207,10 +213,10 @@ pwexpreg <- function(data, tcut = 0, event = "event", covariates = NULL) {
               aic = -2*opt1$value + 2*(J+q),
               bic = -2*opt1$value + (J+q)*log(n))
 
-  if (tolower(event) == "event") {
-    fit$piecewiseSurvivalTime = u
+  if (variable_name == "event") {
+    fit$piecewiseSurvivalTime = tcut
   } else {
-    fit$piecewiseDropoutTime = u
+    fit$piecewiseDropoutTime = tcut
   }
 
   fit

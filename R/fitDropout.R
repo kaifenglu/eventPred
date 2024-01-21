@@ -165,14 +165,15 @@ fitDropout <- function(df, dropout_model = "exponential",
 
       reg <- survival::survreg(formula, data = df1, dist = "exponential")
 
+      # use the more common parameterization for the exponential distribution
       fit3 <- list(model = 'Exponential',
-                   theta = as.numeric(reg$coefficients),
+                   theta = -as.numeric(reg$coefficients),
                    vtheta = reg$var,
                    aic = -2*reg$loglik[1] + 2*(q+1),
                    bic = -2*reg$loglik[1] + (q+1)*log(n0))
 
       # fitted survival curve
-      rate = exp(-as.numeric(x %*% fit3$theta))
+      rate = exp(as.numeric(x %*% fit3$theta))
 
       dffit3 <- dplyr::tibble(
         time = seq(0, max(df1$time)),
@@ -265,14 +266,12 @@ fitDropout <- function(df, dropout_model = "exponential",
       # where ucut[1]=0< ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
       J = length(piecewiseDropoutTime)
 
-      erify::check_positive(c0 - J - q - 1, supplement = paste(
+      erify::check_positive(c0 - J - q + 1, supplement = paste(
         "The number of dropouts must be >=", J + q,
         "to fit a piecewise exponential model."))
 
       # maximum likelihood estimates and covariance matrix
-      fit3 <- pwexpreg(df1, piecewiseDropoutTime, event = "dropout",
-                       covariates)
-      J = length(fit3$piecewiseDropoutTime)
+      fit3 <- pwexpreg(df1$time, df1$dropout, J, piecewiseDropoutTime, q, x)
 
       # fitted survival curve
       time = seq(0, max(df1$time))
@@ -377,11 +376,13 @@ fitDropout <- function(df, dropout_model = "exponential",
     }
 
     if (tolower(dropout_model) == "model averaging") {
-      aictext = paste("Weighted AIC:", round(fit3$aic,2))
-      bictext = paste("Weighted BIC:", round(fit3$bic,2))
+      aictext = paste("Weighted AIC:",
+                      formatC(fit3$aic, format = "f", digits = 2))
+      bictext = paste("Weighted BIC:",
+                      formatC(fit3$bic, format = "f", digits = 2))
     } else {
-      aictext = paste("AIC:", round(fit3$aic,2))
-      bictext = paste("BIC:", round(fit3$bic,2))
+      aictext = paste("AIC:", formatC(fit3$aic, format = "f", digits = 2))
+      bictext = paste("BIC:", formatC(fit3$bic, format = "f", digits = 2))
     }
 
     fittedDropout <- plotly::plot_ly() %>%
@@ -420,12 +421,20 @@ fitDropout <- function(df, dropout_model = "exponential",
     g1[[i]] = fittedDropout
   }
 
+  # ensure that the sub plots share the same x axis range
+  if (by_treatment) {
+    x_range = range(df$time)
+    for (i in 1:ngroups) {
+      g1[[i]] <- g1[[i]] %>% layout(xaxis = list(range = x_range))
+    }
+  }
+
+
   if (!by_treatment) {
     dropout_fit = fit3
     dropout_fit_plot = fittedDropout
   } else {
-    dropout_fit_plot <- plotly::subplot(g1, nrows = ngroups, titleX = TRUE,
-                                        titleY = TRUE, margin = 0.1)
+    dropout_fit_plot = g1
   }
 
   if (showplot) print(dropout_fit_plot)

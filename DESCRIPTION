@@ -1,7 +1,7 @@
 Package: eventPred
 Title: Event Prediction
-Version: 0.2.3
-Date: 2023-12-16
+Version: 0.2.4
+Date: 2024-01-20
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6160-7119"))
@@ -9,7 +9,7 @@ Description: Predicts enrollment and events at the design or analysis stage usin
 License: GPL (>= 2)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.3
+RoxygenNote: 7.3.0
 Imports: 
     dplyr (>= 1.1.0),
     rlang (>= 1.0.6),
@@ -23,9 +23,15 @@ Imports:
     purrr (>= 1.0.2),
     flexsurv (>= 2.2.2),
     erify (>= 0.4.0),
-    stats (>= 3.5.0)
+    stats (>= 3.5.0),
+    shiny (>= 1.7.1)
+Suggests: 
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0) 
 Depends: 
     R (>= 3.5.0)
+VignetteBuilder: knitr
 LazyData: true
 URL: https://github.com/kaifenglu/eventPred
 BugReports: https://github.com/kaifenglu/eventPred/issues

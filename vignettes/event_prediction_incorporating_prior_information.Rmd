@@ -1,0 +1,50 @@
+---
+title: "Event Prediction Incorporating Prior Information"
+author: "Kaifeng Lu"
+date: "2024-01-20"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Event Prediction Incorporating Prior Information}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(eventPred)
+```
+
+We analyzed interim enrollment and event data from the interimData1 dataset within the eventPred package. As of the cutoff date of March 1, 2019, 224 patients had been enrolled (with a target of 300), and 42 patients had experienced the event of interest (with a target of 200 events).
+
+A time-decay model was used to predict future enrollment patterns. A Weibull distribution was employed to model the time to event. To accommodate the limited number of dropouts (n = 1) while allowing for potential non-constant dropout rates, we modeled time to dropout using a flexible piecewise exponential prior distribution with a changepoint at day 140. 
+
+```{r}
+set.seed(2000)
+
+dropout_prior <- list(
+  model = "piecewise exponential",
+  theta = c(-8, -9),
+  vtheta = diag(2)*1e-8,
+  piecewiseDropoutTime = c(0, 140))
+
+pred <- getPrediction(
+  df = interimData1,
+  to_predict = "enrollment and event",
+  target_n = 300,
+  target_d = 200,
+  enroll_model = "time-decay",
+  event_model = "weibull",
+  dropout_model = "piecewise exponential",
+  piecewiseDropoutTime = 0,
+  dropout_prior = dropout_prior,
+  pilevel = 0.90, 
+  nreps = 500)
+```
+
+The median predicted date to reach 200 events is September 19, 2021. The 90% prediction interval for event completion is wide, ranging from July 30, 2020 to October 25, 2023, indicating uncertainty in the prediction. Compared with the prediction without prior information, the point estimate moved upwards and the prediction interval widened due to a higher dropout rate in the prior distribution.

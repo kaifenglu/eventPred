@@ -487,16 +487,18 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
       # plot the enrollment data with date as x-axis
       g1 <- plotly::plot_ly() %>%
+        plotly::add_lines(
+          data = dfa, x = ~date, y = ~n,
+          line = list(shape="hv", width=2),
+          name = "observed") %>%
+        plotly::add_lines(
+          data = dfb, x = ~date, y = ~n,
+          line = list(width=2),
+          name = "median prediction") %>%
         plotly::add_ribbons(
           data = dfb, x = ~date, ymin = ~lower, ymax = ~upper,
-          name = "prediction interval",
-          fill = "tonexty", line = list(width=0)) %>%
-        plotly::add_lines(
-          data = dfb, x = ~date, y = ~n, name = "median prediction",
-          line = list(width=2)) %>%
-        plotly::add_lines(
-          data = dfa, x = ~date, y = ~n, name = "observed",
-          line = list(shape="hv", width=2)) %>%
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval") %>%
         plotly::add_lines(
           x = rep(cutoffdt, 2), y = c(min(dfa$n), max(dfb$upper)),
           name = "cutoff", line = list(dash="dash"),
@@ -507,22 +509,20 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
             yanchor = "bottom", font = list(size=12),
             showarrow = FALSE),
           xaxis = list(title = "", zeroline = FALSE),
-          yaxis = list(title = "Subjects", zeroline = FALSE),
-          legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                        orientation = "h"))
+          yaxis = list(title = "Subjects", zeroline = FALSE))
     } else {
       # plot the enrollment data with day as x-axis
       g1 <- plotly::plot_ly(dfb1, x = ~t) %>%
-        plotly::add_ribbons(
-          ymin = ~lower, ymax = ~upper, name = "prediction interval",
-          fill = "tonexty", line = list(width=0)) %>%
         plotly::add_lines(
-          y = ~n, name = "median prediction", line = list(width=2)) %>%
+          y = ~n, line = list(width=2),
+          name = "median prediction") %>%
+        plotly::add_ribbons(
+          ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval") %>%
         plotly::layout(
           xaxis = list(title = "Days since trial start", zeroline = FALSE),
-          yaxis = list(title = "Subjects", zeroline = FALSE),
-          legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                        orientation = "h"))
+          yaxis = list(title = "Subjects", zeroline = FALSE))
     }
 
   } else { # by treatment
@@ -599,25 +599,25 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
           dplyr::filter(.data$treatment == i)
 
         g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
+          plotly::add_lines(
+            data = dfai, x = ~date, y = ~n,
+            line = list(shape="hv", width=2),
+            name = "observed") %>%
+          plotly::add_lines(
+            data = dfbi, x = ~date, y = ~n,
+            line = list(width=2),
+            name = "median prediction") %>%
           plotly::add_ribbons(
             data = dfbi, x = ~date, ymin = ~lower, ymax = ~upper,
-            name = "prediction interval", fill = "tonexty",
-            line = list(width=0)) %>%
-          plotly::add_lines(
-            data = dfbi, x = ~date, y = ~n, name = "median prediction",
-            line = list(width=2)) %>%
-          plotly::add_lines(
-            data = dfai, x = ~date, y = ~n, name = "observed",
-            line = list(shape="hv", width=2)) %>%
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval") %>%
           plotly::add_lines(
             x = rep(cutoffdt, 2), y = c(min(dfai$n), max(dfbi$upper)),
             name = "cutoff", line = list(dash="dash"),
             showlegend = FALSE) %>%
           plotly::layout(
             xaxis = list(title = "", zeroline = FALSE),
-            yaxis = list(title = "Subjects", zeroline = FALSE),
-            legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                          orientation = "h")) %>%
+            yaxis = list(title = "Subjects", zeroline = FALSE)) %>%
           plotly::layout(
             annotations = list(
               x = 0.5, y = 1,
@@ -642,16 +642,16 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
         g[[(i+1) %% 9999]] <- dfbi %>%
           plotly::plot_ly(x = ~t) %>%
-          plotly::add_ribbons(
-            ymin = ~lower, ymax = ~upper, name = "prediction interval",
-            fill = "tonexty", line = list(width=0)) %>%
           plotly::add_lines(
-            y = ~n, name = "median prediction", line = list(width=2)) %>%
+            y = ~n, line = list(width=2),
+            name = "median prediction") %>%
+          plotly::add_ribbons(
+            ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval") %>%
           plotly::layout(
             xaxis = list(title = "Days since trial start", zeroline = FALSE),
-            yaxis = list(title = "Subjects", zeroline = FALSE),
-            legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                          orientation = "h")) %>%
+            yaxis = list(title = "Subjects", zeroline = FALSE)) %>%
           plotly::layout(
             annotations = list(
               x = 0.5, y = 1,
@@ -661,7 +661,7 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
       }
     }
 
-    g1 <- plotly::subplot(g, nrows = ngroups + 1, margin = 0.05)
+    g1 <- g
   }
 
 

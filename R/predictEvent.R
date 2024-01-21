@@ -942,7 +942,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           model = tolower(event_fit[[j]]$model)
 
           if (model == "exponential") {
-            rate = exp(-theta)
+            rate = exp(theta)
             survivalTimeNew[cols] = rexp(ncols, rate)
           } else if (model == "weibull") {
             shape = exp(-theta[2])
@@ -1009,7 +1009,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           model = tolower(event_fit[[j]]$model)
 
           if (model == "exponential") {
-            rate = exp(-theta)
+            rate = exp(theta)
             survivalTimeOngoing[cols] = rexp(ncols, rate) + u0
           } else if (model == "weibull") {
             shape = exp(-theta[2])
@@ -1093,7 +1093,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           model = tolower(event_fit_w_x[[j]]$model)
 
           if (model == "exponential") {
-            rate = exp(-as.numeric(x1 %*% theta))
+            rate = exp(as.numeric(x1 %*% theta))
             survivalTimeOngoing[cols] = rexp(ncols, rate) + u0
           } else if (model == "weibull") {
             shape = exp(-theta[q_event+2])
@@ -1196,7 +1196,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           model = tolower(dropout_fit[[j]]$model)
 
           if (model == "exponential") {
-            rate = exp(-theta)
+            rate = exp(theta)
             dropoutTimeNew[cols] = rexp(ncols, rate)
           } else if (model == "weibull") {
             shape = exp(-theta[2])
@@ -1263,7 +1263,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           model = tolower(dropout_fit[[j]]$model)
 
           if (model == "exponential") {
-            rate = exp(-theta)
+            rate = exp(theta)
             dropoutTimeOngoing[cols] = rexp(ncols, rate) + u0
           } else if (model == "weibull") {
             shape = exp(-theta[2])
@@ -1347,7 +1347,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
           model = tolower(dropout_fit_w_x[[j]]$model)
 
           if (model == "exponential") {
-            rate = exp(-as.numeric(x1 %*% theta))
+            rate = exp(as.numeric(x1 %*% theta))
             dropoutTimeOngoing[cols] = rexp(ncols)/rate + u0
           } else if (model == "weibull") {
             shape = exp(-theta[q_dropout+2])
@@ -1468,7 +1468,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     newEvents[index, "arrivalTime"] = arrivalTime
     newEvents[index, "treatment"] = treatment
     newEvents[index, "treatment_description"] = treatment_description
-    newEvents[index, "time"] = ceiling(time)
+    newEvents[index, "time"] = pmax(ceiling(time), 1)
     newEvents[index, "event"] = event
     newEvents[index, "dropout"] = dropout
     offset = offset + m
@@ -1504,8 +1504,8 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   sdf <- function(t, target_d, d0, newEvents) {
     sumdata <- newEvents %>%
       dplyr::group_by(.data$draw) %>%
-      dplyr::summarize(n = sum(.data$totalTime <= t & .data$event == 1) + d0)
-    mean(sumdata$n < target_d)
+      dplyr::summarize(n = sum(.data$totalTime <= t & .data$event == 1))
+    mean(sumdata$n < target_d - d0)
   }
 
   tmax = max(newEvents$totalTime[newEvents$event == 1])
@@ -1732,17 +1732,64 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
       dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
 
+      dfa_enrollment <- dfa %>% dplyr::filter(.data$parameter == "Enrollment")
+      dfb_enrollment <- dfb %>% dplyr::filter(.data$parameter == "Enrollment")
+      dfa_event <- dfa %>% dplyr::filter(.data$parameter == "Event")
+      dfb_event <- dfb %>% dplyr::filter(.data$parameter == "Event")
+      dfa_dropout <- dfa %>% dplyr::filter(.data$parameter == "Dropout")
+      dfb_dropout <- dfb %>% dplyr::filter(.data$parameter == "Dropout")
+      dfa_ongoing <- dfa %>% dplyr::filter(.data$parameter == "Ongoing")
+      dfb_ongoing <- dfb %>% dplyr::filter(.data$parameter == "Ongoing")
+
       g1 <- plotly::plot_ly() %>%
+        plotly::add_lines(
+          data = dfa_enrollment, x = ~date, y = ~n,
+          line = list(shape="hv", width=2),
+          name = "observed enrollment") %>%
+        plotly::add_lines(
+          data = dfb_enrollment, x = ~date, y = ~n,
+          line = list(width=2),
+          name = "median prediction enrollment") %>%
         plotly::add_ribbons(
-          data = dfb, x = ~date, ymin = ~lower, ymax = ~upper,
-          fill = "tonexty", fillcolor = ~parameter,
-          line = list(width=0)) %>%
+          data = dfb_enrollment, x = ~date, ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval enrollment") %>%
         plotly::add_lines(
-          data = dfb, x = ~date, y = ~n, color = ~parameter,
-          line = list(width=2)) %>%
+          data = dfa_event, x = ~date, y = ~n,
+          line = list(shape="hv", width=2),
+          name = "observed event") %>%
         plotly::add_lines(
-          data = dfa, x = ~date, y = ~n, color = ~parameter,
-          line = list(shape="hv", width=2)) %>%
+          data = dfb_event, x = ~date, y = ~n,
+          line = list(width=2),
+          name = "median prediction event") %>%
+        plotly::add_ribbons(
+          data = dfb_event, x = ~date, ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval event") %>%
+        plotly::add_lines(
+          data = dfa_dropout, x = ~date, y = ~n,
+          line = list(shape="hv", width=2),
+          name = "observed dropout") %>%
+        plotly::add_lines(
+          data = dfb_dropout, x = ~date, y = ~n,
+          line = list(width=2),
+          name = "median prediction dropout") %>%
+        plotly::add_ribbons(
+          data = dfb_dropout, x = ~date, ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval dropout") %>%
+        plotly::add_lines(
+          data = dfa_ongoing, x = ~date, y = ~n,
+          line = list(shape="hv", width=2),
+          name = "observed ongoing") %>%
+        plotly::add_lines(
+          data = dfb_ongoing, x = ~date, y = ~n,
+          line = list(width=2),
+          name = "median prediction ongoing") %>%
+        plotly::add_ribbons(
+          data = dfb_ongoing, x = ~date, ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval ongoing") %>%
         plotly::add_lines(
           x = rep(cutoffdt, 2), y = c(min(dfa$n), max(dfb$upper)),
           name = "cutoff", line = list(dash="dash"),
@@ -1752,9 +1799,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
             x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
             yanchor = "bottom", font = list(size=12), showarrow = FALSE),
           xaxis = list(title = "", zeroline = FALSE),
-          yaxis = list(zeroline = FALSE),
-          legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                        orientation = 'h'))
+          yaxis = list(zeroline = FALSE))
 
       if (tp < t0) {
         g1 <- g1 %>%
@@ -1783,19 +1828,47 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       }
 
     } else {
+      dfs_enrollment <- dfs %>% dplyr::filter(.data$parameter == "Enrollment")
+      dfs_event <- dfs %>% dplyr::filter(.data$parameter == "Event")
+      dfs_dropout <- dfs %>% dplyr::filter(.data$parameter == "Dropout")
+      dfs_ongoing <- dfs %>% dplyr::filter(.data$parameter == "Ongoing")
+
       g1 <- plotly::plot_ly() %>%
-        plotly::add_ribbons(
-          data = dfs, x = ~t, ymin = ~lower, ymax = ~upper,
-          fill = "tonexty", fillcolor = ~parameter,
-          line = list(width=0)) %>%
         plotly::add_lines(
-          data = dfs, x = ~t, y = ~n, color = ~parameter,
-          line = list(width=2)) %>%
+          data = dfs_enrollment, x = ~t, y = ~n,
+          line = list(width=2),
+          name = "median prediction enrollment") %>%
+        plotly::add_ribbons(
+          data = dfs_enrollment, x = ~t, ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval enrollment") %>%
+        plotly::add_lines(
+          data = dfs_event, x = ~t, y = ~n,
+          line = list(width=2),
+          name = "median prediction event") %>%
+        plotly::add_ribbons(
+          data = dfs_event, x = ~t, ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval event") %>%
+        plotly::add_lines(
+          data = dfs_dropout, x = ~t, y = ~n,
+          line = list(width=2),
+          name = "median prediction dropout") %>%
+        plotly::add_ribbons(
+          data = dfs_dropout, x = ~t, ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval dropout") %>%
+        plotly::add_lines(
+          data = dfs_ongoing, x = ~t, y = ~n,
+          line = list(width=2),
+          name = "median prediction ongoing") %>%
+        plotly::add_ribbons(
+          data = dfs_ongoing, x = ~t, ymin = ~lower, ymax = ~upper,
+          fill = "tonexty", line = list(width=0),
+          name = "prediction interval ongoing") %>%
         plotly::layout(
           xaxis = list(title = "Days since trial start", zeroline = FALSE),
-          yaxis = list(zeroline = FALSE),
-          legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                        orientation = 'h'))
+          yaxis = list(zeroline = FALSE))
 
       if (showEvent) {
         g1 <- g1 %>%
@@ -2011,29 +2084,76 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       g <- list()
       for (i in c(9999, 1:ngroups)) {
         dfsi <- dfs %>% dplyr::filter(.data$treatment == i)
-        dfbi <- dfb %>% dplyr::filter(.data$treatment == i)
         dfai <- dfa %>% dplyr::filter(.data$treatment == i)
+        dfbi <- dfb %>% dplyr::filter(.data$treatment == i)
+
+        dfai_enrollment <- dfai %>%
+          dplyr::filter(.data$parameter == "Enrollment")
+        dfbi_enrollment <- dfbi %>%
+          dplyr::filter(.data$parameter == "Enrollment")
+        dfai_event <- dfai %>% dplyr::filter(.data$parameter == "Event")
+        dfbi_event <- dfbi %>% dplyr::filter(.data$parameter == "Event")
+        dfai_dropout <- dfai %>% dplyr::filter(.data$parameter == "Dropout")
+        dfbi_dropout <- dfbi %>% dplyr::filter(.data$parameter == "Dropout")
+        dfai_ongoing <- dfai %>% dplyr::filter(.data$parameter == "Ongoing")
+        dfbi_ongoing <- dfbi %>% dplyr::filter(.data$parameter == "Ongoing")
 
         g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
+          plotly::add_lines(
+            data = dfai_enrollment, x = ~date, y = ~n,
+            line = list(shape="hv", width=2),
+            name = "observed enrollment") %>%
+          plotly::add_lines(
+            data = dfbi_enrollment, x = ~date, y = ~n,
+            line = list(width=2),
+            name = "median prediction enrollment") %>%
           plotly::add_ribbons(
-            data = dfbi, x = ~date, ymin = ~lower, ymax = ~upper,
-            fill = "tonexty", fillcolor = ~parameter,
-            line = list(width=0)) %>%
+            data = dfbi_enrollment, x = ~date, ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval enrollment") %>%
           plotly::add_lines(
-            data = dfbi, x = ~date, y = ~n, color = ~parameter,
-            line = list(width=2)) %>%
+            data = dfai_event, x = ~date, y = ~n,
+            line = list(shape="hv", width=2),
+            name = "observed event") %>%
           plotly::add_lines(
-            data = dfai, x = ~date, y = ~n, color = ~parameter,
-            line = list(shape="hv", width=2)) %>%
+            data = dfbi_event, x = ~date, y = ~n,
+            line = list(width=2),
+            name = "median prediction event") %>%
+          plotly::add_ribbons(
+            data = dfbi_event, x = ~date, ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval event") %>%
+          plotly::add_lines(
+            data = dfai_dropout, x = ~date, y = ~n,
+            line = list(shape="hv", width=2),
+            name = "observed dropout") %>%
+          plotly::add_lines(
+            data = dfbi_dropout, x = ~date, y = ~n,
+            line = list(width=2),
+            name = "median prediction dropout") %>%
+          plotly::add_ribbons(
+            data = dfbi_dropout, x = ~date, ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval dropout") %>%
+          plotly::add_lines(
+            data = dfai_ongoing, x = ~date, y = ~n,
+            line = list(shape="hv", width=2),
+            name = "observed ongoing") %>%
+          plotly::add_lines(
+            data = dfbi_ongoing, x = ~date, y = ~n,
+            line = list(width=2),
+            name = "median prediction ongoing") %>%
+          plotly::add_ribbons(
+            data = dfbi_ongoing, x = ~date, ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval ongoing") %>%
           plotly::add_lines(
             x = rep(cutoffdt, 2), y = c(min(dfai$n), max(dfbi$upper)),
             name = "cutoff", line = list(dash="dash"),
             showlegend = FALSE) %>%
           plotly::layout(
             xaxis = list(title = "", zeroline = FALSE),
-            yaxis = list(zeroline = FALSE),
-            legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                          orientation = 'h')) %>%
+            yaxis = list(zeroline = FALSE)) %>%
           plotly::layout(
             annotations = list(
               x = 0.5, y = 1,
@@ -2084,22 +2204,50 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     } else { # prediction at design stage
       g <- list()
       for (i in c(9999, 1:ngroups)) {
-        dfsi <- dfs %>%
-          dplyr::filter(.data$treatment == i)
+        dfsi <- dfs %>% dplyr::filter(.data$treatment == i)
+
+        dfsi_enrollment <- dfsi %>%
+          dplyr::filter(.data$parameter == "Enrollment")
+        dfsi_event <- dfsi %>% dplyr::filter(.data$parameter == "Event")
+        dfsi_dropout <- dfsi %>% dplyr::filter(.data$parameter == "Dropout")
+        dfsi_ongoing <- dfsi %>% dplyr::filter(.data$parameter == "Ongoing")
 
         g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
-          plotly::add_ribbons(
-            data = dfsi, x = ~t, ymin = ~lower, ymax = ~upper,
-            fill = "tonexty", fillcolor = ~parameter,
-            line = list(width=0)) %>%
           plotly::add_lines(
-            data = dfsi, x = ~t, y = ~n, color = ~parameter,
-            line = list(width=2)) %>%
+            data = dfsi_enrollment, x = ~t, y = ~n,
+            line = list(width=2),
+            name = "median prediction enrollment") %>%
+          plotly::add_ribbons(
+            data = dfsi_enrollment, x = ~t, ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval enrollment") %>%
+          plotly::add_lines(
+            data = dfsi_event, x = ~t, y = ~n,
+            line = list(width=2),
+            name = "median prediction event") %>%
+          plotly::add_ribbons(
+            data = dfsi_event, x = ~t, ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval event") %>%
+          plotly::add_lines(
+            data = dfsi_dropout, x = ~t, y = ~n,
+            line = list(width=2),
+            name = "median prediction dropout") %>%
+          plotly::add_ribbons(
+            data = dfsi_dropout, x = ~t, ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval dropout") %>%
+          plotly::add_lines(
+            data = dfsi_ongoing, x = ~t, y = ~n,
+            line = list(width=2),
+            name = "median prediction ongoing") %>%
+          plotly::add_ribbons(
+            data = dfsi_ongoing, x = ~t, ymin = ~lower, ymax = ~upper,
+            fill = "tonexty", line = list(width=0),
+            name = "prediction interval ongoing") %>%
           plotly::layout(
             xaxis = list(title = "Days since trial start", zeroline = FALSE),
-            yaxis = list(zeroline = FALSE),
-            legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                          orientation = 'h')) %>%
+            yaxis = list(zeroline = FALSE)) %>%
           plotly::layout(
             annotations = list(
               x = 0.5, y = 1,
@@ -2125,7 +2273,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       }
     }
 
-    g1 <- plotly::subplot(g, nrows = ngroups + 1, margin = 0.05)
+    g1 <- g
   }
 
 

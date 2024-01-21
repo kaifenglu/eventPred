@@ -1,6 +1,6 @@
 library(dplyr)
 
-lrstat::getAccrualDuration(
+lrstat::getAccrualDurationFromN(
   nsubjects = 300,
   accrualTime = seq(0, 8),
   accrualIntensity = c(26/9*seq(1, 9)))
@@ -76,12 +76,12 @@ dropout = 1*(dropoutTime < survivalTime)
 # complete data without administrative censoring
 dfcomplete <- dplyr::tibble(trialsdt, arrivalTime, treatment,
                             time, event, dropout) %>%
-  dplyr::mutate(totalTime = arrivalTime + time) %>%
+  dplyr::mutate(totalTime = arrivalTime + time - 1) %>%
   dplyr::arrange(totalTime) %>%
   dplyr::mutate(n = cumsum(event))
 
 # end the study when the target number of events is reached
-cutoff = max((dfcomplete %>% dplyr::filter(n == 244))$totalTime)
+cutoff = max((dfcomplete %>% dplyr::filter(n == 200))$totalTime)
 
 
 # complete data with administrative censoring

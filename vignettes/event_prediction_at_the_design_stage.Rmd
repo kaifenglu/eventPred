@@ -1,0 +1,84 @@
+---
+title: "Event Prediction at the Design Stage"
+author: "Kaifeng Lu"
+date: "2023-12-23"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Event Prediction at the Design Stage}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(eventPred)
+```
+
+## Prior for enrollment
+We consider a piecewise Poisson enrollment process, with 13 patients per month for the first 200 days and 26 patients per month thereafter. The piecewise Poisson model parameters are the log enrollment rates in the enrollment time intervals. When the variance of the model parameters is set to a very small number, we effectively treat the model parameters as if they are known and fixed. 
+
+```{r}
+set.seed(2000)
+
+enroll_prior <- list(
+  model = "piecewise poisson",
+  theta = log(c(13, 26)/30.4375),
+  vtheta = diag(2)*1e-8,
+  accrualTime = c(0, 200))
+```
+
+
+## Prior for event
+For the control group, we assume an exponential distribution for time to event with a median survival time of 13 months. For the experimental treatment group, we assume a piecewise exponential distribution with the event rate the same as the control group for the first 140 days and a hazard ratio of 0.58 thereafter. This is an example of delayed treatment effect. Since the event model needs to be consistent across treatment groups, we treat the control group event distribution as piecewise exponential but with the same event rate over time. 
+
+```{r}
+event_prior <- list(
+  list(model = "piecewise exponential",
+       theta = log(c(log(2)/13, 0.58*log(2)/13)/30.4375),
+       vtheta = diag(2)*1e-8,
+       piecewiseSurvivalTime = c(0, 140)),
+  list(model = "piecewise exponential",
+       theta = log(c(log(2)/13, log(2)/13)/30.4375),
+       vtheta = diag(2)*1e-8,
+       piecewiseSurvivalTime = c(0, 140)))
+```
+
+## Prior for dropout
+We assume an exponential distribution for time to dropout with a cumulative dropout rate of 5% at the end of one year common across treatment groups. 
+
+```{r}
+dropout_prior <- list(
+  list(model = "exponential",
+       theta = log(-log(1-0.05)/365.25),
+       vtheta = 1e-8),
+  list(model = "exponential",
+       theta = log(-log(1-0.05)/365.25),
+       vtheta = 1e-8))
+```
+
+
+## Enrollment and event prediction at design stage
+We assume 1:1 randomization with a block size of 4. We intend to enroll a total of 300 patients and target a total of 200 events for the overall study. 
+
+```{r}
+pred <- getPrediction(
+  to_predict = "enrollment and event",
+  target_n = 300,
+  target_d = 200,
+  enroll_prior = enroll_prior,
+  event_prior = event_prior,
+  dropout_prior = dropout_prior,
+  pilevel = 0.90, 
+  nreps = 500,
+  by_treatment = TRUE,
+  ngroups = 2, 
+  alloc = c(2,2),
+  treatment_label = c("Drug", "Placebo"))
+```
+
