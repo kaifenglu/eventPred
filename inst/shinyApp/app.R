@@ -665,39 +665,43 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
 
-      radioButtons(
-        "stage",
-        label = "Stage of the study",
-        choices = c("Design stage",
-                    "Real-time before enrollment completion",
-                    "Real-time after enrollment completion"),
-        selected = "Real-time after enrollment completion",
-        inline = FALSE),
+      fluidRow(
+        column(7,
+               radioButtons(
+                 "stage",
+                 label = "Stage of the study",
+                 choices = c("Design stage",
+                             "Real-time before enrollment completion",
+                             "Real-time after enrollment completion"),
+                 selected = "Real-time after enrollment completion",
+                 inline = FALSE)),
 
-      conditionalPanel(
-        condition = "input.stage == 'Design stage' ||
+        column(5,
+               conditionalPanel(
+                 condition = "input.stage == 'Design stage' ||
                  input.stage == 'Real-time before enrollment completion'",
 
-        radioButtons(
-          "to_predict",
-          label = "What to predict?",
-          choices = c("Enrollment only",
-                      "Enrollment and event"),
-          selected = "Enrollment only",
-          inline = FALSE)
-      ),
+                 radioButtons(
+                   "to_predict",
+                   label = "What to predict?",
+                   choices = c("Enrollment only",
+                               "Enrollment and event"),
+                   selected = "Enrollment and event",
+                   inline = FALSE)
+               ),
 
+               conditionalPanel(
+                 condition =
+                   "input.stage == 'Real-time after enrollment completion'",
 
-      conditionalPanel(
-        condition =
-          "input.stage == 'Real-time after enrollment completion'",
-
-        radioButtons(
-          "to_predict2",
-          label = "What to predict?",
-          choices = c("Event only"),
-          selected = "Event only",
-          inline = FALSE)
+                 radioButtons(
+                   "to_predict2",
+                   label = "What to predict?",
+                   choices = c("Event only"),
+                   selected = "Event only",
+                   inline = FALSE)
+               )
+        )
       ),
 
 
@@ -1926,15 +1930,15 @@ server <- function(input, output, session) {
 
 
   output$enroll_fit <- renderPlotly({
-    if (!is.null(enroll_fit())) enroll_fit()$enroll_fit_plot
+    if (!is.null(enroll_fit())) enroll_fit()$fit_plot
   })
 
 
   # event fit information criteria
   output$event_fit_ic <- renderText({
-    if (input$by_treatment && k() > 1) {
-      aic = sum(sapply(event_fit()$event_fit, function(fit) fit$aic))
-      bic = sum(sapply(event_fit()$event_fit, function(fit) fit$bic))
+    if (input$by_treatment && k() > 1 && !is.null(event_fit())) {
+      aic = sum(sapply(event_fit(), function(fit) fit$fit$aic))
+      bic = sum(sapply(event_fit(), function(fit) fit$fit$bic))
       aictext = paste("Total AIC:", formatC(aic, format = "f", digits = 2))
       bictext = paste("Total BIC:", formatC(bic, format = "f", digits = 2))
       text1 = paste0("<i>", aictext, ", ", bictext, "</i>")
@@ -1948,9 +1952,10 @@ server <- function(input, output, session) {
 
   # dropout fit information criteria
   output$dropout_fit_ic <- renderText({
-    if (input$by_treatment && k() > 1 && input$dropout_model != "None") {
-      aic = sum(sapply(dropout_fit()$dropout_fit, function(fit) fit$aic))
-      bic = sum(sapply(dropout_fit()$dropout_fit, function(fit) fit$bic))
+    if (input$by_treatment && k() > 1 && input$dropout_model != "None"
+        && !is.null(dropout_fit())) {
+      aic = sum(sapply(dropout_fit(), function(fit) fit$fit$aic))
+      bic = sum(sapply(dropout_fit(), function(fit) fit$fit$bic))
       aictext = paste("Total AIC:", formatC(aic, format = "f", digits = 2))
       bictext = paste("Total BIC:", formatC(bic, format = "f", digits = 2))
       text1 = paste0("<i>", aictext, ", ", bictext, "</i>")
@@ -1963,13 +1968,13 @@ server <- function(input, output, session) {
 
 
   observe({
-    walk(1:10, function(i) {
+    walk(1:6, function(i) {
       output[[paste0("event_fit_output", i)]] <- renderPlotly({
-        if (i <= k()) {
+        if (i <= k() && !is.null(event_fit())) {
           if (input$by_treatment && k() > 1) {
-            event_fit()$event_fit_plot[[i]]
+            event_fit()[[i]]$fit_plot
           } else {
-            event_fit()$event_fit_plot
+            event_fit()$fit_plot
           }
         } else {
           NULL
@@ -1978,10 +1983,10 @@ server <- function(input, output, session) {
 
       output[[paste0("dropout_fit_output", i)]] <- renderPlotly({
         if (i <= k()) {
-          if (input$by_treatment && k() > 1) {
-            dropout_fit()$dropout_fit_plot[[i]]
+          if (input$by_treatment && k() > 1 && !is.null(dropout_fit())) {
+            dropout_fit()[[i]]$fit_plot
           } else {
-            dropout_fit()$dropout_fit_plot
+            dropout_fit()$fit_plot
           }
         } else {
           NULL
@@ -2609,7 +2614,7 @@ server <- function(input, output, session) {
 
 
   observe({
-    walk(1:10, function(i) {
+    walk(1:6, function(i) {
       output[[paste0("pred_plot_output", i)]] <- renderPlotly({
         if (i <= k() + 1) {
           if (mult_plot()) {

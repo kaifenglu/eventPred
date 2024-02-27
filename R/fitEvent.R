@@ -125,7 +125,7 @@ fitEvent <- function(df, event_model = "model averaging",
 
     if (!("treatment_description" %in% names(df))) {
       df <- df %>% dplyr::mutate(
-        treatment_description = paste0("Treatment ", .data$treatment))
+        treatment_description = paste("Treatment", .data$treatment))
     }
   } else {
     ngroups = 1
@@ -139,7 +139,6 @@ fitEvent <- function(df, event_model = "model averaging",
 
   # fit by treatment group
   event_fit <- list()
-  g1 <- list()
 
   for (i in 1:ngroups) {
     df1 <- df %>% dplyr::filter(.data$treatment == i)
@@ -329,7 +328,7 @@ fitEvent <- function(df, event_model = "model averaging",
         "The number of events must be >=", k + q + 2,
         "to fit a spline model."))
 
-      # g(S(t)) = gamma_0 +gamma_1*x +gamma_2*v_1(x) +... +gamma_{m+1}*v_m(x)
+      # g(S(t)) = gamma_0 +gamma_1*x +gamma_2*v_1(x) +... +gamma_{k+1}*v_k(x)
 
       spl <- flexsurv::flexsurvspline(
         formula, data = df1, k = k, scale = scale, method = "Nelder-Mead")
@@ -416,28 +415,29 @@ fitEvent <- function(df, event_model = "model averaging",
       fit2$treatment_description = df1$treatment_description[1]
     }
 
-    event_fit[[i]] = fit2
-    g1[[i]] = fittedEvent
+    event_fit[[i]] = list(fit = fit2, fit_plot = fittedEvent)
   }
-
 
   # ensure that the sub plots share the same x axis range
   if (by_treatment) {
     x_range = range(df$time)
     for (i in 1:ngroups) {
-      g1[[i]] <- g1[[i]] %>% layout(xaxis = list(range = x_range))
+      event_fit[[i]]$fit_plot <- event_fit[[i]]$fit_plot %>%
+        plotly::layout(xaxis = list(range = x_range))
+    }
+  } else {
+    event_fit = list(fit = fit2, fit_plot = fittedEvent)
+  }
+
+  if (showplot) {
+    if (by_treatment) {
+      for (i in 1:ngroups) {
+        print(event_fit[[i]]$fit_plot)
+      }
+    } else {
+      print(event_fit$fit_plot)
     }
   }
 
-
-  if (!by_treatment) {
-    event_fit = fit2
-    event_fit_plot = fittedEvent
-  } else {
-    event_fit_plot = g1
-  }
-
-  if (showplot) print(event_fit_plot)
-
-  list(event_fit = event_fit, event_fit_plot = event_fit_plot)
+  event_fit
 }

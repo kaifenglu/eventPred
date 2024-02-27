@@ -115,8 +115,8 @@
 #'                           dropout_model = "exponential")
 #'
 #' event_pred <- predictEvent(df = interimData2, target_d = 200,
-#'                            event_fit = event_fit$event_fit,
-#'                            dropout_fit = dropout_fit$dropout_fit,
+#'                            event_fit = event_fit$fit,
+#'                            dropout_fit = dropout_fit$fit,
 #'                            pilevel = 0.90, nreps = 100)
 #'
 #' @export
@@ -1468,7 +1468,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     newEvents[index, "arrivalTime"] = arrivalTime
     newEvents[index, "treatment"] = treatment
     newEvents[index, "treatment_description"] = treatment_description
-    newEvents[index, "time"] = pmax(ceiling(time), 1)
+    newEvents[index, "time"] = pmax(round(time), time0+1)
     newEvents[index, "event"] = event
     newEvents[index, "dropout"] = dropout
     offset = offset + m

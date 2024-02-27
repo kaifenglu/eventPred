@@ -124,7 +124,7 @@ fitDropout <- function(df, dropout_model = "exponential",
 
     if (!("treatment_description" %in% names(df))) {
       df <- df %>% dplyr::mutate(
-        treatment_description = paste0("Treatment ", .data$treatment))
+        treatment_description = paste("Treatment", .data$treatment))
     }
   } else {
     ngroups = 1
@@ -138,7 +138,6 @@ fitDropout <- function(df, dropout_model = "exponential",
 
   # fit by treatment group
   dropout_fit <- list()
-  g1 <- list()
 
   for (i in 1:ngroups) {
     df1 <- df %>% dplyr::filter(.data$treatment == i)
@@ -328,7 +327,7 @@ fitDropout <- function(df, dropout_model = "exponential",
         "The number of dropouts must be >=", k_dropout + q + 2,
         "to fit a spline model."))
 
-      # g(S(t)) = gamma_0 +gamma_1*x +gamma_2*v_1(x) +... +gamma_{m+1}*v_m(x)
+      # g(S(t)) = gamma_0 +gamma_1*x +gamma_2*v_1(x) +... +gamma_{k+1}*v_k(x)
 
       spl <- flexsurv::flexsurvspline(
         formula, data = df1, k = k_dropout, scale = scale_dropout,
@@ -417,27 +416,29 @@ fitDropout <- function(df, dropout_model = "exponential",
       fit3$treatment_description = df1$treatment_description[1]
     }
 
-    dropout_fit[[i]] = fit3
-    g1[[i]] = fittedDropout
+    dropout_fit[[i]] = list(fit = fit3, fit_plot = fittedDropout)
   }
 
   # ensure that the sub plots share the same x axis range
   if (by_treatment) {
     x_range = range(df$time)
     for (i in 1:ngroups) {
-      g1[[i]] <- g1[[i]] %>% layout(xaxis = list(range = x_range))
+      dropout_fit[[i]]$fit_plot <- dropout_fit[[i]]$fit_plot %>%
+        plotly::layout(xaxis = list(range = x_range))
+    }
+  } else {
+    dropout_fit = list(fit = fit3, fit_plot = fittedDropout)
+  }
+
+  if (showplot) {
+    if (by_treatment) {
+      for (i in 1:ngroups) {
+        print(dropout_fit[[i]]$fit_plot)
+      }
+    } else {
+      print(dropout_fit$fit_plot)
     }
   }
 
-
-  if (!by_treatment) {
-    dropout_fit = fit3
-    dropout_fit_plot = fittedDropout
-  } else {
-    dropout_fit_plot = g1
-  }
-
-  if (showplot) print(dropout_fit_plot)
-
-  list(dropout_fit = dropout_fit, dropout_fit_plot = dropout_fit_plot)
+  dropout_fit
 }

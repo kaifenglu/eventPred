@@ -797,7 +797,7 @@ getPrediction <- function(
 
       enroll_fit <- fitEnrollment(df = df, enroll_model,
                                   nknots, accrualTime, showplot)
-      enroll_fit1 <- enroll_fit$enroll_fit
+      enroll_fit1 <- enroll_fit$fit
 
       # combine prior and likelihood to yield posterior
       if (!is.null(enroll_prior)) {
@@ -1090,7 +1090,11 @@ getPrediction <- function(
                               showplot, by_treatment)
 
         if (is.null(event_prior)) {  # no prior, use MLE
-          event_fit1 <- event_fit$event_fit
+          if (by_treatment) {
+            event_fit1 <- purrr::map(event_fit, function(fit) fit$fit)
+          } else {
+            event_fit1 <- event_fit$fit
+          }
         } else {
           if (!by_treatment) {
             df <- df %>% dplyr::mutate(treatment = 1)
@@ -1191,7 +1195,11 @@ getPrediction <- function(
                                   covariates_event)
 
         if (is.null(event_prior_with_covariates)) {  # no prior, use MLE
-          event_fit1_w_x <- event_fit_w_x$event_fit
+          if (by_treatment) {
+            event_fit1_w_x <- purrr::map(event_fit_w_x, function(fit) fit$fit)
+          } else {
+            event_fit1_w_x <- event_fit_w_x$fit
+          }
         } else {
           if (!by_treatment) {
             df <- df %>% dplyr::mutate(treatment = 1)
@@ -1421,7 +1429,11 @@ getPrediction <- function(
                                     showplot, by_treatment)
 
           if (is.null(dropout_prior)) {  # no prior, use MLE
-            dropout_fit1 <- dropout_fit$dropout_fit
+            if (by_treatment) {
+              dropout_fit1 <- purrr::map(dropout_fit, function(fit) fit$fit)
+            } else {
+              dropout_fit1 <- dropout_fit$fit
+            }
           } else {
             if (!by_treatment) {
               df <- df %>% dplyr::mutate(treatment = 1)
@@ -1522,7 +1534,12 @@ getPrediction <- function(
             covariates_dropout)
 
           if (is.null(dropout_prior_with_covariates)) {  # no prior, use MLE
-            dropout_fit1_w_x <- dropout_fit_w_x$dropout_fit
+            if (by_treatment) {
+              dropout_fit1_w_x <- purrr::map(dropout_fit_w_x,
+                                             function(fit) fit$fit)
+            } else {
+              dropout_fit1_w_x <- dropout_fit_w_x$fit
+            }
           } else {
             if (!by_treatment) {
               df <- df %>% dplyr::mutate(treatment = 1)

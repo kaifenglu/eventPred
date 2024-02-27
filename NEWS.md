@@ -1,3 +1,14 @@
+# eventPred 0.2.5
+
+* rename the components of fitEnrollment output to fit and fit_plot
+* restructure the outputs of fitEvent and fitDropout into a list for by-treatment analysis of model fitting and visualization, where each element in the list corresponds to a specific treatment group and has a dedicated sub-list containing two components with one for fit and the other for fit_plot
+* update predictEvent.R, getPrediction.R and app.R accordingly to accommodate the new structure of fitEnrollment, fitEvent and fitDropout outputs
+* update the output of event_prediction_after_enrollment_completion vignette
+* add the condition of (!is.null(event_fit())) for event_fit_ic and (!is.null(dropout_fit())) for dropout_fit_ic in the shiny app
+* minor change to the ui layout of the shiny app
+* ensure that the randomization date for new patients is after the cutoff date and the event date for ongoing subjects is after the cutoff date
+
+
 # eventPred 0.2.4
 
 * fitEnrollment.R

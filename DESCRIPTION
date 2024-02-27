@@ -1,7 +1,7 @@
 Package: eventPred
 Title: Event Prediction
-Version: 0.2.4
-Date: 2024-01-20
+Version: 0.2.5
+Date: 2024-02-27
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6160-7119"))

@@ -362,7 +362,12 @@ predictEnrollment <- function(df = NULL, target_n, enroll_fit, lags = 30,
 
   # assign usubjid for new subjects
   newSubjects$usubjid <- rep(paste0("Z-", 100000 + (1:n1)), nreps)
-  newSubjects$arrivalTime <- pmax(round(newSubjects$arrivalTime), 1)
+
+  if (t0 == 1) { # design stage
+    newSubjects$arrivalTime <- pmax(round(newSubjects$arrivalTime), 1)
+  } else { # analysis stage
+    newSubjects$arrivalTime <- pmax(round(newSubjects$arrivalTime), t0+1)
+  }
 
 
   if (by_treatment) {

@@ -264,5 +264,5 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   if (showplot) print(fittedEnroll)
 
-  list(enroll_fit = fit1, enroll_fit_plot = fittedEnroll)
+  list(fit = fit1, fit_plot = fittedEnroll)
 }
