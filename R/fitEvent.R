@@ -191,7 +191,7 @@ fitEvent <- function(df, event_model = "model averaging",
       reg <- survival::survreg(formula, data = df1, dist = "weibull")
 
       # weibull$shape = 1/reg$scale, weibull$scale = exp(reg$coefficients)
-      # we define theta = (log(weibull$scale), -log(weibull$shape))
+      # we define theta = c(log(weibull$scale), -log(weibull$shape))
       # reg$var is for theta = c(reg$coefficients, log(reg$scale))
       fit2 <- list(model = "Weibull",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
@@ -262,7 +262,7 @@ fitEvent <- function(df, event_model = "model averaging",
           mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))
 
     } else if (tolower(event_model) == "piecewise exponential") {
-      # lambda_0(t) = lambda[j] for ucut[j] < t <= ucut[j+1], j = 1,...,J
+      # lambda_0(t) = lambda[j] for ucut[j] <= t < ucut[j+1], j = 1,...,J
       # where ucut[1]=0 < ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
       J = length(piecewiseSurvivalTime)
 
@@ -278,7 +278,7 @@ fitEvent <- function(df, event_model = "model averaging",
 
       surv = purrr::map(1:n0, function(l)
         ppwexp(time, fit2$theta, J, fit2$piecewiseSurvivalTime,
-               q, x[l,-1], lower.tail = FALSE))
+               q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
       dffit2 <- dplyr::tibble(time, surv)
@@ -318,7 +318,7 @@ fitEvent <- function(df, event_model = "model averaging",
       time = seq(0, max(df1$time))
 
       surv = purrr::map(1:n0, function(l)
-        pmodavg(time, fit2$theta, w1, q, x[l,-1], lower.tail = FALSE))
+        pmodavg(time, fit2$theta, w1, q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
       dffit2 <- dplyr::tibble(time, surv)
@@ -401,21 +401,21 @@ fitEvent <- function(df, event_model = "model averaging",
           showarrow = FALSE)) %>%
       plotly::hide_legend()
 
-    if (by_treatment && ngroups > 1) {
+    if (by_treatment) {
       fittedEvent <- fittedEvent %>%
         plotly::layout(annotations = list(
           x = 0.5, y = 1,
           text = paste0("<b>", df1$treatment_description[1], "</b>"),
           xanchor = "center", yanchor = "middle", showarrow = FALSE,
           xref = 'paper', yref = 'paper'))
-    }
 
-    if (by_treatment) {
       fit2$treatment = df1$treatment[1]
       fit2$treatment_description = df1$treatment_description[1]
     }
 
-    event_fit[[i]] = list(fit = fit2, fit_plot = fittedEvent)
+    event_fit[[i]] = list(fit = fit2, fit_plot = fittedEvent,
+                          kmdf = kmdf, dffit = dffit2,
+                          text = c(modeltext, aictext, bictext))
   }
 
   # ensure that the sub plots share the same x axis range
@@ -426,7 +426,10 @@ fitEvent <- function(df, event_model = "model averaging",
         plotly::layout(xaxis = list(range = x_range))
     }
   } else {
-    event_fit = list(fit = fit2, fit_plot = fittedEvent)
+    event_fit = list(fit = fit2, fit_plot = fittedEvent,
+                     kmdf = kmdf, dffit = dffit2,
+                     text = c(modeltext, aictext, bictext))
+
   }
 
   if (showplot) {
