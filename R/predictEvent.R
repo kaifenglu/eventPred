@@ -75,9 +75,9 @@
 #' To specify the event (dropout) model used during the design-stage event
 #' prediction, the \code{event_fit} (\code{dropout_fit}) should be a list
 #' with one element per treatment. For each treatment, the element
-#' \code{model} to specify the event model
+#' should include \code{model} to specify the event model
 #' (exponential, weibull, log-logistic, log-normal, or piecewise
-#' exponential), \code{theta} and \code{vtheta} to indicate
+#' exponential), and \code{theta} and \code{vtheta} to indicate
 #' the parameter values and the covariance matrix. For the piecewise
 #' exponential event (dropout) model, the list should also include
 #' \code{piecewiseSurvivalTime} (\code{piecewiseDropoutTime}) to indicate
