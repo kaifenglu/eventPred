@@ -98,7 +98,7 @@ summarizeObserved <- function(df, to_predict = "event only",
     ngroups = length(table(df$treatment))
     if (!("treatment_description" %in% names(df))) {
       df <- df %>% dplyr::mutate(
-        treatment_description = paste0("Treatment ", .data$treatment))
+        treatment_description = paste("Treatment", .data$treatment))
     }
 
     # order treatment description based on treatment
@@ -146,7 +146,8 @@ summarizeObserved <- function(df, to_predict = "event only",
     if (grepl("event", to_predict, ignore.case = TRUE)) {
       # time to event data
       adtte <- df %>%
-        dplyr::mutate(adt = as.Date(.data$time - 1, origin = .data$randdt)) %>%
+        dplyr::mutate(adt = as.Date(.data$time - 1,
+                                    origin = .data$randdt)) %>%
         dplyr::arrange(.data$adt) %>%
         dplyr::mutate(n = cumsum(.data$event),
                       parameter = "Event",
@@ -212,7 +213,8 @@ summarizeObserved <- function(df, to_predict = "event only",
       # time to event data
       adtte <- df %>%
         dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-        dplyr::mutate(adt = as.Date(.data$time - 1, origin = .data$randdt)) %>%
+        dplyr::mutate(adt = as.Date(.data$time - 1,
+                                    origin = .data$randdt)) %>%
         dplyr::arrange(.data$adt) %>%
         dplyr::mutate(n = cumsum(.data$event),
                       parameter = "Event",
@@ -363,8 +365,8 @@ summarizeObserved <- function(df, to_predict = "event only",
 
       if (showplot) print(kmDropout)
     } else { # by treatment
-      kmfitEvent <- survival::survfit(survival::Surv(time, event) ~ treatment,
-                                      data = adtte)
+      kmfitEvent <- survival::survfit(survival::Surv(time, event) ~
+                                        treatment, data = adtte)
       treatment <- as.numeric(substring(attr(kmfitEvent$strata, "names"), 11))
       treatment_description <-
         (treatment_mapping %>% dplyr::right_join(dplyr::tibble(
@@ -442,6 +444,8 @@ summarizeObserved <- function(df, to_predict = "event only",
            n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
            tp = tp, cutofftpdt = cutofftpdt,
            adsl = adsl, adtte = adtte,
+           cum_accrual_df = ad,
+           daily_accrual_df = enroll,
            event_km_df = kmdfEvent,
            dropout_km_df = kmdfDropout,
            cum_accrual_plot = cumAccrual,
@@ -452,8 +456,9 @@ summarizeObserved <- function(df, to_predict = "event only",
       list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
            n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
            tp = tp, cutofftpdt = cutofftpdt,
-           adsl = adsl,
-           adtte = adtte, event_km_df = kmdfEvent,
+           adsl = adsl, adtte = adtte,
+           cum_accrual_df = ad,
+           event_km_df = kmdfEvent,
            dropout_km_df = kmdfDropout,
            cum_accrual_plot = cumAccrual,
            event_km_plot = kmEvent,
@@ -462,6 +467,8 @@ summarizeObserved <- function(df, to_predict = "event only",
   } else { # enrollment only
     list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
          n0 = n0, adsl = adsl,
+         cum_accrual_df = ad,
+         daily_accrual_df = enroll,
          cum_accrual_plot = cumAccrual,
          daily_accrual_plot = dailyAccrual)
   }
