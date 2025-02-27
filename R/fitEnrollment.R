@@ -16,12 +16,12 @@
 #'
 #' @details
 #' For the time-decay model, the mean function is
-#' \code{mu(t) = mu/delta*(t - 1/delta*(1 - exp(-delta*t)))}
+#' \deqn{\mu(t) = (\mu/\delta)(t - (1/\delta)(1 - \exp(-\delta t)))}
 #' and the rate function is
-#' \code{lambda(t) = mu/delta*(1 - exp(-delta*t))}.
-#' For the B-spline model, the daily enrollment rate is approximated as
-#' \code{lambda(t) = exp(B(t)*theta)},
-#' where \code{B(t)} represents the B-spline basis functions.
+#' \deqn{\lambda(t) = (\mu/\delta)(1 - \exp(-\delta t)).}
+#' For the B-spline model, the daily enrollment rate is
+#' \eqn{\lambda(t) = \exp(B(t)' \theta)},
+#' where \eqn{B(t)} represents the B-spline basis functions.
 #'
 #' @return
 #' A list of results from the model fit including key information
@@ -129,6 +129,9 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
       mu/delta*(t - 1/delta*(1 - exp(-delta*t)))
     }
 
+    # log-likelihood for time-decay model
+    #   t is the enrollment time of last subject
+    #   df is the data frame containing the enrollment time of all subjects
     llik_td <- function(theta, t, df) {
       mu = exp(theta[1])
       delta = exp(theta[2])
@@ -140,7 +143,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     # slope in the last 1/4 "active" enrollment time interval
     beta = (n0 - df1u$n[df1u$t >= 3/4*t0][1])/(1/4*t0)
     mu0 = 2*n0/t0^2  # Taylor expansion of mu(t) to t^2
-    delta0 = mu0/beta  # beta is the asymptotic slope
+    delta0 = mu0/beta  # beta = mu/delta is the asymptotic slope
     theta <- c(log(mu0), log(delta0))
     opt1 <- optim(theta, llik_td, gr = NULL, t = t0, df = df1,
                   control = c(fnscale = -1), hessian = TRUE)  # maximization
@@ -264,5 +267,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   if (showplot) print(fittedEnroll)
 
-  list(fit = fit1, fit_plot = fittedEnroll)
+  list(fit = fit1, fit_plot = fittedEnroll,
+       enrolldf = df1u, dffit = dffit1,
+       text = c(modeltext, aictext, bictext))
 }
