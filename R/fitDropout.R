@@ -244,7 +244,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       reg <- survival::survreg(formula, data = df1, dist = "lognormal")
 
       # we use parameterization theta = (meanlog, log(sdlog))
-      # reg$var is for c(reg$coefficients, log(reg$scale)) = theta
+      # reg$var is for theta = c(reg$coefficients, log(reg$scale))
       fit3 <- list(model = "Log-normal",
                    theta = c(as.numeric(reg$coefficients), log(reg$scale)),
                    vtheta = reg$var,
@@ -261,7 +261,7 @@ fitDropout <- function(df, dropout_model = "exponential",
           mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))
 
     } else if (tolower(dropout_model) == "piecewise exponential") {
-      # lambda(t) = lambda[j] for ucut[j] < t <= ucut[j+1], j = 1,...,J
+      # lambda(t) = lambda[j] for ucut[j] <= t < ucut[j+1], j = 1,...,J
       # where ucut[1]=0< ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
       J = length(piecewiseDropoutTime)
 
@@ -277,7 +277,7 @@ fitDropout <- function(df, dropout_model = "exponential",
 
       surv = purrr::map(1:n0, function(l)
         ppwexp(time, fit3$theta, J, fit3$piecewiseDropoutTime,
-               q, x[l,-1], lower.tail = FALSE))
+               q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
       dffit3 <- dplyr::tibble(time, surv)
@@ -317,7 +317,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       time = seq(0, max(df1$time))
 
       surv = purrr::map(1:n0, function(l)
-        pmodavg(time, fit3$theta, w1, q, x[l,-1], lower.tail = FALSE))
+        pmodavg(time, fit3$theta, w1, q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
       dffit3 <- dplyr::tibble(time, surv)
@@ -334,10 +334,10 @@ fitDropout <- function(df, dropout_model = "exponential",
         method = "Nelder-Mead")
 
       fit3 <- list(model = "Spline",
-                   theta = spl$coefficients,
+                   theta = as.numeric(spl$coefficients),
                    vtheta = spl$cov,
-                   aic = -2*spl$loglik + 2*(k_dropout+2),
-                   bic = -2*spl$loglik + (k_dropout+2)*log(n0),
+                   aic = -2*spl$loglik + 2*(k_dropout+q+2),
+                   bic = -2*spl$loglik + (k_dropout+q+2)*log(n0),
                    knots = spl$knots,
                    scale = spl$scale)
 
@@ -402,21 +402,21 @@ fitDropout <- function(df, dropout_model = "exponential",
           showarrow = FALSE)) %>%
       plotly::hide_legend()
 
-    if (by_treatment && ngroups > 1) {
+    if (by_treatment) {
       fittedDropout <- fittedDropout %>%
         plotly::layout(annotations = list(
           x = 0.5, y = 1,
           text = paste0("<b>", df1$treatment_description[1], "</b>"),
           xanchor = "center", yanchor = "middle", showarrow = FALSE,
           xref = 'paper', yref = 'paper'))
-    }
 
-    if (by_treatment) {
       fit3$treatment = df1$treatment[1]
       fit3$treatment_description = df1$treatment_description[1]
     }
 
-    dropout_fit[[i]] = list(fit = fit3, fit_plot = fittedDropout)
+    dropout_fit[[i]] = list(fit = fit3, fit_plot = fittedDropout,
+                            kmdf = kmdf, dffit = dffit3,
+                            text = c(modeltext, aictext, bictext))
   }
 
   # ensure that the sub plots share the same x axis range
@@ -427,7 +427,9 @@ fitDropout <- function(df, dropout_model = "exponential",
         plotly::layout(xaxis = list(range = x_range))
     }
   } else {
-    dropout_fit = list(fit = fit3, fit_plot = fittedDropout)
+    dropout_fit = list(fit = fit3, fit_plot = fittedDropout,
+                       kmdf = kmdf, dffit = dffit3,
+                       text = c(modeltext, aictext, bictext))
   }
 
   if (showplot) {
