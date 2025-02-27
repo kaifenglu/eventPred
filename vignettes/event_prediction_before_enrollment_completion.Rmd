@@ -1,7 +1,7 @@
 ---
 title: "Event Prediction before Enrollment Completion"
 author: "Kaifeng Lu"
-date: "2024-01-20"
+date: "2025-02-27"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Event Prediction before Enrollment Completion}
@@ -39,5 +39,5 @@ pred <- getPrediction(
   nreps = 500)
 ```
 
-The median predicted date to reach 200 events is June 13, 2021. The 90% prediction interval for event completion is wide, ranging from June 18, 2020 to December 18, 2022, indicating uncertainty in the prediction. The wide prediction interval is primarily attributed to the limited number of events observed thus far (42 out of 200 target events). More events are needed to refine the prediction and narrow the prediction interval.
+The median predicted date to reach 200 events is June 12, 2021. The 90% prediction interval for event completion is wide, ranging from June 17, 2020 to December 18, 2022, indicating uncertainty in the prediction. The wide prediction interval is primarily attributed to the limited number of events observed thus far (42 out of 200 target events). More events are needed to refine the prediction and narrow the prediction interval.
 

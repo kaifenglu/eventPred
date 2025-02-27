@@ -1,7 +1,7 @@
 ---
 title: "Event Prediction Incorporating Prior Information"
 author: "Kaifeng Lu"
-date: "2024-01-20"
+date: "2025-02-27"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Event Prediction Incorporating Prior Information}
@@ -47,4 +47,4 @@ pred <- getPrediction(
   nreps = 500)
 ```
 
-The median predicted date to reach 200 events is September 19, 2021. The 90% prediction interval for event completion is wide, ranging from July 30, 2020 to October 25, 2023, indicating uncertainty in the prediction. Compared with the prediction without prior information, the point estimate moved upwards and the prediction interval widened due to a higher dropout rate in the prior distribution.
+The median predicted date to reach 200 events is September 18, 2021. The 90% prediction interval for event completion is wide, ranging from July 29, 2020 to October 24, 2023, indicating uncertainty in the prediction. Compared with the prediction without prior information, the point estimate moved upwards and the prediction interval widened due to a higher dropout rate in the prior distribution.

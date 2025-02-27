@@ -1,7 +1,7 @@
 ---
 title: "Event Prediction after Enrollment Completion"
 author: "Kaifeng Lu"
-date: "2024-01-20"
+date: "2025-02-27"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Event Prediction after Enrollment Completion}
@@ -39,7 +39,7 @@ pred <- getPrediction(
   nreps = 500)
 ```
 
-The median predicted date to reach 200 events is March 9, 2021. The 90% prediction interval for event completion is much narrower, ranging from January 6, 2021 to June 10, 2021, indicating reduced uncertainty in the prediction attributed to the greatly increased number of events.
+The median predicted date to reach 200 events is March 8, 2021. The 90% prediction interval for event completion is much narrower, ranging from January 12, 2021 to May 20, 2021, indicating reduced uncertainty in the prediction attributed to the greatly increased number of events.
 
 Based on the finalData dataset within the eventPred package, the actual date to reach the 200 events was February 14, 2021. The increased number of events greatly improved the prediction accuracy and precision.
 

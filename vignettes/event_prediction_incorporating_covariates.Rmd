@@ -1,7 +1,7 @@
 ---
 title: "Event Prediction Incorporating Covariates"
 author: "Kaifeng Lu"
-date: "2024-01-20"
+date: "2025-02-27"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{Event Prediction Incorporating Covariates}
@@ -44,4 +44,4 @@ pred <- getPrediction(
   nreps = 500)
 ```
 
-The median predicted date to reach 200 events is March 2, 2021. The 90% prediction interval for event completion ranges from January 13, 2021 to May 13, 2021. The negligible impact of baseline covariate inclusion on the results aligns with its random generation and lack of association with the time to event distribution.
+The median predicted date to reach 200 events is March 1, 2021. The 90% prediction interval for event completion ranges from January 13, 2021 to May 13, 2021. The negligible impact of baseline covariate inclusion on the results aligns with its random generation and lack of association with the time to event distribution.
