@@ -116,19 +116,18 @@ fitDropout <- function(df, dropout_model = "exponential",
   }
 
 
-  df <- dplyr::as_tibble(df)
-  names(df) <- tolower(names(df))
+  setDT(df)
+  setnames(df, tolower(names(df)))
 
   if (by_treatment) {
-    ngroups = length(table(df$treatment))
+    ngroups = df[, uniqueN(get("treatment"))]
 
     if (!("treatment_description" %in% names(df))) {
-      df <- df %>% dplyr::mutate(
-        treatment_description = paste("Treatment", .data$treatment))
+      df[, `:=`(treatment_description = paste("Treatment", get("treatment")))]
     }
   } else {
     ngroups = 1
-    df <- df %>% dplyr::mutate(treatment = 1)
+    df[, `:=`(treatment = 1)]
   }
 
   if (ngroups == 1) {
@@ -140,19 +139,19 @@ fitDropout <- function(df, dropout_model = "exponential",
   dropout_fit <- list()
 
   for (i in 1:ngroups) {
-    df1 <- df %>% dplyr::filter(.data$treatment == i)
+    df1 <- df[get("treatment") == i]
 
     n0 = nrow(df1)
-    c0 = sum(df1$dropout)
-    ex0 = sum(df1$time)
+    c0 = df1[, sum(get("dropout"))]
+    ex0 = df1[, sum(get("time"))]
 
     x = model.matrix(formula, df1)
     q = ncol(x) - 1
 
     kmfit <- survival::survfit(survival::Surv(time, dropout) ~ 1, data = df1)
-    kmdf <- dplyr::tibble(time = kmfit$time, surv = kmfit$surv)
-    kmdf <- dplyr::tibble(time = 0, surv = 1) %>%
-      dplyr::bind_rows(kmdf)
+    kmdf <- data.table(time = kmfit$time, surv = kmfit$surv)
+    df0 <- data.table(time = 0, surv = 1)
+    kmdf <- rbindlist(list(df0, kmdf), use.names = TRUE)
 
     if (tolower(dropout_model) == "exponential") {
       erify::check_positive(c0 - q, supplement = paste(
@@ -174,11 +173,9 @@ fitDropout <- function(df, dropout_model = "exponential",
       # fitted survival curve
       rate = exp(as.numeric(x %*% fit3$theta))
 
-      dffit3 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = sapply(.data$time, function(t)
-          mean(pexp(t, rate, lower.tail = FALSE))))
-
+      dffit3 <- data.table(time = seq(0, max(df1$time)))[
+        , `:=`(surv = sapply(get("time"), function(t)
+          mean(pexp(t, rate, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "weibull") {
       erify::check_positive(c0 - q - 1, supplement = paste(
         "The number of dropouts must be >=", q + 2,
@@ -202,11 +199,9 @@ fitDropout <- function(df, dropout_model = "exponential",
       shape = exp(-fit3$theta[q+2])
       scale = exp(as.numeric(x %*% fit3$theta[1:(q+1)]))
 
-      dffit3 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = sapply(.data$time, function(t)
-          mean(pweibull(t, shape, scale, lower.tail = FALSE))))
-
+      dffit3 <- data.table(time = seq(0, max(df1$time)))[
+        , `:=`(surv = sapply(get("time"), function(t)
+          mean(pweibull(t, shape, scale, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "log-logistic") {
       erify::check_positive(c0 - q - 1, supplement = paste(
         "The number of dropouts must be >=", q + 2,
@@ -229,11 +224,9 @@ fitDropout <- function(df, dropout_model = "exponential",
       location = as.numeric(x %*% fit3$theta[1:(q+1)])
       scale = exp(fit3$theta[q+2])
 
-      dffit3 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = sapply(.data$time, function(t)
-          mean(plogis(log(t), location, scale, lower.tail = FALSE))))
-
+      dffit3 <- data.table(time = seq(0, max(df1$time)))[
+        , `:=`(surv = sapply(get("time"), function(t)
+          mean(plogis(log(t), location, scale, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "log-normal") {
       erify::check_positive(c0 - q - 1, supplement = paste(
         "The number of dropouts must be >=", q + 2,
@@ -255,11 +248,9 @@ fitDropout <- function(df, dropout_model = "exponential",
       meanlog = as.numeric(x %*% fit3$theta[1:(q+1)])
       sdlog = exp(fit3$theta[q+2])
 
-      dffit3 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = sapply(.data$time, function(t)
-          mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))
-
+      dffit3 <- data.table(time = seq(0, max(df1$time)))[
+        , `:=`(surv = sapply(get("time"), function(t)
+          mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "piecewise exponential") {
       # lambda(t) = lambda[j] for ucut[j] <= t < ucut[j+1], j = 1,...,J
       # where ucut[1]=0< ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
@@ -280,8 +271,7 @@ fitDropout <- function(df, dropout_model = "exponential",
                q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-      dffit3 <- dplyr::tibble(time, surv)
-
+      dffit3 <- data.table(time, surv)
     } else if (tolower(dropout_model) == "model averaging") {
       erify::check_positive(c0 - q - 1, supplement = paste(
         "The number of dropouts must be >=", q + 2,
@@ -320,8 +310,7 @@ fitDropout <- function(df, dropout_model = "exponential",
         pmodavg(time, fit3$theta, w1, q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-      dffit3 <- dplyr::tibble(time, surv)
-
+      dffit3 <- data.table(time, surv)
     } else if (tolower(dropout_model) == "spline") {
       erify::check_positive(c0 - k_dropout - q - 1, supplement = paste(
         "The number of dropouts must be >=", k_dropout + q + 2,
@@ -359,7 +348,7 @@ fitDropout <- function(df, dropout_model = "exponential",
           lower.tail = FALSE)
       }
 
-      dffit3 <- dplyr::tibble(time, surv)
+      dffit3 <- data.table(time, surv)
     }
 
 

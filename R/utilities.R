@@ -23,7 +23,7 @@
 #'
 #' @export
 #'
-ppwexp <- function(t, theta, J, tcut, q = 0, x = 0, lower.tail = TRUE,
+ppwexp <- function(t, theta, J, tcut, q = 0, x, lower.tail = TRUE,
                    log.p = FALSE) {
 
   lambda = exp(theta[1:J]) # hazard rates in the intervals
@@ -77,7 +77,7 @@ ppwexp <- function(t, theta, J, tcut, q = 0, x = 0, lower.tail = TRUE,
 #'
 #' @export
 #'
-qpwexp <- function(p, theta, J, tcut, q = 0, x = 0, lower.tail = TRUE,
+qpwexp <- function(p, theta, J, tcut, q = 0, x, lower.tail = TRUE,
                    log.p = FALSE) {
 
   lambda = exp(theta[1:J]) # hazard rates in the intervals
@@ -118,8 +118,6 @@ qpwexp <- function(p, theta, J, tcut, q = 0, x = 0, lower.tail = TRUE,
 #'   for the baseline piecewise exponential survival distribution.
 #'   Must start with 0, e.g., c(0, 60) breaks the time axis into 2 event
 #'   intervals: [0, 60) and [60, Inf). By default, it is set to 0.
-#' @param q The number of columns of the covariates matrix
-#'   (excluding the intercept).
 #' @param x The covariates matrix (including the intercept).
 #'
 #' @return The profile log likelihood value for piecewise exponential
@@ -129,7 +127,7 @@ qpwexp <- function(p, theta, J, tcut, q = 0, x = 0, lower.tail = TRUE,
 #'
 #' @export
 #'
-pllik_pwexp <- function(beta, time, event, J, tcut, q, x) {
+pllik_pwexp <- function(beta, time, event, J, tcut, x) {
   if (length(tcut) == J) tcut = c(tcut, Inf)
 
   xbeta = as.numeric(x[,-1] %*% beta)
@@ -165,7 +163,7 @@ pllik_pwexp <- function(beta, time, event, J, tcut, q, x) {
 #'
 #' @export
 #'
-pwexpreg <- function(time, event, J, tcut, q, x) {
+pwexpreg <- function(time, event, J, tcut, q = 0, x) {
   # get the variable name as a character string
   if (grepl("dropout", deparse(substitute(event)), ignore.case = TRUE)) {
     variable_name = "dropout"
@@ -211,12 +209,12 @@ pwexpreg <- function(time, event, J, tcut, q, x) {
     beta0 = rep(0,q)
     if (q > 1) {
       opt1 <- optim(beta0, pllik_pwexp, gr = NULL,
-                    time, event, J, tcut, q, x,
+                    time, event, J, tcut, x,
                     control = c(fnscale = -1), hessian = TRUE)
     } else {
       sdx = sd(x[,-1])
       opt1 <- optim(beta0, pllik_pwexp, gr = NULL,
-                    time, event, J, tcut, q, x,
+                    time, event, J, tcut, x,
                     method = "Brent",
                     lower = beta0 - 6*sdx, upper = beta0 + 6*sdx,
                     control = c(fnscale = -1), hessian = TRUE)

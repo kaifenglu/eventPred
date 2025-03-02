@@ -1,7 +1,5 @@
 #' @name eventPred-package
 #' @aliases eventPred-package
-#' @keywords internal
-#' "_PACKAGE"
 #'
 #' @title Event Prediction
 #'
@@ -24,9 +22,9 @@
 #' before enrollment completion, the \code{eventPred} package
 #' considers several models, including the homogeneous Poisson
 #' model, the time-decay model with an enrollment
-#' rate function \code{lambda(t) = mu/delta*(1 - exp(-delta*t))},
+#' rate function \eqn{\lambda(t) = (\mu/\delta) (1 - \exp(-\delta t))},
 #' the B-spline model with the daily enrollment rate
-#' \code{lambda(t) = exp(B(t)*theta)}, and the piecewise Poisson model.
+#' \eqn{\lambda(t) = \exp(B(t)'\theta)}, and the piecewise Poisson model.
 #' If prior information exists on the model parameters, it can
 #' be combined with the likelihood to yield the posterior distribution.
 #'
@@ -65,29 +63,48 @@
 #' \itemize{
 #'   \item Enrollment models
 #'   \itemize{
-#'     \item Poisson: \code{theta = log(rate)}
-#'     \item Time-decay: \code{theta = c(log(mu), log(delta))}
-#'     \item B-spline: no reparametrization is needed. The
-#'     knots as considered fixed.
-#'     \item Piecewise Poisson: \code{theta = log(rates)}.
+#'     \item Poisson: \eqn{\theta = \log(\lambda)}.
+#'     \item Time-decay: \eqn{\theta = (\log(\mu), \log(\delta))'}.
+#'     \item B-spline: \eqn{\log(\lambda(t)) = B(t)' \theta},
+#'     \eqn{B(t) = (B_1(t), \ldots, B_{k+4}(t))'} are the B-spline
+#'     basis with \eqn{k} inner knots.
+#'     \item Piecewise Poisson: \eqn{\theta_j = \log(\lambda_j)}
+#'     for the \eqn{j}th time interval.
 #'     The left endpoints of time intervals, denoted as
 #'     \code{accrualTime}, are considered fixed.
 #'   }
 #'
 #'   \item Event or dropout models
+#'
+#'   Let \eqn{x} denote the covariates for a subject. Let \eqn{\beta}
+#'   denote the regression coefficients and
+#'   \eqn{\sigma} denote the scale parameter of the AFT model,
+#'   \deqn{\log(T) = \beta' x + \sigma \epsilon.}
+#'
 #'   \itemize{
-#'     \item Exponential: \code{theta = log(rate)}
-#'     \item Weibull: \code{theta = c(log(scale), -log(shape))}
-#'     \item Log-logistic: \code{theta = c(log(scale), -log(shape))}
-#'     \item Log-normal: \code{theta = c(meanlog, log(sdlog))}
-#'     \item Piecewise exponential: \code{theta = log(rates)}.
+#'     \item Exponential: \eqn{\log(\lambda) = \theta' x}. In other words,
+#'     \eqn{\theta = -\beta}.
+#'     \item Weibull: \eqn{\log(\texttt{weibull scale}) = \theta_1' x},
+#'     \eqn{\log(\texttt{weibull shape}) = -\theta_2}.
+#'     In other words, \eqn{\theta = (\beta', \log(\sigma))'}.
+#'     \item Log-logistic: For the logistic distribution of \eqn{\log(T)},
+#'     \eqn{\texttt{location} = \theta_1' x},
+#'     \eqn{\log(\texttt{scale}) = \theta_2}.
+#'     In other words, \eqn{\theta = (\beta', \log(\sigma))'}.
+#'     \item Log-normal: For the normal distribution of \eqn{\log(T)},
+#'     \eqn{\texttt{mean} = \theta_1' x}, \eqn{\log(\texttt{sd}) = \theta_2}.
+#'     In other words, \eqn{\theta = (\beta', \log(\sigma))'}.
+#'     \item Piecewise exponential:
+#'     \eqn{\log(\lambda_j) = \theta_{1j} + \theta_2' x} for the \eqn{j}th
+#'     time interval, \eqn{\theta = (\theta_1', \theta_2')'}.
 #'     The left endpoints of time intervals, denoted as
 #'     \code{piecewiseSurvivalTime} for event model and
 #'     \code{piecewiseDropoutTime} for dropout model, are
 #'     considered fixed.
-#'     \item Model averaging: \code{theta = c(log(weibull$scale),
-#'     -log(weibull$shape), lnorm$meanlog, log(lnorm$sdlog))}.
-#'     The covariance matrix for \code{theta} is structured
+#'     \item Model averaging:
+#'     \eqn{\theta = (\theta_{\texttt{weibull}}',
+#'     \theta_{\texttt{lnorm}}')'}.
+#'     The covariance matrix for \eqn{\theta} is structured
 #'     as a block diagonal matrix, with the upper-left block
 #'     corresponding to the Weibull component and the
 #'     lower-right block corresponding to the log-normal
@@ -95,12 +112,25 @@
 #'     partitioned into two distinct blocks, with no
 #'     off-diagonal elements connecting the two components.
 #'     The weight assigned to the Weibull component, denoted as
-#'     \code{w1}, is considered fixed.
-#'     \item Spline: \code{theta} corresponds to the coefficients
-#'     of basis vectors. The \code{knots} and \code{scale}
-#'     are considered fixed. The \code{scale} can be hazard,
-#'     odds, or normal, corresponding to extensions of Weibull,
-#'     log-logistic, and log-normal distributions, respectively.
+#'     \eqn{w_1}, is considered fixed.
+#'     \item Spline: Let \eqn{S(t|x)} denote the survival function given
+#'     covariates \eqn{x}. We model a
+#'     transformation of the survival function as a cubic spine:
+#'     \deqn{g(S(t|x)) = c(u) + \theta_2' x,} where
+#'     \deqn{c(u) = \gamma_1 + \gamma_2 u + \gamma_3 v_1(u) + \cdots +
+#'     \gamma_{k+2} v_k(u)} is the cubic spline in \eqn{u=\log(t)},
+#'     \eqn{\theta = (\theta_1', \theta_2')'},
+#'     \eqn{\theta_1 = (\gamma_1, \ldots, \gamma_{k+2})'},
+#'     assuming \eqn{k} inner knots (\eqn{k = \texttt{knots}}),
+#'     and \eqn{v_1(u), \ldots, v_k(u)} are the basis of the
+#'     Royston/Parmar spline. The transformation is given as follows:
+#'     \itemize{
+#'     \item For \code{scale = "hazard"}, \eqn{g(S(t)) = \log(-\log(S(t)))}.
+#'     \item For \code{scale = "odds"},  \eqn{g(S(t)) = \log(1/S(t)-1)}.
+#'     \item For \code{scale = "normal"}, \eqn{g(S(t)) = -\Phi^{-1}(S(t))}.
+#'     }
+#'     The hazard, odds, and normal scales correspond to extensions of
+#'     the Weibull, log-logistic, and log-normal distributions, respectively.
 #'   }
 #' }
 #'
@@ -126,6 +156,8 @@
 #' estimation of treatment effects. Stat in Med. 2002; 21:2175-2197.
 #'
 #'
+#' @importFrom data.table as.data.table CJ copy data.table
+#'   rbindlist setDT setnames setorder setorderv uniqueN .I .N := .SD
 #' @importFrom dplyr %>% arrange as_tibble bind_rows cross_join filter
 #'   group_by mutate n rename rename_all row_number select slice
 #'   summarize tibble
@@ -140,7 +172,7 @@
 #' @importFrom stats as.formula dweibull dlnorm loess.smooth model.matrix
 #'   optim optimHess pexp plnorm plogis pnorm pweibull qlogis qlnorm qnorm
 #'   quantile rbinom reorder rexp rlnorm rlogis rmultinom rnorm runif
-#'   rweibull uniroot var
+#'   rweibull sd uniroot var
 #' @importFrom flexsurv flexsurvspline psurvspline qsurvspline rsurvspline
 #'   dllogis pllogis
 #' @importFrom erify check_bool check_class check_content check_n

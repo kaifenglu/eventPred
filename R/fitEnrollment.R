@@ -49,6 +49,7 @@
 #'
 fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
                           accrualTime = 0, showplot = TRUE) {
+
   erify::check_class(df, "data.frame")
 
   erify::check_content(tolower(enroll_model),
@@ -66,45 +67,39 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   erify::check_bool(showplot)
 
-
-  df <- dplyr::as_tibble(df)
-  names(df) <- tolower(names(df))
+  setDT(df)
+  setnames(df, tolower(names(df)))
   df$trialsdt <- as.Date(df$trialsdt)
   df$randdt <- as.Date(df$randdt)
   df$cutoffdt <- as.Date(df$cutoffdt)
 
-  trialsdt = df$trialsdt[1]
-  cutoffdt = df$cutoffdt[1]
+  trialsdt = df[1, get("trialsdt")]
+  cutoffdt = df[1, get("cutoffdt")]
   n0 = nrow(df)
   # up to the last randomization date to account for enrollment completion
-  t0 = as.numeric(max(df$randdt) - trialsdt + 1)
+  t0 = df[, max(as.numeric(get("randdt") - get("trialsdt") + 1))]
 
   erify::check_positive(n0, supplement = paste(
     "The number of subjects must be positive to fit an enrollment model."))
 
-  if (any(df$randdt < trialsdt)) {
-    stop("randdt must be greater than or equal to trialsdt.")
+  if (df[, any(get("randdt") < get("trialsdt"))]) {
+    stop("randdt must be greater than or equal to trialsdt")
   }
 
-  if (any(df$randdt > cutoffdt)) {
-    stop("randdt must be less than or equal to cutoffdt.")
+  if (df[, any(get("randdt") > get("cutoffdt"))]) {
+    stop("randdt must be less than or equal to cutoffdt")
   }
 
-  df1 <- df %>%
-    dplyr::arrange(.data$randdt) %>%
-    dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
-                  n = dplyr::row_number())
+  df1 <- df[order(get("randdt")), `:=`(
+    t = as.numeric(get("randdt") - get("trialsdt") + 1),
+    n = .I)]
 
-  df1u <- df1 %>%
-    dplyr::group_by(.data$randdt) %>%
-    dplyr::slice(dplyr::n()) %>%
-    dplyr::ungroup() %>%
-    dplyr::select(.data$t, .data$n)
+  # remove duplicates
+  df1u <- df1[, .SD[.N], keyby = "randdt"][, mget(c("t", "n"))]
 
   # add day 1
-  df0 <- dplyr::tibble(t = 1, n = 0)
-  df1u <- df0 %>%
-    dplyr::bind_rows(df1u)
+  df0 <- data.table(t = 1, n = 0)
+  df1u <- rbindlist(list(df0, df1u), use.names = TRUE)
 
   # fit enrollment model
   if (tolower(enroll_model) == "poisson") {
@@ -116,9 +111,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
                  aic = -2*(-n0 + n0*log(n0/t0)) + 2,
                  bic = -2*(-n0 + n0*log(n0/t0)) + log(n0))
 
-    dffit1 <- dplyr::tibble(
-      t = seq(1, t0),
-      n = exp(fit1$theta)*.data$t)
+    dffit1 <- data.table(t = seq(1, t0))[
+      , `:=`(n = exp(fit1$theta)*get("t"))]
   } else if (tolower(enroll_model) == "time-decay") {
     # lambda(t) = mu/delta*(1 - exp(-delta*t))
     # mu(t) = mu/delta*(t - 1/delta*(1 - exp(-delta*t)))
@@ -141,7 +135,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     }
 
     # slope in the last 1/4 "active" enrollment time interval
-    beta = (n0 - df1u$n[df1u$t >= 3/4*t0][1])/(1/4*t0)
+    beta = (n0 - df1u[get("t") >= 3/4*t0, get("n")][1])/(t0/4)
     mu0 = 2*n0/t0^2  # Taylor expansion of mu(t) to t^2
     delta0 = mu0/beta  # beta = mu/delta is the asymptotic slope
     theta <- c(log(mu0), log(delta0))
@@ -153,9 +147,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
                  aic = -2*opt1$value + 4,
                  bic = -2*opt1$value + 2*log(n0))
 
-    dffit1 <- dplyr::tibble(
-      t = seq(1, t0),
-      n = fmu_td(.data$t, fit1$theta))
+    dffit1 <- data.table(t = seq(1, t0))[
+      , `:=`(n = fmu_td(get("t"), fit1$theta))]
   } else if (tolower(enroll_model) == "b-spline") {
     # lambda(t) = exp(theta' bs(t))
     # mu(t) = sum(lambda(u), {u,1,t})
@@ -193,9 +186,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
       lambdasum[t]
     }
 
-    dffit1 <- dplyr::tibble(
-      t = seq(1, t0),
-      n = fmu_bs(.data$t, fit1$theta, x))
+    dffit1 <- data.table(t = seq(1, t0))[
+      , `:=`(n = fmu_bs(get("t"), fit1$theta, x))]
   } else if (tolower(enroll_model) == "piecewise poisson") {
     # truncate the time intervals by data cut
     u = accrualTime[accrualTime < t0]
@@ -229,9 +221,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     j = findInterval(time, u)
     m = psum[j] + lambda[j]*(time - u[j]) # cumulative enrollment by day
 
-    dffit1 <- dplyr::tibble(
-      t = time,
-      n = m)
+    dffit1 <- data.table(t = time, n = m)
   }
 
 

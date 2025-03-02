@@ -200,7 +200,7 @@
 #'
 getPrediction <- function(
     df = NULL, to_predict = "enrollment and event",
-    target_n = NA, target_d = NA,
+    target_n = NA_real_, target_d = NA_real_,
     enroll_model = "b-spline", nknots = 0, lags = 30,
     accrualTime = 0,
     enroll_prior = NULL,
@@ -245,10 +245,14 @@ getPrediction <- function(
   }
 
   if (is.null(df)) by_treatment = TRUE
+  if (!is.null(df)) {
+    setDT(df)
+    setnames(df, tolower(names(df)))
+  }
 
   if (by_treatment) {
     if (!is.null(df)) {
-      ngroups = length(table(df$treatment))
+      ngroups = df[, uniqueN(get("treatment"))]
     }
 
     if (is.null(alloc)) {
@@ -750,11 +754,10 @@ getPrediction <- function(
   if (!is.null(df)) {
     cols = colnames(df)
 
-    if (tolower(to_predict) == "enrollment only") {
-      req_cols = c("trialsdt", "usubjid", "randdt", "cutoffdt")
-    } else {
-      req_cols = c("trialsdt", "usubjid", "randdt", "time", "event",
-                   "dropout", "cutoffdt")
+    req_cols = c("trialsdt", "usubjid", "randdt", "cutoffdt")
+
+    if (grepl("event", to_predict, ignore.case = TRUE)) {
+      req_cols <- c(req_cols, "time", "event", "dropout")
     }
 
     if (by_treatment) {
@@ -766,28 +769,25 @@ getPrediction <- function(
                  paste(req_cols[!(req_cols %in% cols)], collapse = ", ")))
     }
 
-    if (any(is.na(df[, req_cols]))) {
+    if (any(is.na(df[, mget(req_cols)]))) {
       stop(paste("The following columns of df have missing values:",
                  paste(req_cols[sapply(df, function(x) any(is.na(x)))],
                        collapse = ", ")))
     }
 
     if ("treatment" %in% cols && !("treatment_description" %in% cols)) {
-      df <- df %>%
-        mutate(treatment_description = paste("Treatment", .data$treatment))
+      df[, `:=`(treatment_description = paste("Treatment", get("treatment")))]
     }
   }
 
 
   if (!is.null(df)) {
-    df <- dplyr::as_tibble(df)
-    names(df) <- tolower(names(df))
     df$trialsdt <- as.Date(df$trialsdt)
     df$randdt <- as.Date(df$randdt)
     df$cutoffdt <- as.Date(df$cutoffdt)
 
-    trialsdt = df$trialsdt[1]
-    cutoffdt = df$cutoffdt[1]
+    trialsdt = df[1, get("trialsdt")]
+    cutoffdt = df[1, get("cutoffdt")]
 
     # summarize observed data
     observed <- summarizeObserved(df, to_predict, showplot, by_treatment)
@@ -866,12 +866,10 @@ getPrediction <- function(
                      supplement = "Event target reached.")
 
       if (by_treatment) {
-        sum_by_trt <- df %>%
-          dplyr::group_by(.data$treatment) %>%
-          dplyr::summarise(n0 = dplyr::n(),
-                           d0 = sum(.data$event),
-                           c0 = sum(.data$dropout),
-                           r0 = sum(!(.data$event == 1 | .data$dropout == 1)))
+        sum_by_trt <- df[, list(
+          n0 = .I, d0 = sum(get("event")), c0 = sum(get("dropout")),
+          r0 = sum(!(get("event") | get("dropout")))),
+          keyby = "treatment"]
       }
 
       # convert prior by treatment to prior overall
@@ -1472,46 +1470,42 @@ getPrediction <- function(
   if (tolower(to_predict) == "enrollment only") {
     subject_data <- enroll_pred$newSubjects
     if (!is.null(df)) {
-      df <- df %>%
-        dplyr::mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1))
+      df[, `:=`(arrivalTime = as.numeric(get("randdt") - get("trialsdt")+1))]
 
       if (by_treatment) {
-        subject_data <- df %>%
-          dplyr::mutate(draw = 0) %>%
-          dplyr::select(.data$draw, .data$usubjid, .data$arrivalTime,
-                        .data$treatment, .data$treatment_description) %>%
-          dplyr::bind_rows(subject_data)
+        subject_data <- rbindlist(list(
+          df[, `:=`(draw = 0)][
+            , mget(c("draw", "usubjid", "arrivalTime",
+                     "treatment", "treatment_description"))],
+          subject_data), use.names = TRUE)
       } else {
-        subject_data <- df %>%
-          dplyr::mutate(draw = 0) %>%
-          dplyr::select(.data$draw, .data$usubjid, .data$arrivalTime) %>%
-          dplyr::bind_rows(subject_data)
+        subject_data <- rbindlist(list(
+          df[, `:=`(draw = 0)][
+            , mget(c("draw", "usubjid", "arrivalTime"))],
+          subject_data), use.names = TRUE)
       }
     }
   } else {
     subject_data <- event_pred$newEvents
     if (!is.null(df)) {
-      df <- df %>%
-        dplyr::mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1),
-                      totalTime = .data$arrivalTime + .data$time - 1)
+      df[, `:=`(
+        arrivalTime = as.numeric(get("randdt") - get("trialsdt") + 1),
+        totalTime = as.numeric(get("randdt") - get("trialsdt")) +
+          get("time"))]
 
       if (by_treatment) {
-        subject_data <- df %>%
-          dplyr::filter(.data$event == 1 | .data$dropout == 1) %>%
-          dplyr::mutate(draw = 0) %>%
-          dplyr::select(.data$draw, .data$usubjid, .data$arrivalTime,
-                        .data$treatment, .data$treatment_description,
-                        .data$time, .data$event, .data$dropout,
-                        .data$totalTime) %>%
-          dplyr::bind_rows(subject_data)
+        subject_data <- rbindlist(list(
+          df[get("event") | get("dropout"), `:=`(draw = 0)][
+            , mget(c("draw", "usubjid", "arrivalTime", "treatment",
+                     "treatment_description", "time", "event",
+                     "dropout", "totalTime"))],
+          subject_data), use.names = TRUE)
       } else {
-        subject_data <- df %>%
-          dplyr::filter(.data$event == 1 | .data$dropout == 1) %>%
-          dplyr::mutate(draw = 0) %>%
-          dplyr::select(.data$draw, .data$usubjid, .data$arrivalTime,
-                        .data$time, .data$event, .data$dropout,
-                        .data$totalTime) %>%
-          dplyr::bind_rows(subject_data)
+        subject_data <- rbindlist(list(
+          df[get("event") | get("dropout"), `:=`(draw = 0)][
+            , mget(c("draw", "usubjid", "arrivalTime", "time",
+                     "event", "dropout", "totalTime"))],
+          subject_data), use.names = TRUE)
       }
     }
   }
@@ -1519,10 +1513,8 @@ getPrediction <- function(
   # merge in other information such as covariates from raw data
   if (!is.null(df)) {
     varnames <- c(setdiff(names(df), names(subject_data)), "usubjid")
-    subject_data <- df %>%
-      dplyr::select(varnames) %>%
-      dplyr::right_join(subject_data, by = "usubjid") %>%
-      dplyr::arrange(.data$draw)
+    subject_data <- merge(df[, mget(varnames)], subject_data,
+                          by = "usubjid", all.y = TRUE)[order(get("draw"))]
   }
 
 

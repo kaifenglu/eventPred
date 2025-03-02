@@ -150,6 +150,11 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   if (is.null(df) && "treatment" %in% names(newSubjects))
     by_treatment = TRUE
 
+  if (!is.null(df)) {
+    setDT(df)
+    setnames(df, tolower(names(df)))
+  }
+
 
   # number of treatment groups and add treatment description
   if (by_treatment) {
@@ -157,9 +162,9 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       if (!("treatment" %in% names(df))) {
         stop("df must contain treatment")
       }
-      ngroups = length(table(df$treatment))
+      ngroups = df[, uniqueN(get("treatment"))]
     } else {
-      ngroups = length(table(newSubjects$treatment))
+      ngroups = newSubjects[, uniqueN(get("treatment"))]
     }
 
     if (!is.null(df) && !is.null(newSubjects) &&
@@ -169,26 +174,24 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     if (!is.null(df)) {
       if (!("treatment_description" %in% names(df))) {
-        df <- df %>% dplyr::mutate(
-            treatment_description = paste("Treatment", .data$treatment))
+        df[, `:=`(treatment_description =
+                    paste("Treatment", get("treatment")))]
       }
     }
 
     if (!is.null(newSubjects)) {
       if (!("treatment_description" %in% names(newSubjects))) {
-      newSubjects <- newSubjects %>% dplyr::mutate(
-          treatment_description = paste("Treatment", .data$treatment))
+        newSubjects[, `:=`(treatment_description =
+                             paste("Treatment", get("treatment")))]
       }
     }
   } else {  # treat as a special case of by-treatment calculation
     ngroups = 1
     if (!is.null(df)) {
-      df$treatment = 1
-      df$treatment_description = "Overall"
+      df[, `:=`(treatment = 1, treatment_description = "Overall")]
     }
     if (!is.null(newSubjects)) {
-      newSubjects$treatment = 1
-      newSubjects$treatment_description = "Overall"
+      newSubjects[, `:=`(treatment = 1, treatment_description = "Overall")]
     }
   }
 
@@ -542,49 +545,46 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   # check input data and extract ongoing subjects
   if (!is.null(df)) {
-    df <- dplyr::as_tibble(df)
-    names(df) <- tolower(names(df))
     df$trialsdt <- as.Date(df$trialsdt)
     df$randdt <- as.Date(df$randdt)
     df$cutoffdt <- as.Date(df$cutoffdt)
 
-    trialsdt = df$trialsdt[1]
-    cutoffdt = df$cutoffdt[1]
+    trialsdt = df[1, get("trialsdt")]
+    cutoffdt = df[1, get("cutoffdt")]
     t0 = as.numeric(cutoffdt - trialsdt + 1)
 
-    if (any(df$randdt < trialsdt)) {
+    if (df[, any(get("randdt") < get("trialsdt"))]) {
       stop("randdt must be greater than or equal to trialsdt")
     }
 
-    if (any(df$randdt > cutoffdt)) {
+    if (df[, any(get("randdt") > get("cutoffdt"))]) {
       stop("randdt must be less than or equal to cutoffdt")
     }
 
-    if (any(df$time < 1)) {
+    if (df[, any(get("time") < 1)]) {
       stop("time must be greater than or equal to 1")
     }
 
-    if (any(df$event == 1 & df$dropout == 1)) {
+    if (df[, any(get("event") & get("dropout"))]) {
       stop("event and dropout cannot both be equal to 1 simultaneously")
     }
 
-    if (any(df$time > as.numeric(cutoffdt - df$randdt + 1))) {
+    if (df[, any(get("time") >
+                 as.numeric(get("cutoffdt") - get("randdt") + 1))]) {
       stop("time must be less than or equal to cutoffdt - randdt + 1")
     }
 
-    df <- df %>%
-      dplyr::mutate(arrivalTime = as.numeric(.data$randdt - trialsdt + 1),
-                    totalTime = .data$arrivalTime + .data$time - 1)
+    df[, `:=`(
+      arrivalTime = as.numeric(get("randdt") - get("trialsdt") + 1),
+      totalTime = as.numeric(get("randdt") - get("trialsdt")) + get("time"))]
 
     if (!("usubjid" %in% names(df))) {
-      df$usubjid = paste0("A-", 100000 + (1:nrow(df)))
+      df[, `:=`(usubjid = paste0("A-", 100000 + .I))]
     }
 
     # subset to extract ongoing subjects
-    ongoingSubjects <- df %>%
-      dplyr::filter(.data$event == 0 & .data$dropout == 0)
-
-    iOngoing = which(df$event == 0 & df$dropout == 0)
+    iOngoing = df[, which(!get("event") & !get("dropout"))]
+    ongoingSubjects = df[iOngoing]
     if (!is.null(covariates_event)) {
       x_eventOngoing <- x_event[iOngoing,]
     }
@@ -597,16 +597,15 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     treatmentOngoing <- ongoingSubjects$treatment
     treatment_descriptionOngoing <- ongoingSubjects$treatment_description
     time0Ongoing <- ongoingSubjects$time
-    tp = min(ongoingSubjects$totalTime) # tp <= t0
+    tp = ongoingSubjects[, min(get("totalTime"))]
     cutofftpdt = as.Date(tp - 1, origin = trialsdt)
-    n0 = nrow(df)
-    d0 = sum(df$event)
-    c0 = sum(df$dropout)
-    r0 = nrow(ongoingSubjects)
+    n0 = df[, .N]
+    d0 = df[, sum(get("event"))]
+    c0 = df[, sum(get("dropout"))]
+    r0 = ongoingSubjects[, .N]
 
     # subjects who have had the event or dropped out
-    stoppedSubjects <- df %>%
-      dplyr::filter(.data$event == 1 | .data$dropout == 1)
+    stoppedSubjects <- df[get("event") | get("dropout")]
   } else {
     t0 = 1
     tp = 1
@@ -627,10 +626,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
   if (!is.null(newSubjects)) {
     # predicted enrollment end day
-    new1 <- newSubjects %>%
-      dplyr::group_by(.data$draw) %>%
-      dplyr::slice(dplyr::n())
-
+    new1 <- newSubjects[, .SD[.N], keyby = get("draw")]
     pred_day1 <- ceiling(quantile(new1$arrivalTime, c(0.5, plower, pupper)))
 
     # future time points at which to predict number of subjects
@@ -640,181 +636,165 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
 
   # enrollment prediction data
+  df_copy <- data.table::copy(df)
+  subjects_copy <- data.table::copy(newSubjects)
   if (!by_treatment) {
     if (!is.null(newSubjects)) {
       # predicted number of subjects enrolled after data cut
-      dfb1 <- dplyr::tibble(t = t) %>%
-        dplyr::cross_join(newSubjects) %>%
-        dplyr::group_by(.data$t, .data$draw) %>%
-        dplyr::summarise(nenrolled = sum(.data$arrivalTime <= .data$t) + n0,
-                         .groups = "drop_last") %>%
-        dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
-                         pilevel = pilevel,
-                         lower = quantile(.data$nenrolled, probs = plower),
-                         upper = quantile(.data$nenrolled, probs = pupper),
-                         mean = mean(.data$nenrolled),
-                         var = var(.data$nenrolled)) %>%
-        dplyr::ungroup()
+      subjects_copy[, `:=`(tmp_row = .I)]
+
+      dfb1 <- CJ(
+        t = t, tmp_row = subjects_copy$tmp_row, sorted = FALSE)[
+          subjects_copy, on = "tmp_row"][
+            , list(nenrolled = sum(get("arrivalTime") <= get("t")) + n0),
+            keyby = c("t", "draw")][
+              , list(n = quantile(get("nenrolled"), probs = 0.5),
+                     pilevel = pilevel,
+                     lower = quantile(get("nenrolled"), probs = plower),
+                     upper = quantile(get("nenrolled"), probs = pupper),
+                     mean = mean(get("nenrolled")),
+                     var = var(get("nenrolled"))),
+              keyby = "t"]
     }
 
     if (!is.null(df)) {
       # day 1
-      df0 <- dplyr::tibble(t = 1, n = 0, pilevel = pilevel,
-                           lower = NA, upper = NA, mean = 0, var = 0)
+      df0 <- data.table(t = 1, n = 0, pilevel = pilevel,
+                        lower = NA_real_, upper = NA_real_,
+                        mean = 0, var = 0)
 
       # arrival time for subjects already enrolled before data cut
-      dfa1 <- df %>%
-        dplyr::arrange(.data$randdt) %>%
-        dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
-                      n = dplyr::row_number()) %>%
-        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
-                      mean = .data$n, var = 0) %>%
-        dplyr::bind_rows(df0) %>%
-        dplyr::bind_rows(dplyr::tibble(t = t0, n = n0, pilevel = pilevel,
-                                       lower = NA, upper = NA,
-                                       mean = n0, var = 0)) %>%
-        dplyr::select(.data$t, .data$n, .data$pilevel, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::group_by(.data$t) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::ungroup()
+      dfa0 <- df[order(get("randdt")), list(
+        t = as.numeric(get("randdt") - get("trialsdt") + 1),
+        n = .I, pilevel = pilevel, lower = NA_real_, upper = NA_real_,
+        mean = .I, var = 0)]
+
+      new_row <- data.table(t = t0, n = n0, pilevel = pilevel,
+                            lower = NA_real_, upper = NA_real_,
+                            mean = n0, var = 0)
+
+      dfa1 <- rbindlist(list(df0, dfa0, new_row),
+                        use.names = TRUE)[, .SD[.N], by = "t"]
     }
 
 
     if (is.null(newSubjects)) { # existing subjects only
       # add predicted from data cut to specified years after data cut
-      dfb1t0 <- dfa1 %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(pilevel = pilevel, lower = .data$n, upper = .data$n)
-      dfb1t1 <- dfb1t0 %>%
-        dplyr::mutate(t = t1)
+      dfb1t0 <- dfa1[.N, .SD][, `:=`(
+        pilevel = pilevel, lower = get("n"), upper = get("n"))]
 
-      enroll_pred_df <- dfa1 %>%
-        dplyr::bind_rows(dfb1t0) %>%
-        dplyr::bind_rows(dfb1t1) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Enrollment")
+      dfb1t1 <- data.table::copy(dfb1t0)[, `:=`(t = t1)]
+
+      enroll_pred_df <- rbindlist(list(
+        dfa1, dfb1t0, dfb1t1), use.names = TRUE)[
+          , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+                parameter = "Enrollment")]
     } else if (is.null(df)) { # new subjects only
-      enroll_pred_df <- dfb1 %>%
-        dplyr::mutate(parameter = "Enrollment")
+      enroll_pred_df <- dfb1[, `:=`(parameter = "Enrollment")]
     } else { # existing and new subjects
-      enroll_pred_df <- dfa1 %>%
-        dplyr::bind_rows(dfb1) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Enrollment")
+      enroll_pred_df <- rbindlist(list(
+        dfa1, dfb1), use.names = TRUE)[
+          , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+                 parameter = "Enrollment")]
     }
 
-    enroll_pred_df <- enroll_pred_df %>%
-      dplyr::arrange(.data$t)
+    enroll_pred_df <- enroll_pred_df[order(get("t"))]
   } else { # by treatment
 
     # summary of observed data by treatment
     if (!is.null(df)) {
       # add overall treatment
-      df2 <- df %>%
-        dplyr::bind_rows(df %>% dplyr::mutate(
-          treatment = 9999, treatment_description = "Overall"))
+      df2 <- rbindlist(list(df, df_copy[, `:=`(
+        treatment = 9999, treatment_description = "Overall")]),
+        use.names = TRUE)
 
-      sum_by_trt <- df2 %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-        dplyr::summarise(n0 = dplyr::n(),
-                         d0 = sum(.data$event),
-                         c0 = sum(.data$dropout),
-                         r0 = sum(!(.data$event == 1 | .data$dropout == 1)),
-                         .groups = "drop")
+      sum_by_trt <- df2[, list(
+        n0 = .I, d0 = sum(get("event")), c0 = sum(get("dropout")),
+        r0 = sum(!(get("event") | get("dropout")))),
+        keyby = c("treatment", "treatment_description")]
     }
 
     if (!is.null(newSubjects)) {
       # add overall treatment
-      newSubjects2 <- newSubjects %>%
-        dplyr::bind_rows(newSubjects %>% dplyr::mutate(
-          treatment = 9999, treatment_description = "Overall"))
+      newSubjects2 <- rbindlist(list(
+        newSubjects,
+        subjects_copy[, `:=`(treatment = 9999,
+                             treatment_description = "Overall")]),
+        use.names = TRUE)
 
       if (is.null(df)) {
-        sum_by_trt <- newSubjects2 %>%
-          dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-          dplyr::slice(dplyr::n()) %>%
-          dplyr::mutate(n0 = 0, d0 = 0, c0 = 0, r0 = 0) %>%
-          dplyr::select(.data$treatment, .data$treatment_description,
-                        .data$n0, .data$d0, .data$c0, .data$r0)
+        sum_by_trt <- newSubjects2[
+          , .SD[.N], keyby = c("treatment", "treatment_description")][
+            , `:=`(n0 = 0, d0 = 0, c0 = 0, r0 = 0)][
+              ,mget(c("treatment", "treatment_description",
+                      "n0", "d0", "c0", "r0"))]
       }
 
       # predicted number of subjects enrolled by treatment after cutoff
-      dfb1 <- dplyr::tibble(t = t) %>%
-        dplyr::cross_join(newSubjects2) %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description,
-                        .data$t, .data$draw) %>%
-        dplyr::summarise(nenrolled = sum(.data$arrivalTime <= .data$t),
-                         .groups = "drop_last") %>%
-        dplyr::left_join(sum_by_trt,
-                         by = c("treatment", "treatment_description")) %>%
-        dplyr::mutate(nenrolled = .data$nenrolled + .data$n0) %>%
-        dplyr::summarise(n = quantile(.data$nenrolled, probs = 0.5),
+      newSubjects2[, `:=`(tmp_row = .I)]
+
+      dfb1 <- CJ(t = t, tmp_row = newSubjects2$tmp_row, sorted = FALSE)[
+        newSubjects2, on = "tmp_row"][
+          , list(nenrolled = sum(get("arrivalTime") <= get("t"))),
+            keyby = c("treatment", "treatment_description", "t", "draw")][
+              sum_by_trt, on = c("treatment", "treatment_description")][
+                , `:=`(nenrolled = get("nenrolled") + get("n0"))][
+                  , list(n = quantile(get("nenrolled"), probs = 0.5),
                          pilevel = pilevel,
-                         lower = quantile(.data$nenrolled, probs = plower),
-                         upper = quantile(.data$nenrolled, probs = pupper),
-                         mean = mean(.data$nenrolled),
-                         var = var(.data$nenrolled),
-                         .groups = "drop_last") %>%
-        dplyr::ungroup()
+                         lower = quantile(get("nenrolled"), probs = plower),
+                         upper = quantile(get("nenrolled"), probs = pupper),
+                         mean = mean(get("nenrolled")),
+                         var = var(get("nenrolled"))),
+                  keyby = c("treatment", "treatment_description", "t")]
     }
 
 
     if (!is.null(df)) {
       # day 1
-      df0 <- sum_by_trt %>%
-        dplyr::select(.data$treatment, .data$treatment_description) %>%
-        dplyr::mutate(t = 1, n = 0, pilevel = pilevel, lower = NA,
-                      upper = NA, mean = 0, var = 0)
+      df0 <- sum_by_trt[, mget(c("treatment", "treatment_description"))][
+        , `:=`(t = 1, n = 0, pilevel = pilevel, lower = NA_real_,
+               upper = NA_real_, mean = 0, var = 0)]
 
       # arrival time for subjects already enrolled before data cut
-      dfa1 <- df2 %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-        dplyr::arrange(.data$randdt) %>%
-        dplyr::mutate(t = as.numeric(.data$randdt - trialsdt + 1),
-                      n = dplyr::row_number()) %>%
-        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
-                      mean = .data$n, var = 0) %>%
-        dplyr::bind_rows(df0) %>%
-        dplyr::bind_rows(sum_by_trt %>%
-                           dplyr::mutate(t = t0, n = n0, pilevel = pilevel,
-                                         lower = NA, upper = NA,
-                                         mean = n0, var = 0)) %>%
-        dplyr::select(.data$treatment, .data$treatment_description,
-                      .data$t, .data$n, .data$pilevel, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description,
-                        .data$t) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description)
+      dfa1 <- df2[order(get("randdt")), `:=`(
+        t = as.numeric(get("randdt") - get("trialsdt") + 1),
+        n = .I), keyby = c("treatment", "treatment_description")][
+          , `:=`(pilevel = pilevel, lower = NA_real_, upper = NA_real_,
+                 mean = get("n"), var = 0)][
+                   , mget(c("treatment", "treatment_description", "t", "n",
+                            "pilevel", "lower", "upper", "mean", "var"))]
+
+      sum_by_trt[, `:=`(t = t0, n = n0, pilevel = pilevel,
+                        lower = NA_real_, upper = NA_real_,
+                        mean = n0, var = 0)]
+
+      dfa1 <- rbindlist(list(dfa1, df0, sum_by_trt), use.names = TRUE)[
+        , .SD[.N], by = c("treatment", "treatment_description", "t")]
     }
 
 
     if (is.null(newSubjects)) { # existing subjects only
       # add predicted from data cut to specified years after data cut
-      dfb1t0 <- dfa1 %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(pilevel = pilevel, lower = .data$n, upper = .data$n)
-      dfb1t1 <- dfb1t0 %>%
-        dplyr::mutate(t = t1)
+      dfb1t0 <- dfa1[.N, .SD][, `:=`(
+        pilevel = pilevel, lower = get("n"), upper = get("n"))]
 
-      enroll_pred_df <- dfa1 %>%
-        dplyr::bind_rows(dfb1t0) %>%
-        dplyr::bind_rows(dfb1t1) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Enrollment")
+      dfb1t1 <- data.table::copy(dfb1t0)[, `:=`(t = t1)]
+
+      enroll_pred_df <- rbindlist(list(
+        dfa1, dfb1t0, dfb1t1), use.names = TRUE)[
+          , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+                 parameter = "Enrollment")]
     } else if (is.null(df)) { # new subjects only
-      enroll_pred_df <- dfb1 %>%
-        dplyr::mutate(parameter = "Enrollment")
+      enroll_pred_df <- dfb1[, `:=`(parameter = "Enrollment")]
     } else { # existing and new subjects
-      enroll_pred_df <- dfa1 %>%
-        dplyr::bind_rows(dfb1) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Enrollment")
+      enroll_pred_df <- rbindlist(list(
+        dfa1, dfb1), use.names = TRUE)[
+          , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+                 parameter = "Enrollment")]
     }
 
-    enroll_pred_df <- enroll_pred_df %>%
-      dplyr::arrange(.data$treatment, .data$treatment_description, .data$t)
+    cols = c("treatment", "treatment_description", "t")
+    enroll_pred_df <- enroll_pred_df[do.call("order", lapply(cols, as.name))]
   }
 
 
@@ -929,17 +909,23 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     m1 = 0
   }
 
-  newEvents = dplyr::as_tibble(matrix(
-    nrow = nreps*r0 + m1, ncol = 8,
-    dimnames = list(NULL, c("draw", "usubjid", "arrivalTime",
-                            "treatment", "treatment_description",
-                            "time", "event", "dropout"))))
+  n_rows = nreps*r0 + m1
+
+  newEvents <- data.table(
+    draw = rep(NA_real_, n_rows),
+    usubjid = rep(NA_character_, n_rows),
+    arrivalTime = rep(NA_real_, n_rows),
+    treatment = rep(NA_real_, n_rows),
+    treatment_description = rep(NA_character_, n_rows),
+    time = rep(NA_real_, n_rows),
+    event = rep(NA_real_, n_rows),
+    dropout = rep(NA_real_, n_rows))
 
   offset = 0
   for (i in 1:nreps) {
     # number of new subjects in the simulated data set
     if (m1 > 0) {
-      n1 = nrow(newSubjects %>% dplyr::filter(.data$draw == i))
+      n1 = newSubjects[get("draw") == i, .N]
     } else {
       n1 = 0
     }
@@ -948,7 +934,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # usubjid, arrival time, treatment, and time offset for new subjects
     if (n1 > 0) {
-      newSubjects1 <- newSubjects %>% dplyr::filter(.data$draw == i)
+      newSubjects1 <- newSubjects[get("draw") == i]
       usubjidNew = newSubjects1$usubjid
       arrivalTimeNew = newSubjects1$arrivalTime
       treatmentNew = newSubjects1$treatment
@@ -981,7 +967,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # draw event time for new subjects
     if (n1 > 0) {
-      survivalTimeNew = rep(NA, n1)
+      survivalTimeNew = rep(NA_real_, n1)
 
       for (j in 1:ngroups) {
         cols = which(treatmentNew == j)
@@ -1046,7 +1032,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # draw event time for ongoing subjects without covariates
     if (r0 > 0 && is.null(event_fit_w_x)) {
-      survivalTimeOngoing = rep(NA, r0)
+      survivalTimeOngoing = rep(NA_real_, r0)
 
       for (j in 1:ngroups) {
         cols = which(treatmentOngoing == j)
@@ -1129,7 +1115,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # draw event time for ongoing subjects with covariates
     if (r0 > 0 && !is.null(event_fit_w_x)) {
-      survivalTimeOngoing = rep(NA, r0)
+      survivalTimeOngoing = rep(NA_real_, r0)
 
       for (j in 1:ngroups) {
         cols = which(treatmentOngoing == j)
@@ -1232,7 +1218,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # draw dropout time for new subjects
     if (n1 > 0 && !is.null(dropout_fit)) {
-      dropoutTimeNew = rep(NA, n1)
+      dropoutTimeNew = rep(NA_real_, n1)
 
       for (j in 1:ngroups) {
         cols = which(treatmentNew == j)
@@ -1297,7 +1283,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # draw dropout time for ongoing subjects without covariates
     if (r0 > 0 && !is.null(dropout_fit) && is.null(dropout_fit_w_x)) {
-      dropoutTimeOngoing = rep(NA, r0)
+      dropoutTimeOngoing = rep(NA_real_, r0)
 
       for (j in 1:ngroups) {
         cols = which(treatmentOngoing == j)
@@ -1380,7 +1366,7 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
     # draw dropout time for ongoing subjects with covariates
     if (r0 > 0 && !is.null(dropout_fit_w_x)) {
-      dropoutTimeOngoing = rep(NA, r0)
+      dropoutTimeOngoing = rep(NA_real_, r0)
 
       for (j in 1:ngroups) {
         cols = which(treatmentOngoing == j)
@@ -1520,25 +1506,28 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
 
 
   # calculate total time since trial start
-  newEvents <- newEvents %>%
-    dplyr::mutate(totalTime = .data$arrivalTime + .data$time - 1)
+  newEvents <- newEvents[
+    , `:=`(totalTime = get("arrivalTime") + get("time") - 1)]
 
   if (!is.null(df)) {
     # combined stopped, ongoing and new subjects
-    allSubjects <- dplyr::tibble(draw = 1:nreps) %>%
-      dplyr::cross_join(stoppedSubjects) %>%
-      dplyr::select(.data$draw, .data$usubjid, .data$arrivalTime,
-                    .data$treatment, .data$treatment_description,
-                    .data$time, .data$event, .data$dropout,
-                    .data$totalTime) %>%
-      dplyr::bind_rows(newEvents)
+    cross_joined <- CJ(
+      draw = 1:nreps, usubjid = stoppedSubjects$usubjid,
+      sorted = FALSE)[stoppedSubjects, on = "usubjid",
+                      mget(c("draw", "usubjid", "arrivalTime",
+                             "treatment", "treatment_description",
+                             "time", "event", "dropout", "totalTime"))]
+
+    allSubjects <- rbindlist(list(cross_joined, newEvents),
+                             use.names = TRUE)
   } else {
     allSubjects <- newEvents
   }
 
   # remove the dummy treatment from newEvents
-  if (!by_treatment) newEvents <- newEvents %>%
-    dplyr::select(-c(treatment, treatment_description))
+  if (!by_treatment) {
+    newEvents[, (c("treatment", "treatment_description")) := NULL]
+  }
 
   # A general quantile method if there are data sets not reaching target_d
   # Find t such that sum(I{D_i(t) < target_d}, {i, 1, nreps}) / nreps = q.
@@ -1546,25 +1535,24 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   # where D_i(t) is the cumulative number of events at time t, and
   # T_i(target_d) is the time to reach target_d for data set i.
   sdf <- function(t, target_d, d0, newEvents) {
-    sumdata <- newEvents %>%
-      dplyr::group_by(.data$draw) %>%
-      dplyr::summarize(n = sum(.data$totalTime <= t & .data$event == 1))
+    sumdata <- newEvents[, list(
+      n = sum(get("totalTime") <= t & get("event"))), keyby = get("draw")]
+
     mean(sumdata$n < target_d - d0)
   }
 
-  tmax = max(newEvents$totalTime[newEvents$event == 1])
+  tmax = newEvents[get("event") == 1, max(get("totalTime"))]
 
   # obtain the quantiles
   if (sdf(tmax, target_d, d0, newEvents) == 0) { # target_d reached for all
-    new1 <- newEvents %>%
-      dplyr::group_by(.data$draw) %>%
-      dplyr::filter(.data$event == 1) %>%
-      dplyr::arrange(.data$draw, .data$totalTime) %>%
-      dplyr::filter(dplyr::row_number() == target_d - d0)
+    new1 <- newEvents[get("event") == 1][
+      , setorder(.SD, "totalTime"), by = "draw"][
+        , .SD[target_d - d0], by = "draw"]
+
     pred_day <- ceiling(quantile(new1$totalTime, c(0.5, plower, pupper)))
   } else {
     qs = 1 - c(0.5, plower, pupper)
-    pred_day = rep(NA, 3)
+    pred_day = rep(NA_real_, 3)
     for (j in 1:3) {
       # check if the quantile can be estimated from observed data
       if (sdf(tmax, target_d, d0, newEvents) <= qs[j]) {
@@ -1600,193 +1588,158 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
   # future time points at which to predict number of events
   t = unique(c(t2[t2 >= tp], seq(t0, t1, 30), t1))
 
+  subjects_copy <- data.table::copy(allSubjects)
   if (!by_treatment) {
     # number of events, dropouts, and ongoing subjects after data cut
-    df1 = dplyr::tibble(t = t) %>%
-      dplyr::cross_join(allSubjects) %>%
-      dplyr::group_by(.data$t, .data$draw) %>%
-      dplyr::summarise(nevents = sum(.data$totalTime <= .data$t &
-                                       .data$event == 1),
-                       ndropouts = sum(.data$totalTime <= .data$t &
-                                         .data$dropout == 1),
-                       nongoing = sum(.data$arrivalTime <= .data$t &
-                                        .data$totalTime > .data$t),
-                       .groups = "drop_last")
+    subjects_copy[, `:=`(tmp_row = .I)]
+
+    df1 = CJ(
+      t = t, tmp_row = subjects_copy$tmp_row, sorted = FALSE)[
+        subjects_copy, on = "tmp_row"][
+          , list(nevents = sum(get("totalTime") <= get("t") &
+                                 get("event")),
+                 ndropouts = sum(get("totalTime") <= get("t") &
+                                   get("dropout")),
+                 nongoing = sum(get("arrivalTime") <= get("t") &
+                                  get("totalTime") > get("t"))),
+          keyby = c("t", "draw")]
 
     # predicted number of events after data cut
-    dfb2 = df1 %>%
-      dplyr::summarise(n = quantile(.data$nevents, probs = 0.5),
-                       pilevel = pilevel,
-                       lower = quantile(.data$nevents, probs = plower),
-                       upper = quantile(.data$nevents, probs = pupper),
-                       mean = mean(.data$nevents),
-                       var = var(.data$nevents))
+    dfb2 = df1[, list(n = quantile(get("nevents"), probs = 0.5),
+                      pilevel = pilevel,
+                      lower = quantile(get("nevents"), probs = plower),
+                      upper = quantile(get("nevents"), probs = pupper),
+                      mean = mean(get("nevents")),
+                      var = var(get("nevents"))),
+               keyby = c("t")]
 
     # predicted number of dropouts after data cut
-    dfb3 = df1 %>%
-      dplyr::summarise(n = quantile(.data$ndropouts, probs = 0.5),
-                       pilevel = pilevel,
-                       lower = quantile(.data$ndropouts, probs = plower),
-                       upper = quantile(.data$ndropouts, probs = pupper),
-                       mean = mean(.data$ndropouts),
-                       var = var(.data$ndropouts))
+    dfb3 = df1[, list(n = quantile(get("ndropouts"), probs = 0.5),
+                      pilevel = pilevel,
+                      lower = quantile(get("ndropouts"), probs = plower),
+                      upper = quantile(get("ndropouts"), probs = pupper),
+                      mean = mean(get("ndropouts")),
+                      var = var(get("ndropouts"))),
+               keyby = c("t")]
 
     # predicted number of subjects at risk after data cut
-    dfb4 = df1 %>%
-      dplyr::summarise(n = quantile(.data$nongoing, probs = 0.5),
-                       pilevel = pilevel,
-                       lower = quantile(.data$nongoing, probs = plower),
-                       upper = quantile(.data$nongoing, probs = pupper),
-                       mean = mean(.data$nongoing),
-                       var = var(.data$nongoing))
+    dfb4 = df1[, list(n = quantile(get("nongoing"), probs = 0.5),
+                      pilevel = pilevel,
+                      lower = quantile(get("nongoing"), probs = plower),
+                      upper = quantile(get("nongoing"), probs = pupper),
+                      mean = mean(get("nongoing")),
+                      var = var(get("nongoing"))),
+               keyby = c("t")]
 
     if (!is.null(df)) {
       # day 1
-      df0 <- dplyr::tibble(t = 1, n = 0, pilevel = pilevel,
-                           lower = NA, upper = NA, mean = 0, var = 0)
+      df0 <- data.table(t = 1, n = 0, pilevel = pilevel,
+                        lower = NA_real_, upper = NA_real_,
+                        mean = 0, var = 0)
 
       # observed number of events before data cut
-      dfa2 <- df %>%
-        dplyr::arrange(.data$totalTime) %>%
-        dplyr::mutate(t = .data$totalTime, n = cumsum(.data$event)) %>%
-        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
-                      mean = .data$n, var = 0) %>%
-        dplyr::select(.data$t, .data$n, .data$pilevel, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::bind_rows(df0) %>%
-        dplyr::filter(.data$t <= tp) %>%
-        dplyr::arrange(.data$t)
+      dt_copy <- df[get("totalTime") <= tp]
+      setorder(dt_copy, "totalTime")
+
+      dfa2 <- rbindlist(list(
+        df0, dt_copy[, list(t = get("totalTime"),
+                            n = cumsum(get("event")),
+                            pilevel = pilevel,
+                            lower = NA_real_,
+                            upper = NA_real_,
+                            mean = cumsum(get("event")),  # Reuses n
+                            var = 0)]), use.names = TRUE)
 
       # observed number of dropouts before data cut
-      dfa3 <- df %>%
-        dplyr::arrange(.data$totalTime) %>%
-        dplyr::mutate(t = .data$totalTime, n = cumsum(.data$dropout)) %>%
-        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
-                      mean = .data$n, var = 0) %>%
-        dplyr::select(.data$t, .data$n, .data$pilevel, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::bind_rows(df0) %>%
-        dplyr::filter(.data$t <= tp) %>%
-        dplyr::arrange(.data$t)
+      dfa3 <- rbindlist(list(
+        df0, dt_copy[, list(t = get("totalTime"),
+                            n = cumsum(get("dropout")),
+                            pilevel = pilevel,
+                            lower = NA_real_,
+                            upper = NA_real_,
+                            mean = cumsum(get("dropout")),  # Reuses n
+                            var = 0)]), use.names = TRUE)
 
       # observed number of ongoing subjects before data cutoff
-      dfa4 <- dplyr::tibble(t = t2) %>%
-        dplyr::cross_join(df) %>%
-        dplyr::group_by(.data$t) %>%
-        dplyr::summarise(n = sum(.data$arrivalTime <= .data$t &
-                                   (.data$totalTime > .data$t |
-                                      (.data$event == 0 &
-                                         .data$dropout == 0))),
-                         .groups = "drop_last") %>%
-        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
-                      mean = .data$n, var = 0) %>%
-        dplyr::select(.data$t, .data$n, .data$pilevel, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::bind_rows(df0) %>%
-        dplyr::filter(.data$t <= tp) %>%
-        dplyr::arrange(.data$t)
+      df_copy[, `:=`(tmp_row = .I)]
 
+      dfa4 <- rbindlist(list(
+        df0, CJ(t = t2, tmp_row = df_copy$tmp_row, sorted = FALSE)[
+          df_copy, on = "tmp_row"][
+            get("t") <= tp, list(
+              n = sum(get("arrivalTime") <= get("t") &
+                        (get("totalTime") > get("t") |
+                           (!get("event") & !get("dropout")))),
+              pilevel = pilevel,
+              lower = NA_real_, upper = NA_real_,
+              mean = sum(get("arrivalTime") <= get("t") &
+                           (get("totalTime") > get("t") |
+                              (!get("event") & !get("dropout")))),
+              var = 0), by = "t"]), use.names = TRUE)
 
       # add time tp
-      dfa2tp <- dfa2 %>%
-        dplyr::ungroup() %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(t = tp)
+      dfa2 <- rbindlist(list(
+        dfa2, data.table::copy(dfa2)[.N][, `:=`(t = tp)]),
+        use.names = TRUE)[, .SD[.N], by = "t"]
 
-      dfa2 <- dfa2 %>%
-        dplyr::bind_rows(dfa2tp) %>%
-        dplyr::group_by(.data$t) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::ungroup()
+      dfa3 <- rbindlist(list(
+        dfa3, data.table::copy(dfa3)[.N][, `:=`(t = tp)]),
+        use.names = TRUE)[, .SD[.N], by = "t"]
 
-
-      dfa3tp <- dfa3 %>%
-        dplyr::ungroup() %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(t = tp)
-
-      dfa3 <- dfa3 %>%
-        dplyr::bind_rows(dfa3tp) %>%
-        dplyr::group_by(.data$t) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::ungroup()
-
-
-      dfa4tp <- dfa4 %>%
-        dplyr::ungroup() %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(t = tp)
-
-      dfa4 <- dfa4 %>%
-        dplyr::bind_rows(dfa4tp) %>%
-        dplyr::group_by(.data$t) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::ungroup()
+      dfa4 <- rbindlist(list(
+        dfa4, data.table::copy(dfa4)[.N][, `:=`(t = tp)]),
+        use.names = TRUE)[, .SD[.N], by = "t"]
 
 
       # concatenate events before and after data cut
-      event_pred_df <- dfa2 %>%
-        dplyr::bind_rows(dfb2) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Event")
+      event_pred_df <- rbindlist(list(dfa2, dfb2), use.names = TRUE)[
+          , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+                 parameter = "Event")]
 
       # concatenate dropouts before and after data cut
-      dropout_pred_df <- dfa3 %>%
-        dplyr::bind_rows(dfb3) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Dropout")
+      dropout_pred_df <- rbindlist(list(dfa3, dfb3), use.names = TRUE)[
+          , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+                 parameter = "Dropout")]
 
       # concatenate ongoing subjects before and after data cut
-      ongoing_pred_df <- dfa4 %>%
-        dplyr::bind_rows(dfb4) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Ongoing")
+      ongoing_pred_df <- rbindlist(list(dfa4, dfb4), use.names = TRUE)[
+          , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+                 parameter = "Ongoing")]
     } else {
-      event_pred_df <- dfb2 %>%
-        dplyr::mutate(parameter = "Event")
-
-      dropout_pred_df <- dfb3 %>%
-        dplyr::mutate(parameter = "Dropout")
-
-      ongoing_pred_df <- dfb4 %>%
-        dplyr::mutate(parameter = "Ongoing")
+      event_pred_df <- dfb2[, `:=`(parameter = "Event")]
+      dropout_pred_df <- dfb3[, `:=`(parameter = "Dropout")]
+      ongoing_pred_df <- dfb4[, `:=`(parameter = "Ongoing")]
     }
 
-    event_pred_df <- event_pred_df %>%
-      dplyr::arrange(.data$t)
-
-    dropout_pred_df <- dropout_pred_df %>%
-      dplyr::arrange(.data$t)
-
-    ongoing_pred_df <- ongoing_pred_df %>%
-      dplyr::arrange(.data$t)
+    setorder(event_pred_df, "t")
+    setorder(dropout_pred_df, "t")
+    setorder(ongoing_pred_df, "t")
 
 
     # generate plot
     if (showEnrollment | showEvent | showDropout | showOngoing) {
-      dfs <- dplyr::tibble()
-      if (showEnrollment) dfs <- dfs %>% dplyr::bind_rows(enroll_pred_df)
-      if (showEvent) dfs <- dfs %>% dplyr::bind_rows(event_pred_df)
-      if (showDropout) dfs <- dfs %>% dplyr::bind_rows(dropout_pred_df)
-      if (showOngoing) dfs <- dfs %>% dplyr::bind_rows(ongoing_pred_df)
+      dt_list <- list()
+      if (showEnrollment) dt_list <- c(dt_list, list(enroll_pred_df))
+      if (showEvent) dt_list <- c(dt_list, list(event_pred_df))
+      if (showDropout) dt_list <- c(dt_list, list(dropout_pred_df))
+      if (showOngoing) dt_list <- c(dt_list, list(ongoing_pred_df))
 
-      dfs$parameter <- factor(dfs$parameter, levels = c(
-        "Enrollment", "Event", "Dropout", "Ongoing"))
+      dfs <- rbindlist(dt_list, use.names = TRUE)[
+        , `:=`(parameter = factor(get("parameter"), levels = c(
+          "Enrollment", "Event", "Dropout", "Ongoing")))]
 
       if (!is.null(df)) { # after trial start
-        dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
-        dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
+        dfa <- dfs[is.na(get("lower"))]
+        dfb <- dfs[!is.na(get("lower"))]
 
-        dfa_enrollment <- dfa %>%
-          dplyr::filter(.data$parameter == "Enrollment")
-        dfb_enrollment <- dfb %>%
-          dplyr::filter(.data$parameter == "Enrollment")
-        dfa_event <- dfa %>% dplyr::filter(.data$parameter == "Event")
-        dfb_event <- dfb %>% dplyr::filter(.data$parameter == "Event")
-        dfa_dropout <- dfa %>% dplyr::filter(.data$parameter == "Dropout")
-        dfb_dropout <- dfb %>% dplyr::filter(.data$parameter == "Dropout")
-        dfa_ongoing <- dfa %>% dplyr::filter(.data$parameter == "Ongoing")
-        dfb_ongoing <- dfb %>% dplyr::filter(.data$parameter == "Ongoing")
+        dfa_enrollment <- dfa[get("parameter") == "Enrollment"]
+        dfb_enrollment <- dfb[get("parameter") == "Enrollment"]
+        dfa_event <- dfa[get("parameter") == "Event"]
+        dfb_event <- dfb[get("parameter") == "Event"]
+        dfa_dropout <- dfa[get("parameter") == "Dropout"]
+        dfb_dropout <- dfb[get("parameter") == "Dropout"]
+        dfa_ongoing <- dfa[get("parameter") == "Ongoing"]
+        dfb_ongoing <- dfb[get("parameter") == "Ongoing"]
 
         g1 <- plotly::plot_ly() %>%
           plotly::add_lines(
@@ -1876,11 +1829,10 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
                 font = list(size=12), showarrow = FALSE))
         }
       } else { # at design stage
-        dfs_enrollment <- dfs %>%
-          dplyr::filter(.data$parameter == "Enrollment")
-        dfs_event <- dfs %>% dplyr::filter(.data$parameter == "Event")
-        dfs_dropout <- dfs %>% dplyr::filter(.data$parameter == "Dropout")
-        dfs_ongoing <- dfs %>% dplyr::filter(.data$parameter == "Ongoing")
+        dfs_enrollment <- dfs[get("parameter") == "Enrollment"]
+        dfs_event <- dfs[get("parameter") == "Event"]
+        dfs_dropout <- dfs[get("parameter") == "Dropout"]
+        dfs_ongoing <- dfs[get("parameter") == "Ongoing"]
 
         g1 <- plotly::plot_ly() %>%
           plotly::add_lines(
@@ -1936,220 +1888,182 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
     }
   } else {  # by treatment
     # add overall treatment
-    allSubjects2 <- allSubjects %>%
-      dplyr::bind_rows(allSubjects %>% dplyr::mutate(
-        treatment = 9999, treatment_description = "Overall"))
+    allSubjects2 <- rbindlist(list(
+      allSubjects, subjects_copy[, `:=`(treatment = 9999,
+                                        treatment_description = "Overall")]),
+      use.names = TRUE)
 
     # number of events, dropouts, and ongoing subjects after data cut
-    df1 = dplyr::tibble(t = t) %>%
-      dplyr::cross_join(allSubjects2) %>%
-      dplyr::group_by(.data$treatment, .data$treatment_description,
-                      .data$t, .data$draw) %>%
-      dplyr::summarise(nevents = sum(.data$totalTime <= .data$t &
-                                       .data$event == 1),
-                       ndropouts = sum(.data$totalTime <= .data$t &
-                                         .data$dropout == 1),
-                       nongoing = sum(.data$arrivalTime <= .data$t &
-                                        .data$totalTime > .data$t),
-                       .groups = "drop_last")
+    allSubjects2[, `:=`(tmp_row = .I)]
+
+    df1 = CJ(
+      t = t, tmp_row = allSubjects2$tmp_row, sorted = FALSE)[
+        allSubjects2, on = "tmp_row"][
+          , list(nevents = sum(get("totalTime") <= get("t") &
+                                 get("event")),
+                 ndropouts = sum(get("totalTime") <= get("t") &
+                                   get("dropout")),
+                 nongoing = sum(get("arrivalTime") <= get("t") &
+                                  get("totalTime") > get("t"))),
+          keyby = c("treatment", "treatment_description", "t", "draw")]
 
     # predicted number of events after data cut
-    dfb2 = df1 %>%
-      dplyr::summarise(n = quantile(.data$nevents, probs = 0.5),
-                       pilevel = pilevel,
-                       lower = quantile(.data$nevents, probs = plower),
-                       upper = quantile(.data$nevents, probs = pupper),
-                       mean = mean(.data$nevents),
-                       var = var(.data$nevents),
-                       .groups = "drop_last")
+    cols <- c("treatment", "treatment_description", "t")
+
+    dfb2 = df1[, list(n = quantile(get("nevents"), probs = 0.5),
+                      pilevel = pilevel,
+                      lower = quantile(get("nevents"), probs = plower),
+                      upper = quantile(get("nevents"), probs = pupper),
+                      mean = mean(get("nevents")),
+                      var = var(get("nevents"))),
+               keyby = cols]
 
     # predicted number of dropouts after data cut
-    dfb3 = df1 %>%
-      dplyr::summarise(n = quantile(.data$ndropouts, probs = 0.5),
-                       pilevel = pilevel,
-                       lower = quantile(.data$ndropouts, probs = plower),
-                       upper = quantile(.data$ndropouts, probs = pupper),
-                       mean = mean(.data$ndropouts),
-                       var = var(.data$ndropouts),
-                       .groups = "drop_last")
+    dfb3 = df1[, list(n = quantile(get("ndropouts"), probs = 0.5),
+                      pilevel = pilevel,
+                      lower = quantile(get("ndropouts"), probs = plower),
+                      upper = quantile(get("ndropouts"), probs = pupper),
+                      mean = mean(get("ndropouts")),
+                      var = var(get("ndropouts"))),
+               keyby = cols]
 
     # predicted number of subjects at risk after data cut
-    dfb4 = df1 %>%
-      dplyr::summarise(n = quantile(.data$nongoing, probs = 0.5),
-                       pilevel = pilevel,
-                       lower = quantile(.data$nongoing, probs = plower),
-                       upper = quantile(.data$nongoing, probs = pupper),
-                       mean = mean(.data$nongoing),
-                       var = var(.data$nongoing),
-                       .groups = "drop_last")
+    dfb4 = df1[, list(n = quantile(get("nongoing"), probs = 0.5),
+                      pilevel = pilevel,
+                      lower = quantile(get("nongoing"), probs = plower),
+                      upper = quantile(get("nongoing"), probs = pupper),
+                      mean = mean(get("nongoing")),
+                      var = var(get("nongoing"))),
+               keyby = cols]
 
 
     if (!is.null(df)) {
       # day 1
-      df0 <- sum_by_trt %>%
-        dplyr::select(.data$treatment, .data$treatment_description) %>%
-        dplyr::mutate(t = 1, n = 0, pilevel = pilevel,
-                      lower = NA, upper = NA, mean = 0, var = 0)
+      df0 <- sum_by_trt[, list(
+        treatment, treatment_description, t = 1, n = 0, pilevel = pilevel,
+        lower = NA_real_, upper = NA_real_, mean = 0, var = 0)]
 
 
       # observed number of events before data cut
-      dfa2 <- df2 %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-        dplyr::arrange(.data$totalTime) %>%
-        dplyr::mutate(t = .data$totalTime, n = cumsum(.data$event)) %>%
-        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
-                      mean = .data$n, var = 0) %>%
-        dplyr::select(.data$treatment, .data$treatment_description,
-                      .data$t, .data$n, .data$pilevel, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::bind_rows(df0) %>%
-        dplyr::filter(.data$t <= tp) %>%
-        dplyr::arrange(.data$treatment, .data$treatment_description, .data$t)
+      dt_copy <- df2[get("totalTime") <= tp]
+      setorderv(dt_copy, c("treatment", "treatment_description", "totalTime"))
+
+      dfa2 <- rbindlist(list(
+        df0, dt_copy[, list(t = get("totalTime"),
+                            n = cumsum(get("event")),
+                            pilevel = pilevel,
+                            lower = NA_real_,
+                            upper = NA_real_,
+                            mean = cumsum(get("event")),  # Reuses n
+                            var = 0),
+                     by = c("treatment", "treatment_description")]),
+        use.names = TRUE)[do.call("order", lapply(cols, as.name))]
 
       # observed number of dropouts before data cut
-      dfa3 <- df2 %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-        dplyr::arrange(.data$totalTime) %>%
-        dplyr::mutate(t = .data$totalTime, n = cumsum(.data$dropout)) %>%
-        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
-                      mean = .data$n, var = 0) %>%
-        dplyr::select(.data$treatment, .data$treatment_description,
-                      .data$t, .data$n, .data$pilevel, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::bind_rows(df0) %>%
-        dplyr::filter(.data$t <= tp) %>%
-        dplyr::arrange(.data$treatment, .data$treatment_description, .data$t)
-
+      dfa3 <- rbindlist(list(
+        df0, dt_copy[, list(t = get("totalTime"),
+                            n = cumsum(get("dropout")),
+                            pilevel = pilevel,
+                            lower = NA_real_,
+                            upper = NA_real_,
+                            mean = cumsum(get("dropout")),  # Reuses n
+                            var = 0),
+                     by = c("treatment", "treatment_description")]),
+        use.names = TRUE)[do.call("order", lapply(cols, as.name))]
 
       # observed number of ongoing subjects before data cutoff
-      dfa4 <- dplyr::tibble(t = t2) %>%
-        dplyr::cross_join(df2) %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description,
-                        .data$t) %>%
-        dplyr::summarise(n = sum(.data$arrivalTime <= .data$t &
-                                   (.data$totalTime > .data$t |
-                                      (.data$event == 0 &
-                                         .data$dropout == 0))),
-                         .groups = "drop_last") %>%
-        dplyr::mutate(pilevel = pilevel, lower = NA, upper = NA,
-                      mean = .data$n, var = 0) %>%
-        dplyr::select(.data$treatment, .data$treatment_description,
-                      .data$t, .data$n, .data$pilevel, .data$lower,
-                      .data$upper, .data$mean, .data$var) %>%
-        dplyr::bind_rows(df0) %>%
-        dplyr::filter(.data$t <= tp) %>%
-        dplyr::arrange(.data$treatment, .data$treatment_description, .data$t)
+      df2_copy <- data.table::copy(df2)[, `:=`(tmp_row = .I)]
+
+      dfa4 <- rbindlist(list(
+        df0, CJ(t = t2, tmp_row = df2_copy$tmp_row, sorted = FALSE)[
+          df2_copy, on = "tmp_row"][
+            get("t") <= tp, list(
+              n = sum(get("arrivalTime") <= get("t") &
+                        (get("totalTime") > get("t") |
+                           (!get("event") & !get("dropout")))),
+              pilevel = pilevel,
+              lower = NA_real_, upper = NA_real_,
+              mean = sum(get("arrivalTime") <= get("t") &
+                           (get("totalTime") > get("t") |
+                              (!get("event") & !get("dropout")))),
+              var = 0), by = cols]),
+        use.names = TRUE)[do.call("order", lapply(cols, as.name))]
 
 
       # add time tp
-      dfa2tp <- dfa2 %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(t = tp)
+      dfa2 <- rbindlist(list(
+        dfa2, data.table::copy(dfa2)[
+          , .SD[.N], keyby = c("treatment", "treatment_description")][
+            , `:=`(t = tp)]), use.names = TRUE)[
+          , .SD[.N], keyby = cols]
 
-      dfa2 <- dfa2 %>%
-        dplyr::bind_rows(dfa2tp) %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description,
-                        .data$t) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::ungroup()
+      dfa3 <- rbindlist(list(
+        dfa3, data.table::copy(dfa3)[
+          , .SD[.N], keyby = c("treatment", "treatment_description")][
+            , `:=`(t = tp)]), use.names = TRUE)[
+              , .SD[.N], keyby = cols]
 
-
-      dfa3tp <- dfa3 %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(t = tp)
-
-      dfa3 <- dfa3 %>%
-        dplyr::bind_rows(dfa3tp) %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description,
-                        .data$t) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::ungroup()
-
-
-      dfa4tp <- dfa4 %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::mutate(t = tp)
-
-      dfa4 <- dfa4 %>%
-        dplyr::bind_rows(dfa4tp) %>%
-        dplyr::group_by(.data$treatment, .data$treatment_description,
-                        .data$t) %>%
-        dplyr::slice(dplyr::n()) %>%
-        dplyr::ungroup()
+      dfa2 <- rbindlist(list(
+        dfa2, data.table::copy(dfa2)[
+          , .SD[.N], keyby = c("treatment", "treatment_description")][
+            , `:=`(t = tp)]), use.names = TRUE)[
+              , .SD[.N], keyby = cols]
 
 
       # concatenate events before and after data cut
-      event_pred_df <- dfa2 %>%
-        dplyr::bind_rows(dfb2) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Event")
+      event_pred_df <- rbindlist(list(dfa2, dfb2), use.names = TRUE)[
+        , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+               parameter = "Event")]
 
       # concatenate dropouts before and after data cut
-      dropout_pred_df <- dfa3 %>%
-        dplyr::bind_rows(dfb3) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Dropout")
+      dropout_pred_df <- rbindlist(list(dfa3, dfb3), use.names = TRUE)[
+        , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+               parameter = "Dropout")]
 
       # concatenate ongoing subjects before and after data cut
-      ongoing_pred_df <- dfa4 %>%
-        dplyr::bind_rows(dfb4) %>%
-        dplyr::mutate(date = as.Date(.data$t - 1, origin = trialsdt)) %>%
-        dplyr::mutate(parameter = "Ongoing")
+      ongoing_pred_df <- rbindlist(list(dfa4, dfb4), use.names = TRUE)[
+        , `:=`(date = as.Date(get("t") - 1, origin = get("trialsdt")),
+               parameter = "Ongoing")]
     } else {
-      event_pred_df <- dfb2 %>%
-        dplyr::mutate(parameter = "Event")
-
-      dropout_pred_df <- dfb3 %>%
-        dplyr::mutate(parameter = "Dropout")
-
-      ongoing_pred_df <- dfb4 %>%
-        dplyr::mutate(parameter = "Ongoing")
+      event_pred_df <- dfb2[, `:=`(parameter = "Event")]
+      dropout_pred_df <- dfb3[, `:=`(parameter = "Dropout")]
+      ongoing_pred_df <- dfb4[, `:=`(parameter = "Ongoing")]
     }
 
-    event_pred_df <- event_pred_df %>%
-      dplyr::arrange(.data$treatment, .data$treatment_description, .data$t)
-
-    dropout_pred_df <- dropout_pred_df %>%
-      dplyr::arrange(.data$treatment, .data$treatment_description, .data$t)
-
-    ongoing_pred_df <- ongoing_pred_df %>%
-      dplyr::arrange(.data$treatment, .data$treatment_description, .data$t)
-
+    setorderv(event_pred_df, cols)
+    setorderv(dropout_pred_df, cols)
+    setorderv(ongoing_pred_df, cols)
 
     # generate plot
     if (showEnrollment | showEvent | showDropout | showOngoing) {
-      dfs <- dplyr::tibble()
-      if (showEnrollment) dfs <- dfs %>% dplyr::bind_rows(enroll_pred_df)
-      if (showEvent) dfs <- dfs %>% dplyr::bind_rows(event_pred_df)
-      if (showDropout) dfs <- dfs %>% dplyr::bind_rows(dropout_pred_df)
-      if (showOngoing) dfs <- dfs %>% dplyr::bind_rows(ongoing_pred_df)
+      dt_list <- list()
+      if (showEnrollment) dt_list <- c(dt_list, list(enroll_pred_df))
+      if (showEvent) dt_list <- c(dt_list, list(event_pred_df))
+      if (showDropout) dt_list <- c(dt_list, list(dropout_pred_df))
+      if (showOngoing) dt_list <- c(dt_list, list(ongoing_pred_df))
 
-      dfs$parameter <- factor(dfs$parameter, levels = c(
-        "Enrollment", "Event", "Dropout", "Ongoing"))
+      dfs <- rbindlist(dt_list, use.names = TRUE)[
+        , `:=`(parameter = factor(get("parameter"), levels = c(
+          "Enrollment", "Event", "Dropout", "Ongoing")))]
 
       if (!is.null(df)) { # after trial start
-        dfa <- dfs %>% dplyr::filter(is.na(.data$lower))
-        dfb <- dfs %>% dplyr::filter(!is.na(.data$lower))
+        dfa <- dfs[is.na(get("lower"))]
+        dfb <- dfs[!is.na(get("lower"))]
 
         g1 <- list()
         for (i in c(9999, 1:ngroups)) {
-          dfsi <- dfs %>% dplyr::filter(.data$treatment == i)
-          dfai <- dfa %>% dplyr::filter(.data$treatment == i)
-          dfbi <- dfb %>% dplyr::filter(.data$treatment == i)
+          dfsi <- dfs[get("treatment") == i]
+          dfai <- dfa[get("treatment") == i]
+          dfbi <- dfb[get("treatment") == i]
 
-          dfai_enrollment <- dfai %>%
-            dplyr::filter(.data$parameter == "Enrollment")
-          dfbi_enrollment <- dfbi %>%
-            dplyr::filter(.data$parameter == "Enrollment")
-          dfai_event <- dfai %>% dplyr::filter(.data$parameter == "Event")
-          dfbi_event <- dfbi %>% dplyr::filter(.data$parameter == "Event")
-          dfai_dropout <- dfai %>% dplyr::filter(.data$parameter == "Dropout")
-          dfbi_dropout <- dfbi %>% dplyr::filter(.data$parameter == "Dropout")
-          dfai_ongoing <- dfai %>% dplyr::filter(.data$parameter == "Ongoing")
-          dfbi_ongoing <- dfbi %>% dplyr::filter(.data$parameter == "Ongoing")
+          dfai_enrollment <- dfai[get("parameter") == "Enrollment"]
+          dfbi_enrollment <- dfbi[get("parameter") == "Enrollment"]
+          dfai_event <- dfai[get("parameter") == "Event"]
+          dfbi_event <- dfbi[get("parameter") == "Event"]
+          dfai_dropout <- dfai[get("parameter") == "Dropout"]
+          dfbi_dropout <- dfbi[get("parameter") == "Dropout"]
+          dfai_ongoing <- dfai[get("parameter") == "Ongoing"]
+          dfbi_ongoing <- dfbi[get("parameter") == "Ongoing"]
 
           g1[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
             plotly::add_lines(
@@ -2260,13 +2174,12 @@ predictEvent <- function(df = NULL, target_d, newSubjects = NULL,
       } else { # prediction at design stage
         g1 <- list()
         for (i in c(9999, 1:ngroups)) {
-          dfsi <- dfs %>% dplyr::filter(.data$treatment == i)
+          dfsi <- dfs[get("treatment") == i]
 
-          dfsi_enrollment <- dfsi %>%
-            dplyr::filter(.data$parameter == "Enrollment")
-          dfsi_event <- dfsi %>% dplyr::filter(.data$parameter == "Event")
-          dfsi_dropout <- dfsi %>% dplyr::filter(.data$parameter == "Dropout")
-          dfsi_ongoing <- dfsi %>% dplyr::filter(.data$parameter == "Ongoing")
+          dfsi_enrollment <- dfsi[get("parameter") == "Enrollment"]
+          dfsi_event <- dfsi[get("parameter") == "Event"]
+          dfsi_dropout <- dfsi[get("parameter") == "Dropout"]
+          dfsi_ongoing <- dfsi[get("parameter") == "Ongoing"]
 
           g1[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
             plotly::add_lines(

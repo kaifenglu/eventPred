@@ -117,19 +117,18 @@ fitEvent <- function(df, event_model = "model averaging",
   }
 
 
-  df <- dplyr::as_tibble(df)
-  names(df) <- tolower(names(df))
+  setDT(df)
+  setnames(df, tolower(names(df)))
 
   if (by_treatment) {
-    ngroups = length(table(df$treatment))
+    ngroups = df[, uniqueN(get("treatment"))]
 
     if (!("treatment_description" %in% names(df))) {
-      df <- df %>% dplyr::mutate(
-        treatment_description = paste("Treatment", .data$treatment))
+      df[, `:=`(treatment_description = paste("Treatment", get("treatment")))]
     }
   } else {
     ngroups = 1
-    df <- df %>% dplyr::mutate(treatment = 1)
+    df[, `:=`(treatment = 1)]
   }
 
   if (ngroups == 1) {
@@ -141,19 +140,19 @@ fitEvent <- function(df, event_model = "model averaging",
   event_fit <- list()
 
   for (i in 1:ngroups) {
-    df1 <- df %>% dplyr::filter(.data$treatment == i)
+    df1 <- df[get("treatment") == i]
 
     n0 = nrow(df1)
-    d0 = sum(df1$event)
-    ex0 = sum(df1$time)
+    d0 = df1[, sum(get("event"))]
+    ex0 = df1[, sum(get("time"))]
 
     x = model.matrix(formula, df1)
     q = ncol(x) - 1
 
     kmfit <- survival::survfit(survival::Surv(time, event) ~ 1, data = df1)
-    kmdf <- dplyr::tibble(time = kmfit$time, surv = kmfit$surv)
-    kmdf <- dplyr::tibble(time = 0, surv = 1) %>%
-      dplyr::bind_rows(kmdf)
+    kmdf <- data.table(time = kmfit$time, surv = kmfit$surv)
+    df0 <- data.table(time = 0, surv = 1)
+    kmdf <- rbindlist(list(df0, kmdf), use.names = TRUE)
 
     if (tolower(event_model) == "exponential") {
       erify::check_positive(d0 - q, supplement = paste(
@@ -175,11 +174,9 @@ fitEvent <- function(df, event_model = "model averaging",
       # fitted survival curve
       rate = exp(as.numeric(x %*% fit2$theta))
 
-      dffit2 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = sapply(.data$time, function(t)
-          mean(pexp(t, rate, lower.tail = FALSE))))
-
+      dffit2 <- data.table(time = seq(0, max(df1$time)))[
+        , `:=`(surv = sapply(get("time"), function(t)
+          mean(pexp(t, rate, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "weibull") {
       erify::check_positive(d0 - q - 1, supplement = paste(
         "The number of events must be >=", q+2,
@@ -203,11 +200,9 @@ fitEvent <- function(df, event_model = "model averaging",
       shape = exp(-fit2$theta[q+2])
       scale = exp(as.numeric(x %*% fit2$theta[1:(q+1)]))
 
-      dffit2 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = sapply(.data$time, function(t)
-          mean(pweibull(t, shape, scale, lower.tail = FALSE))))
-
+      dffit2 <- data.table(time = seq(0, max(df1$time)))[
+        , `:=`(surv = sapply(get("time"), function(t)
+          mean(pweibull(t, shape, scale, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "log-logistic") {
       erify::check_positive(d0 - q - 1, supplement = paste(
         "The number of events must be >=", q+2,
@@ -230,11 +225,9 @@ fitEvent <- function(df, event_model = "model averaging",
       location = as.numeric(x %*% fit2$theta[1:(q+1)])
       scale = exp(fit2$theta[q+2])
 
-      dffit2 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = sapply(.data$time, function(t)
-          mean(plogis(log(t), location, scale, lower.tail = FALSE))))
-
+      dffit2 <- data.table(time = seq(0, max(df1$time)))[
+        , `:=`(surv = sapply(get("time"), function(t)
+          mean(plogis(log(t), location, scale, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "log-normal") {
       erify::check_positive(d0 - q - 1, supplement = paste(
         "The number of events must be >=", q + 2,
@@ -256,11 +249,9 @@ fitEvent <- function(df, event_model = "model averaging",
       meanlog = as.numeric(x %*% fit2$theta[1:(q+1)])
       sdlog = exp(fit2$theta[q+2])
 
-      dffit2 <- dplyr::tibble(
-        time = seq(0, max(df1$time)),
-        surv = sapply(.data$time, function(t)
-          mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))
-
+      dffit2 <- data.table(time = seq(0, max(df1$time)))[
+        , `:=`(surv = sapply(get("time"), function(t)
+          mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "piecewise exponential") {
       # lambda_0(t) = lambda[j] for ucut[j] <= t < ucut[j+1], j = 1,...,J
       # where ucut[1]=0 < ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
@@ -281,8 +272,7 @@ fitEvent <- function(df, event_model = "model averaging",
                q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-      dffit2 <- dplyr::tibble(time, surv)
-
+      dffit2 <- data.table(time, surv)
     } else if (tolower(event_model) == "model averaging") {
       erify::check_positive(d0 - q - 1, supplement = paste(
         "The number of events must be >=", q + 2,
@@ -321,8 +311,7 @@ fitEvent <- function(df, event_model = "model averaging",
         pmodavg(time, fit2$theta, w1, q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-      dffit2 <- dplyr::tibble(time, surv)
-
+      dffit2 <- data.table(time, surv)
     } else if (tolower(event_model) == "spline") {
       erify::check_positive(d0 - k - q - 1, supplement = paste(
         "The number of events must be >=", k + q + 2,
@@ -358,7 +347,7 @@ fitEvent <- function(df, event_model = "model averaging",
           lower.tail = FALSE)
       }
 
-      dffit2 <- dplyr::tibble(time, surv)
+      dffit2 <- data.table(time, surv)
     }
 
 
