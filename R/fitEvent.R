@@ -70,9 +70,10 @@
 #'
 #' @examples
 #'
-#' event_fit <- fitEvent(df = interimData2,
-#'                       event_model = "piecewise exponential",
-#'                       piecewiseSurvivalTime = c(0, 180))
+#' event_fit <- fitEvent(
+#'   df = interimData2,
+#'   event_model = "piecewise exponential",
+#'   piecewiseSurvivalTime = c(0, 180))
 #'
 #' @export
 #'
@@ -117,14 +118,15 @@ fitEvent <- function(df, event_model = "model averaging",
   }
 
 
-  setDT(df)
-  setnames(df, tolower(names(df)))
+  data.table::setDT(df)
+
 
   if (by_treatment) {
-    ngroups = df[, uniqueN(get("treatment"))]
+    ngroups = df[, data.table::uniqueN(get("treatment"))]
 
     if (!("treatment_description" %in% names(df))) {
-      df[, `:=`(treatment_description = paste("Treatment", get("treatment")))]
+      df[, `:=`(treatment_description =
+                  paste("Treatment", get("treatment")))]
     }
   } else {
     ngroups = 1
@@ -152,7 +154,7 @@ fitEvent <- function(df, event_model = "model averaging",
     kmfit <- survival::survfit(survival::Surv(time, event) ~ 1, data = df1)
     kmdf <- data.table(time = kmfit$time, surv = kmfit$surv)
     df0 <- data.table(time = 0, surv = 1)
-    kmdf <- rbindlist(list(df0, kmdf), use.names = TRUE)
+    kmdf <- data.table::rbindlist(list(df0, kmdf), use.names = TRUE)
 
     if (tolower(event_model) == "exponential") {
       erify::check_positive(d0 - q, supplement = paste(
@@ -254,7 +256,8 @@ fitEvent <- function(df, event_model = "model averaging",
           mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "piecewise exponential") {
       # lambda_0(t) = lambda[j] for ucut[j] <= t < ucut[j+1], j = 1,...,J
-      # where ucut[1]=0 < ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
+      # where ucut[1]=0 < ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are
+      # the knots
       J = length(piecewiseSurvivalTime)
 
       erify::check_positive(d0 - J - q + 1, supplement = paste(
