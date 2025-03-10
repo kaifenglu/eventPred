@@ -70,8 +70,9 @@
 #'
 #' @examples
 #'
-#' dropout_fit <- fitDropout(df = interimData2,
-#'                           dropout_model = "exponential")
+#' dropout_fit <- fitDropout(
+#'   df = interimData2,
+#'   dropout_model = "exponential")
 #'
 #' @export
 #'
@@ -116,14 +117,15 @@ fitDropout <- function(df, dropout_model = "exponential",
   }
 
 
-  setDT(df)
-  setnames(df, tolower(names(df)))
+  data.table::setDT(df)
+
 
   if (by_treatment) {
-    ngroups = df[, uniqueN(get("treatment"))]
+    ngroups = df[, data.table::uniqueN(get("treatment"))]
 
     if (!("treatment_description" %in% names(df))) {
-      df[, `:=`(treatment_description = paste("Treatment", get("treatment")))]
+      df[, `:=`(treatment_description =
+                  paste("Treatment", get("treatment")))]
     }
   } else {
     ngroups = 1
@@ -151,7 +153,7 @@ fitDropout <- function(df, dropout_model = "exponential",
     kmfit <- survival::survfit(survival::Surv(time, dropout) ~ 1, data = df1)
     kmdf <- data.table(time = kmfit$time, surv = kmfit$surv)
     df0 <- data.table(time = 0, surv = 1)
-    kmdf <- rbindlist(list(df0, kmdf), use.names = TRUE)
+    kmdf <- data.table::rbindlist(list(df0, kmdf), use.names = TRUE)
 
     if (tolower(dropout_model) == "exponential") {
       erify::check_positive(c0 - q, supplement = paste(
@@ -253,7 +255,8 @@ fitDropout <- function(df, dropout_model = "exponential",
           mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "piecewise exponential") {
       # lambda(t) = lambda[j] for ucut[j] <= t < ucut[j+1], j = 1,...,J
-      # where ucut[1]=0< ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are the knots
+      # where ucut[1]=0< ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are
+      # the knots
       J = length(piecewiseDropoutTime)
 
       erify::check_positive(c0 - J - q + 1, supplement = paste(
