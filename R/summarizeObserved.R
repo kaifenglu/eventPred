@@ -189,7 +189,7 @@ summarizeObserved <- function(df, to_predict = "event only",
 
       adtte <- data.table::copy(df)[
         , `:=`(adt = as.Date(get("time") - 1, origin = get("randdt")))][
-          , .SD[order(get("adt"))], by = trtcols][
+          do.call("order", lapply(c(trtcols, "adt"), as.name))][
             , `:=`(n = cumsum(get("event")),
                    parameter = "Event", date = get("adt")),
             by = trtcols]
@@ -199,9 +199,9 @@ summarizeObserved <- function(df, to_predict = "event only",
         "treatment", "treatment_description", "adt")][, mget(cols)]
 
       # dummy subject to initialize time axis at trial start
-      adtte0 <- data.table(
-        treatment = 1:ngroups, n = 0, parameter = "Event",
-        date = trialsdt)[treatment_mapping, on = "treatment"]
+      adtte0 <- merge(data.table(
+        treatment = 1:ngroups, n = 0, parameter = "Event", date = trialsdt),
+        treatment_mapping, by = "treatment", all.x = TRUE)
 
       # combine enrollment and time to event data
       ad <- data.table::rbindlist(list(
