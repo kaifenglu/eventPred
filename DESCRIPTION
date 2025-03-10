@@ -1,18 +1,20 @@
 Package: eventPred
 Title: Event Prediction
-Version: 0.2.5
-Date: 2024-02-27
+Version: 0.2.7
+Date: 2025-03-10
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6160-7119"))
-Description: Predicts enrollment and events at the design or analysis stage using specified enrollment and time-to-event models through simulations.
+Description: Predicts enrollment and events at the design or analysis stage 
+             using specified enrollment and time-to-event models through 
+             simulations.
 License: GPL (>= 2)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.0
+RoxygenNote: 7.3.1
 Imports: 
-    dplyr (>= 1.1.0),
-    rlang (>= 1.0.6),
+    data.table (>= 1.14.10),
+    magrittr (>= 2.0.0),
     plotly (>= 4.10.1),
     survival (>= 2.41-3),
     splines (>= 3.5.0),
