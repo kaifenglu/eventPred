@@ -335,10 +335,10 @@ summarizeObserved <- function(df, to_predict = "event only",
       kmfitEvent <- survival::survfit(survival::Surv(time, event) ~
                                         treatment, data = adtte)
 
-      treatments <- as.numeric(substring(names(kmfitEvent$strata), 11))
+      treatment <- as.numeric(substring(names(kmfitEvent$strata), 11))
 
       treatment_description <- treatment_mapping[
-        get("treatment") %in% treatments, get("treatment_description")]
+        get("treatment") %in% treatment, get("treatment_description")]
 
       kmdfEvent <- data.table::rbindlist(list(
         data.table(treatment = treatment,
@@ -368,10 +368,10 @@ summarizeObserved <- function(df, to_predict = "event only",
       kmfitDropout <- survival::survfit(survival::Surv(time, dropout) ~
                                           treatment, data = adtte)
 
-      treatments <- as.numeric(substring(names(kmfitDropout$strata), 11))
+      treatment <- as.numeric(substring(names(kmfitDropout$strata), 11))
 
       treatment_description <- treatment_mapping[
-        get("treatment") %in% treatments, get("treatment_description")]
+        get("treatment") %in% treatment, get("treatment_description")]
 
       kmdfDropout <- data.table::rbindlist(list(
         data.table(treatment = treatment,
