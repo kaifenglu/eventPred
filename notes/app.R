@@ -6,6 +6,7 @@ library(shinybusy)
 library(readxl)
 library(writexl)
 library(dplyr, warn.conflicts = FALSE)
+library(purrr)
 library(prompter)
 library(ggplot2)
 library(plotly, warn.conflicts = FALSE)
@@ -470,7 +471,7 @@ eventPanel <- tabPanel(
                numericInput(
                  "spline_k",
                  label = "How many inner knots to use?",
-                 value = 0,
+                 value = 1,
                  min = 0, max = 10, step = 1),
 
                radioButtons(
@@ -483,6 +484,7 @@ eventPanel <- tabPanel(
       )
     ),
 
+    uiOutput("event_fit_ic"),
     uiOutput("event_fit")
   )
 )
@@ -579,6 +581,7 @@ dropoutPanel <- tabPanel(
       )
     ),
 
+    uiOutput("dropout_fit_ic"),
     uiOutput("dropout_fit")
   )
 )
@@ -999,10 +1002,9 @@ server <- function(input, output, session) {
         a = "Overall"
       } else if (input$stage != "Design stage" && !is.null(df())) {
         treatment_mapping <- df() %>%
-          dplyr::select(treatment, treatment_description) %>%
-          dplyr::arrange(treatment, treatment_description) %>%
-          dplyr::group_by(treatment, treatment_description) %>%
-          dplyr::slice(dplyr::n())
+          group_by(treatment, treatment_description) %>%
+          slice(n()) %>%
+          select(treatment, treatment_description)
         a = treatment_mapping$treatment_description
       } else {
         a = rownames(input[[paste0("treatment_allocation_", k())]])
@@ -1464,33 +1466,38 @@ server <- function(input, output, session) {
     df <- readxl::read_excel(inFile$datapath)
 
     if (to_predict() == "Enrollment only") {
-      required_columns <- c('trialsdt', 'randdt', 'cutoffdt')
+      req_cols <- c('trialsdt', 'usubjid', 'randdt', 'cutoffdt')
     } else {
-      required_columns <- c('trialsdt', 'randdt', 'cutoffdt', 'time', 'event',
-                            'dropout')
+      req_cols <- c('trialsdt', 'usubjid', 'randdt', 'cutoffdt',
+                    'time', 'event', 'dropout')
     }
 
     if (input$by_treatment) {
-      required_columns <- c(required_columns, 'treatment')
+      req_cols <- c(req_cols, 'treatment')
     }
 
-    column_names <- colnames(df)
+    cols <- colnames(df)
 
     shiny::validate(
-      need(all(required_columns %in% column_names),
-           "You don't have the right data"))
+      need(all(req_cols %in% cols),
+           paste("The following columns are missing from the input data:",
+                 paste(req_cols[!(req_cols %in% cols)], collapse = ", "))))
 
-    if ('treatment' %in% column_names &&
-        !('treatment_description' %in% column_names)) {
-      df <- df %>% dplyr::mutate(
-        treatment_description = paste0("Treatment ", treatment))
+    if (any(is.na(df[, req_cols]))) {
+      stop(paste("The following columns have missing values:",
+                 paste(req_cols[sapply(df, function(x) any(is.na(x)))],
+                       collapse = ", ")))
     }
 
-    dplyr::tibble(df) %>%
-      dplyr::mutate(trialsdt = as.Date(trialsdt),
-                    randdt = as.Date(randdt),
-                    cutoffdt = as.Date(cutoffdt))
+    if ('treatment' %in% cols && !('treatment_description' %in% cols)) {
+      df <- df %>%
+        mutate(treatment_description = paste0("Treatment ", treatment))
+    }
 
+    tibble(df) %>%
+      mutate(trialsdt = as.Date(trialsdt),
+             randdt = as.Date(randdt),
+             cutoffdt = as.Date(cutoffdt))
   })
 
 
@@ -1529,8 +1536,8 @@ server <- function(input, output, session) {
                      "positive to fit a dropout model.")))
       } else {
         sum_by_trt <- df() %>%
-          dplyr::group_by(treatment) %>%
-          dplyr::summarise(c0 = sum(dropout))
+          group_by(treatment) %>%
+          summarise(c0 = sum(dropout))
 
         shiny::validate(
           need(all(sum_by_trt$c0 > 0),
@@ -1820,19 +1827,19 @@ server <- function(input, output, session) {
         if (to_predict() == "Enrollment and event" ||
             to_predict() == "Event only") {
           sum_by_trt <- df() %>%
-            dplyr::bind_rows(df() %>% dplyr::mutate(
+            bind_rows(df() %>% mutate(
               treatment = 9999, treatment_description = "Overall")) %>%
-            dplyr::group_by(treatment, treatment_description) %>%
-            dplyr::summarise(n0 = n(),
-                             d0 = sum(event),
-                             c0 = sum(dropout),
-                             r0 = sum(!(event | dropout)),
-                             rp = sum((time < as.numeric(
-                               cutoffdt - randdt + 1)) & !(event | dropout)),
-                             .groups = "drop")
+            group_by(treatment, treatment_description) %>%
+            summarise(n0 = n(),
+                      d0 = sum(event),
+                      c0 = sum(dropout),
+                      r0 = sum(!(event | dropout)),
+                      rp = sum((time < as.numeric(
+                        cutoffdt - randdt + 1)) & !(event | dropout)),
+                      .groups = "drop")
 
           if (any(sum_by_trt$rp) > 0) {
-            table <- t(sum_by_trt %>% dplyr::select(n0, d0, c0, r0, rp))
+            table <- t(sum_by_trt %>% select(n0, d0, c0, r0, rp))
             colnames(table) <- sum_by_trt$treatment_description
             rownames(table) <- c("Current number of subjects",
                                  "Current number of events",
@@ -1840,7 +1847,7 @@ server <- function(input, output, session) {
                                  "Number of ongoing subjects",
                                  "  With ongoing date before cutoff")
           } else {
-            table <- t(sum_by_trt %>% dplyr::select(n0, d0, c0, r0))
+            table <- t(sum_by_trt %>% select(n0, d0, c0, r0))
             colnames(table) <- sum_by_trt$treatment_description
             rownames(table) <- c("Current number of subjects",
                                  "Current number of events",
@@ -1850,26 +1857,26 @@ server <- function(input, output, session) {
 
         } else {
           sum_by_trt <- df() %>%
-            dplyr::bind_rows(df() %>% dplyr::mutate(
+            bind_rows(df() %>% mutate(
               treatment = 9999, treatment_description = "Overall")) %>%
-            dplyr::group_by(treatment, treatment_description) %>%
-            dplyr::summarise(n0 = n(), .groups = "drop")
+            group_by(treatment, treatment_description) %>%
+            summarise(n0 = n(), .groups = "drop")
 
-          table <- t(sum_by_trt %>% dplyr::select(n0))
+          table <- t(sum_by_trt %>% select(n0))
           colnames(table) <- sum_by_trt$treatment_description
           rownames(table) <- c("Current number of subjects")
         }
       } else {
         if (to_predict() == "Enrollment and event" ||
             to_predict() == "Event only") {
-          sum_overall <- dplyr::tibble(n0 = observed()$n0,
-                                       d0 = observed()$d0,
-                                       c0 = observed()$c0,
-                                       r0 = observed()$r0,
-                                       rp = observed()$rp)
+          sum_overall <- tibble(n0 = observed()$n0,
+                                d0 = observed()$d0,
+                                c0 = observed()$c0,
+                                r0 = observed()$r0,
+                                rp = observed()$rp)
 
           if (sum_overall$rp > 0) {
-            table <- t(sum_overall %>% dplyr::select(n0, d0, c0, r0, rp))
+            table <- t(sum_overall %>% select(n0, d0, c0, r0, rp))
             colnames(table) <- "Overall"
             rownames(table) <- c("Current number of subjects",
                                  "Current number of events",
@@ -1877,7 +1884,7 @@ server <- function(input, output, session) {
                                  "Number of ongoing subjects",
                                  "  With ongoing date before cutoff")
           } else {
-            table <- t(sum_overall %>% dplyr::select(n0, d0, c0, r0))
+            table <- t(sum_overall %>% select(n0, d0, c0, r0))
             colnames(table) <- "Overall"
             rownames(table) <- c("Current number of subjects",
                                  "Current number of events",
@@ -1885,7 +1892,7 @@ server <- function(input, output, session) {
                                  "Number of ongoing subjects")
           }
         } else {
-          table <- t(dplyr::tibble(n0 = observed()$n0))
+          table <- t(tibble(n0 = observed()$n0))
           colnames(table) <- "Overall"
           rownames(table) <- c("Current number of subjects")
         }
@@ -1930,32 +1937,92 @@ server <- function(input, output, session) {
   })
 
 
-  output$event_fit1 <- renderPlotly({
-    if (!is.null(event_fit())) event_fit()$event_fit_plot
+  # event fit information criteria
+  output$event_fit_ic <- renderText({
+    if (input$by_treatment && k() > 1) {
+      aic = sum(sapply(event_fit()$event_fit, function(fit) fit$aic))
+      bic = sum(sapply(event_fit()$event_fit, function(fit) fit$bic))
+      aictext = paste("Total AIC:", formatC(aic, format = "f", digits = 2))
+      bictext = paste("Total BIC:", formatC(bic, format = "f", digits = 2))
+      text1 = paste0("<i>", aictext, ", ", bictext, "</i>")
+    } else {
+      text1 = NULL
+    }
+
+    if (!is.null(text1)) text1
   })
 
+
+  # dropout fit information criteria
+  output$dropout_fit_ic <- renderText({
+    if (input$by_treatment && k() > 1) {
+      aic = sum(sapply(dropout_fit()$dropout_fit, function(fit) fit$aic))
+      bic = sum(sapply(dropout_fit()$dropout_fit, function(fit) fit$bic))
+      aictext = paste("Total AIC:", formatC(aic, format = "f", digits = 2))
+      bictext = paste("Total BIC:", formatC(bic, format = "f", digits = 2))
+      text1 = paste0("<i>", aictext, ", ", bictext, "</i>")
+    } else {
+      text1 = NULL
+    }
+
+    if (!is.null(text1)) text1
+  })
+
+
+  observe({
+    walk(1:10, function(i) {
+      output[[paste0("event_fit_output", i)]] <- renderPlotly({
+        if (i <= k()) {
+          if (input$by_treatment && k() > 1) {
+            event_fit()$event_fit_plot[[i]]
+          } else {
+            event_fit()$event_fit_plot
+          }
+        } else {
+          NULL
+        }
+      })
+
+      output[[paste0("dropout_fit_output", i)]] <- renderPlotly({
+        if (i <= k()) {
+          if (input$by_treatment && k() > 1) {
+            dropout_fit()$dropout_fit_plot[[i]]
+          } else {
+            dropout_fit()$dropout_fit_plot
+          }
+        } else {
+          NULL
+        }
+      })
+    })
+  })
+
+
+  event_fit_outputs <- reactive({
+    outputs <- map(1:k(), function(i) {
+      plotlyOutput(paste0("event_fit_output", i))
+    })
+
+    tagList(outputs)
+  })
 
   output$event_fit <- renderUI({
-    if (input$by_treatment && k() > 1) {
-      plotlyOutput("event_fit1", height=240*k())
-    } else {
-      plotlyOutput("event_fit1")
-    }
+    event_fit_outputs()
   })
 
 
-  output$dropout_fit1 <- renderPlotly({
-    if (!is.null(dropout_fit())) dropout_fit()$dropout_fit_plot
-  })
+  dropout_fit_outputs <- reactive({
+    outputs <- map(1:k(), function(i) {
+      plotlyOutput(paste0("dropout_fit_output", i))
+    })
 
+    tagList(outputs)
+  })
 
   output$dropout_fit <- renderUI({
-    if (input$by_treatment && k() > 1) {
-      plotlyOutput("dropout_fit1", height=240*k())
-    } else {
-      plotlyOutput("dropout_fit1")
-    }
+    dropout_fit_outputs()
   })
+
 
 
   # enrollment predication date
@@ -2083,8 +2150,8 @@ server <- function(input, output, session) {
   })
 
 
-  # enrollment prediction plot
-  output$pred_plot1 <- renderPlotly({
+  # enrollment and event prediction plot
+  pred_plot <- reactive({
     if (to_predict() == "Enrollment only") {
       req(pred()$enroll_pred)
       req(pred()$stage == input$stage && pred()$to_predict == to_predict())
@@ -2103,7 +2170,7 @@ server <- function(input, output, session) {
       enroll_pred_df <- pred()$enroll_pred$enroll_pred_df
       if ((!input$by_treatment || k() == 1) ||
           ((input$by_treatment || input$stage == 'Design stage') &&
-           k() > 1 &&
+           k() > 1 && "treatment" %in% names(enroll_pred_df) &&
            length(table(enroll_pred_df$treatment)) == k() + 1)) {
         g1 <- enroll_pred_plot
       } else {
@@ -2141,41 +2208,83 @@ server <- function(input, output, session) {
       }
 
 
-      dfs <- dplyr::tibble()
+      dfs <- tibble()
       if (showEnrollment())
-        dfs <- dfs %>% dplyr::bind_rows(pred()$event_pred$enroll_pred_df)
+        dfs <- dfs %>% bind_rows(pred()$event_pred$enroll_pred_df)
 
       if (showEvent())
-        dfs <- dfs %>% dplyr::bind_rows(pred()$event_pred$event_pred_df)
+        dfs <- dfs %>% bind_rows(pred()$event_pred$event_pred_df)
 
       if (showDropout())
-        dfs <- dfs %>% dplyr::bind_rows(pred()$event_pred$dropout_pred_df)
+        dfs <- dfs %>% bind_rows(pred()$event_pred$dropout_pred_df)
 
       if (showOngoing())
-        dfs <- dfs %>% dplyr::bind_rows(pred()$event_pred$ongoing_pred_df)
-
-
-      dfs$parameter <- factor(dfs$parameter, levels = c(
-        "Enrollment", "Event", "Dropout", "Ongoing"))
-
+        dfs <- dfs %>% bind_rows(pred()$event_pred$ongoing_pred_df)
 
       if ((!input$by_treatment || k() == 1) &&
           !("treatment" %in% names(dfs))) { # overall
         if (input$stage != 'Design stage') {
-          dfa <- dfs %>% dplyr::filter(is.na(lower))
-          dfb <- dfs %>% dplyr::filter(!is.na(lower))
+          dfa <- dfs %>% filter(is.na(lower))
+          dfb <- dfs %>% filter(!is.na(lower))
+
+          dfa_enrollment <- dfa %>% filter(parameter == "Enrollment")
+          dfb_enrollment <- dfb %>% filter(parameter == "Enrollment")
+          dfa_event <- dfa %>% filter(parameter == "Event")
+          dfb_event <- dfb %>% filter(parameter == "Event")
+          dfa_dropout <- dfa %>% filter(parameter == "Dropout")
+          dfb_dropout <- dfb %>% filter(parameter == "Dropout")
+          dfa_ongoing <- dfa %>% filter(parameter == "Ongoing")
+          dfb_ongoing <- dfb %>% filter(parameter == "Ongoing")
 
           g1 <- plotly::plot_ly() %>%
+            plotly::add_lines(
+              data = dfa_enrollment, x = ~date, y = ~n,
+              line = list(shape="hv", width=2),
+              name = "observed enrollment") %>%
+            plotly::add_lines(
+              data = dfb_enrollment, x = ~date, y = ~n,
+              line = list(width=2),
+              name = "median prediction enrollment") %>%
             plotly::add_ribbons(
-              data = dfb, x = ~date, ymin = ~lower, ymax = ~upper,
-              fill = "tonexty", fillcolor = ~parameter,
-              line = list(width=0)) %>%
+              data = dfb_enrollment, x = ~date, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval enrollment") %>%
             plotly::add_lines(
-              data = dfb, x = ~date, y = ~n, color = ~parameter,
-              line = list(width=2)) %>%
+              data = dfa_event, x = ~date, y = ~n,
+              line = list(shape="hv", width=2),
+              name = "observed event") %>%
             plotly::add_lines(
-              data = dfa, x = ~date, y = ~n, color = ~parameter,
-              line = list(shape="hv", width=2)) %>%
+              data = dfb_event, x = ~date, y = ~n,
+              line = list(width=2),
+              name = "median prediction event") %>%
+            plotly::add_ribbons(
+              data = dfb_event, x = ~date, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval event") %>%
+            plotly::add_lines(
+              data = dfa_dropout, x = ~date, y = ~n,
+              line = list(shape="hv", width=2),
+              name = "observed dropout") %>%
+            plotly::add_lines(
+              data = dfb_dropout, x = ~date, y = ~n,
+              line = list(width=2),
+              name = "median prediction dropout") %>%
+            plotly::add_ribbons(
+              data = dfb_dropout, x = ~date, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval dropout") %>%
+            plotly::add_lines(
+              data = dfa_ongoing, x = ~date, y = ~n,
+              line = list(shape="hv", width=2),
+              name = "observed ongoing") %>%
+            plotly::add_lines(
+              data = dfb_ongoing, x = ~date, y = ~n,
+              line = list(width=2),
+              name = "median prediction ongoing") %>%
+            plotly::add_ribbons(
+              data = dfb_ongoing, x = ~date, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval ongoing") %>%
             plotly::add_lines(
               x = rep(observed()$cutoffdt, 2),
               y = c(min(dfa$n), max(dfb$upper)),
@@ -2187,9 +2296,7 @@ server <- function(input, output, session) {
                 xanchor = "left", yanchor = "bottom", font = list(size = 12),
                 showarrow = FALSE),
               xaxis = list(title = "", zeroline = FALSE),
-              yaxis = list(zeroline = FALSE),
-              legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                            orientation = 'h'))
+              yaxis = list(zeroline = FALSE))
 
           if (observed()$tp < observed()$t0) {
             g1 <- g1 %>%
@@ -2221,20 +2328,48 @@ server <- function(input, output, session) {
                   showarrow = FALSE))
           }
         } else {  # Design stage
+          dfs_enrollment <- dfs %>% filter(parameter == "Enrollment")
+          dfs_event <- dfs %>% filter(parameter == "Event")
+          dfs_dropout <- dfs %>% filter(parameter == "Dropout")
+          dfs_ongoing <- dfs %>% filter(parameter == "Ongoing")
+
           g1 <- plotly::plot_ly() %>%
-            plotly::add_ribbons(
-              data = dfs, x = ~t, ymin = ~lower, ymax = ~upper,
-              fill = "tonexty", fillcolor = ~parameter,
-              line = list(width=0)) %>%
             plotly::add_lines(
-              data = dfs, x = ~t, y = ~n, color = ~parameter,
-              line = list(width=2)) %>%
+              data = dfs_enrollment, x = ~t, y = ~n,
+              line = list(width=2),
+              name = "median prediction enrollment") %>%
+            plotly::add_ribbons(
+              data = dfs_enrollment, x = ~t, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval enrollment") %>%
+            plotly::add_lines(
+              data = dfs_event, x = ~t, y = ~n,
+              line = list(width=2),
+              name = "median prediction event") %>%
+            plotly::add_ribbons(
+              data = dfs_event, x = ~t, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval event") %>%
+            plotly::add_lines(
+              data = dfs_dropout, x = ~t, y = ~n,
+              line = list(width=2),
+              name = "median prediction dropout") %>%
+            plotly::add_ribbons(
+              data = dfs_dropout, x = ~t, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval dropout") %>%
+            plotly::add_lines(
+              data = dfs_ongoing, x = ~t, y = ~n,
+              line = list(width=2),
+              name = "median prediction ongoing") %>%
+            plotly::add_ribbons(
+              data = dfs_ongoing, x = ~t, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval ongoing") %>%
             plotly::layout(
               xaxis = list(title = "Days since trial start",
                            zeroline = FALSE),
-              yaxis = list(zeroline = FALSE),
-              legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                            orientation = 'h'))
+              yaxis = list(zeroline = FALSE))
 
           if (showEvent()) {
             g1 <- g1 %>%
@@ -2251,30 +2386,77 @@ server <- function(input, output, session) {
           }
         }
       } else if (((input$by_treatment || input$stage == 'Design stage') &&
-                  k() > 1) &&
-                 ("treatment" %in% names(dfs)) &&
+                  k() > 1) && ("treatment" %in% names(dfs)) &&
                  (length(table(dfs$treatment)) == k() + 1)) { # by treatment
         if (input$stage != 'Design stage') {
-          dfa <- dfs %>% dplyr::filter(is.na(lower))
-          dfb <- dfs %>% dplyr::filter(!is.na(lower))
+          dfa <- dfs %>% filter(is.na(lower))
+          dfb <- dfs %>% filter(!is.na(lower))
 
           g <- list()
           for (i in c(9999, 1:k())) {
-            dfsi <- dfs %>% dplyr::filter(treatment == i)
-            dfbi <- dfb %>% dplyr::filter(treatment == i)
-            dfai <- dfa %>% dplyr::filter(treatment == i)
+            dfsi <- dfs %>% filter(treatment == i)
+            dfbi <- dfb %>% filter(treatment == i)
+            dfai <- dfa %>% filter(treatment == i)
+
+            dfai_enrollment <- dfai %>% filter(parameter == "Enrollment")
+            dfbi_enrollment <- dfbi %>% filter(parameter == "Enrollment")
+            dfai_event <- dfai %>% filter(parameter == "Event")
+            dfbi_event <- dfbi %>% filter(parameter == "Event")
+            dfai_dropout <- dfai %>% filter(parameter == "Dropout")
+            dfbi_dropout <- dfbi %>% filter(parameter == "Dropout")
+            dfai_ongoing <- dfai %>% filter(parameter == "Ongoing")
+            dfbi_ongoing <- dfbi %>% filter(parameter == "Ongoing")
 
             g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
+              plotly::add_lines(
+                data = dfai_enrollment, x = ~date, y = ~n,
+                line = list(shape="hv", width=2),
+                name = "observed enrollment") %>%
+              plotly::add_lines(
+                data = dfbi_enrollment, x = ~date, y = ~n,
+                line = list(width=2),
+                name = "median prediction enrollment") %>%
               plotly::add_ribbons(
-                data = dfbi, x = ~date, ymin = ~lower, ymax = ~upper,
-                fill = "tonexty", fillcolor = ~parameter,
-                line = list(width=0)) %>%
+                data = dfbi_enrollment, x = ~date,
+                ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval enrollment") %>%
               plotly::add_lines(
-                data = dfbi, x = ~date, y = ~n, color = ~parameter,
-                line = list(width=2)) %>%
+                data = dfai_event, x = ~date, y = ~n,
+                line = list(shape="hv", width=2),
+                name = "observed event") %>%
               plotly::add_lines(
-                data = dfai, x = ~date, y = ~n, color = ~parameter,
-                line = list(shape="hv", width=2)) %>%
+                data = dfbi_event, x = ~date, y = ~n,
+                line = list(width=2),
+                name = "median prediction event") %>%
+              plotly::add_ribbons(
+                data = dfbi_event, x = ~date, ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval event") %>%
+              plotly::add_lines(
+                data = dfai_dropout, x = ~date, y = ~n,
+                line = list(shape="hv", width=2),
+                name = "observed dropout") %>%
+              plotly::add_lines(
+                data = dfbi_dropout, x = ~date, y = ~n,
+                line = list(width=2),
+                name = "median prediction dropout") %>%
+              plotly::add_ribbons(
+                data = dfbi_dropout, x = ~date, ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval dropout") %>%
+              plotly::add_lines(
+                data = dfai_ongoing, x = ~date, y = ~n,
+                line = list(shape="hv", width=2),
+                name = "observed ongoing") %>%
+              plotly::add_lines(
+                data = dfbi_ongoing, x = ~date, y = ~n,
+                line = list(width=2),
+                name = "median prediction ongoing") %>%
+              plotly::add_ribbons(
+                data = dfbi_ongoing, x = ~date, ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval ongoing") %>%
               plotly::add_lines(
                 x = rep(observed()$cutoffdt, 2),
                 y = c(min(dfai$n), max(dfbi$upper)),
@@ -2282,9 +2464,7 @@ server <- function(input, output, session) {
                 showlegend = FALSE) %>%
               plotly::layout(
                 xaxis = list(title = "", zeroline = FALSE),
-                yaxis = list(zeroline = FALSE),
-                legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                              orientation = 'h')) %>%
+                yaxis = list(zeroline = FALSE)) %>%
               plotly::layout(
                 annotations = list(
                   x = 0.5, y = 1,
@@ -2341,22 +2521,50 @@ server <- function(input, output, session) {
         } else {  # Design stage
           g <- list()
           for (i in c(9999, 1:k())) {
-            dfsi <- dfs %>% dplyr::filter(treatment == i)
+            dfsi <- dfs %>% filter(treatment == i)
+
+            dfsi_enrollment <- dfsi %>% filter(parameter == "Enrollment")
+            dfsi_event <- dfsi %>% filter(parameter == "Event")
+            dfsi_dropout <- dfsi %>% filter(parameter == "Dropout")
+            dfsi_ongoing <- dfsi %>% filter(parameter == "Ongoing")
 
             g[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
-              plotly::add_ribbons(
-                data = dfsi, x = ~t, ymin = ~lower, ymax = ~upper,
-                fill = "tonexty", fillcolor = ~parameter,
-                line = list(width=0)) %>%
               plotly::add_lines(
-                data = dfsi, x = ~t, y = ~n, color = ~parameter,
-                line = list(width=2)) %>%
+                data = dfsi_enrollment, x = ~t, y = ~n,
+                line = list(width=2),
+                name = "median prediction enrollment") %>%
+              plotly::add_ribbons(
+                data = dfsi_enrollment, x = ~t, ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval enrollment") %>%
+              plotly::add_lines(
+                data = dfsi_event, x = ~t, y = ~n,
+                line = list(width=2),
+                name = "median prediction event") %>%
+              plotly::add_ribbons(
+                data = dfsi_event, x = ~t, ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval event") %>%
+              plotly::add_lines(
+                data = dfsi_dropout, x = ~t, y = ~n,
+                line = list(width=2),
+                name = "median prediction dropout") %>%
+              plotly::add_ribbons(
+                data = dfsi_dropout, x = ~t, ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval dropout") %>%
+              plotly::add_lines(
+                data = dfsi_ongoing, x = ~t, y = ~n,
+                line = list(width=2),
+                name = "median prediction ongoing") %>%
+              plotly::add_ribbons(
+                data = dfsi_ongoing, x = ~t, ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval ongoing") %>%
               plotly::layout(
                 xaxis = list(title = "Days since trial start",
                              zeroline = FALSE),
-                yaxis = list(zeroline = FALSE),
-                legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                              orientation = 'h')) %>%
+                yaxis = list(zeroline = FALSE)) %>%
               plotly::layout(
                 annotations = list(
                   x = 0.5, y = 1,
@@ -2384,7 +2592,7 @@ server <- function(input, output, session) {
           }
         }
 
-        g1 <- plotly::subplot(g, nrows = k() + 1, margin = 0.05)
+        g1 <- g
       } else {
         g1 <- NULL
       }
@@ -2395,13 +2603,49 @@ server <- function(input, output, session) {
   })
 
 
-  output$pred_plot <- renderUI({
-    if (input$by_treatment && k() > 1) {
-      plotlyOutput("pred_plot1", height=250*(k()+1))
-    } else {
-      plotlyOutput("pred_plot1")
-    }
+
+  mult_plot <- reactive({
+    (to_predict() == "Enrollment only" &&
+       (input$by_treatment || input$stage == 'Design stage') && k() > 1 &&
+       "treatment" %in% names(pred()$enroll_pred$enroll_pred_df) &&
+       length(table(pred()$enroll_pred$enroll_pred_df$treatment)) == k()+1) ||
+      (to_predict() != "Enrollment only" &&
+         (input$by_treatment || input$stage == 'Design stage') && k() > 1 &&
+         "treatment" %in% names(pred()$event_pred$event_pred_df) &&
+         length(table(pred()$event_pred$event_pred_df$treatment)) == k()+1)
   })
+
+
+  observe({
+    walk(1:10, function(i) {
+      output[[paste0("pred_plot_output", i)]] <- renderPlotly({
+        if (i <= k() + 1) {
+          if (mult_plot()) {
+            pred_plot()[[i]]
+          } else {
+            pred_plot()
+          }
+        } else {
+          NULL
+        }
+      })
+    })
+  })
+
+
+  pred_plot_outputs <- reactive({
+    n = ifelse(mult_plot(), k() + 1, 1)
+    outputs <- map(1:n, function(i) {
+      plotlyOutput(paste0("pred_plot_output", i))
+    })
+
+    tagList(outputs)
+  })
+
+  output$pred_plot <- renderUI({
+    pred_plot_outputs()
+  })
+
 
 
   output$downloadEventSummaryData <- downloadHandler(
@@ -2413,9 +2657,9 @@ server <- function(input, output, session) {
         eventsummarydata <- pred()$enroll_pred$enroll_pred_df
       } else {
         eventsummarydata <- pred()$event_pred$enroll_pred_df %>%
-          dplyr::bind_rows(pred()$event_pred$event_pred_df) %>%
-          dplyr::bind_rows(pred()$event_pred$dropout_pred_df) %>%
-          dplyr::bind_rows(pred()$event_pred$ongoing_pred_df)
+          bind_rows(pred()$event_pred$event_pred_df) %>%
+          bind_rows(pred()$event_pred$dropout_pred_df) %>%
+          bind_rows(pred()$event_pred$ongoing_pred_df)
       }
       writexl::write_xlsx(eventsummarydata, file)
     }
