@@ -174,9 +174,10 @@ summarizeObserved <- function(df, to_predict = "event only",
       "treatment", "treatment_description", "randdt")][, mget(cols)]
 
     # dummy subject to initialize time axis at trial start
-    adsl0 <- data.table(
+    adsl0 <- merge(data.table(
       treatment = 1:ngroups, n = 0, parameter = "Enrollment",
-      date = trialsdt)[treatment_mapping, on = "treatment"]
+      date = trialsdt),
+      treatment_mapping, by = "treatment", all.x = TRUE)
 
     # extend enrollment information to cutoff date
     adsl1 <- adsl[, .SD[.N],
@@ -334,11 +335,10 @@ summarizeObserved <- function(df, to_predict = "event only",
       kmfitEvent <- survival::survfit(survival::Surv(time, event) ~
                                         treatment, data = adtte)
 
-      treatment <- as.numeric(substring(names(kmfitEvent$strata), 11))
+      treatments <- as.numeric(substring(names(kmfitEvent$strata), 11))
 
       treatment_description <- treatment_mapping[
-        data.table(treatment = treatment), on = "treatment",
-        get("treatment_description")]
+        get("treatment") %in% treatments, get("treatment_description")]
 
       kmdfEvent <- data.table::rbindlist(list(
         data.table(treatment = treatment,
@@ -368,11 +368,10 @@ summarizeObserved <- function(df, to_predict = "event only",
       kmfitDropout <- survival::survfit(survival::Surv(time, dropout) ~
                                           treatment, data = adtte)
 
-      treatment <- as.numeric(substring(names(kmfitDropout$strata), 11))
+      treatments <- as.numeric(substring(names(kmfitDropout$strata), 11))
 
       treatment_description <- treatment_mapping[
-        data.table(treatment = treatment), on = "treatment",
-        get("treatment_description")]
+        get("treatment") %in% treatments, get("treatment_description")]
 
       kmdfDropout <- data.table::rbindlist(list(
         data.table(treatment = treatment,
