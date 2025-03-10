@@ -156,11 +156,9 @@
 #' estimation of treatment effects. Stat in Med. 2002; 21:2175-2197.
 #'
 #'
-#' @importFrom data.table as.data.table CJ copy data.table
-#'   rbindlist setDT setnames setorder setorderv uniqueN .I .N := .SD
-#' @importFrom dplyr %>% arrange as_tibble bind_rows cross_join filter
-#'   group_by mutate n rename rename_all row_number select slice
-#'   summarize tibble
+#' @importFrom data.table copy data.table
+#'   rbindlist setDT setorderv uniqueN .I .N .SD :=
+#' @importFrom magrittr %>%
 #' @importFrom plotly plot_ly add_lines add_ribbons hide_legend layout
 #' @importFrom survival Surv survfit survreg
 #' @importFrom splines bs
@@ -177,7 +175,6 @@
 #'   dllogis pllogis
 #' @importFrom erify check_bool check_class check_content check_n
 #'   check_positive
-#' @importFrom rlang .data
 #' @importFrom shiny shinyAppDir
 #'
 NULL
