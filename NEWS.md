@@ -1,3 +1,14 @@
+# eventPred 0.2.7
+
+* update the documentation of fitEvent and fitDropout
+* replace dplyr with data.table
+
+# eventPred 0.2.6
+
+* add fix_parameter to predictEnrollment, predictEvent, and getPrediction to allow the parameters to be fixed at the maximum likelihood estimates instead of being drawn from the approximate posterior distributions
+
+* update the use of showplot with respect to the use of showEnrollment, showEvent, showDropout, and showOngoing in predictEvent
+
 # eventPred 0.2.5
 
 * rename the components of fitEnrollment output to fit and fit_plot
