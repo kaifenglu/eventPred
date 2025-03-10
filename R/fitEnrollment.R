@@ -42,8 +42,9 @@
 #'
 #' @examples
 #'
-#' enroll_fit <- fitEnrollment(df = interimData1, enroll_model = "b-spline",
-#'                             nknots = 1)
+#' enroll_fit <- fitEnrollment(
+#'   df = interimData1, enroll_model = "b-spline",
+#'   nknots = 1)
 #'
 #' @export
 #'
@@ -67,8 +68,8 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   erify::check_bool(showplot)
 
-  setDT(df)
-  setnames(df, tolower(names(df)))
+  data.table::setDT(df)
+
   df$trialsdt <- as.Date(df$trialsdt)
   df$randdt <- as.Date(df$randdt)
   df$cutoffdt <- as.Date(df$cutoffdt)
@@ -76,6 +77,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   trialsdt = df[1, get("trialsdt")]
   cutoffdt = df[1, get("cutoffdt")]
   n0 = nrow(df)
+
   # up to the last randomization date to account for enrollment completion
   t0 = df[, max(as.numeric(get("randdt") - get("trialsdt") + 1))]
 
@@ -90,16 +92,15 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     stop("randdt must be less than or equal to cutoffdt")
   }
 
-  df1 <- df[order(get("randdt")), `:=`(
-    t = as.numeric(get("randdt") - get("trialsdt") + 1),
-    n = .I)]
+  df1 <- df[order(get("randdt"))][, `:=`(
+    t = as.numeric(get("randdt") - get("trialsdt") + 1), n = .I)]
 
   # remove duplicates
-  df1u <- df1[, .SD[.N], keyby = "randdt"][, mget(c("t", "n"))]
+  df1u <- df1[, .SD[.N], by = "randdt"][, mget(c("t", "n"))]
 
   # add day 1
   df0 <- data.table(t = 1, n = 0)
-  df1u <- rbindlist(list(df0, df1u), use.names = TRUE)
+  df1u <- data.table::rbindlist(list(df0, df1u), use.names = TRUE)
 
   # fit enrollment model
   if (tolower(enroll_model) == "poisson") {
