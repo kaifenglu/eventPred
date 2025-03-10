@@ -188,6 +188,7 @@
 #'
 #' @examples
 #' # Event prediction after enrollment completion
+#' set.seed(3000)
 #'
 #' pred <- getPrediction(
 #'   df = interimData2, to_predict = "event only",
@@ -200,7 +201,7 @@
 #'
 getPrediction <- function(
     df = NULL, to_predict = "enrollment and event",
-    target_n = NA_real_, target_d = NA_real_,
+    target_n = NA, target_d = NA,
     enroll_model = "b-spline", nknots = 0, lags = 30,
     accrualTime = 0,
     enroll_prior = NULL,
@@ -245,14 +246,11 @@ getPrediction <- function(
   }
 
   if (is.null(df)) by_treatment = TRUE
-  if (!is.null(df)) {
-    setDT(df)
-    setnames(df, tolower(names(df)))
-  }
+  if (!is.null(df)) data.table::setDT(df)
 
   if (by_treatment) {
     if (!is.null(df)) {
-      ngroups = df[, uniqueN(get("treatment"))]
+      ngroups = df[, data.table::uniqueN(get("treatment"))]
     }
 
     if (is.null(alloc)) {
@@ -754,10 +752,11 @@ getPrediction <- function(
   if (!is.null(df)) {
     cols = colnames(df)
 
-    req_cols = c("trialsdt", "usubjid", "randdt", "cutoffdt")
-
-    if (grepl("event", to_predict, ignore.case = TRUE)) {
-      req_cols <- c(req_cols, "time", "event", "dropout")
+    if (tolower(to_predict) == "enrollment only") {
+      req_cols = c("trialsdt", "usubjid", "randdt", "cutoffdt")
+    } else {
+      req_cols = c("trialsdt", "usubjid", "randdt", "time", "event",
+                   "dropout", "cutoffdt")
     }
 
     if (by_treatment) {
@@ -867,9 +866,9 @@ getPrediction <- function(
 
       if (by_treatment) {
         sum_by_trt <- df[, list(
-          n0 = .I, d0 = sum(get("event")), c0 = sum(get("dropout")),
+          n0 = .N, d0 = sum(get("event")), c0 = sum(get("dropout")),
           r0 = sum(!(get("event") | get("dropout")))),
-          keyby = "treatment"]
+          by = "treatment"]
       }
 
       # convert prior by treatment to prior overall
@@ -1426,7 +1425,9 @@ getPrediction <- function(
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
             covariates_event, event_fit1_w_x,
-            fix_parameter = fix_parameter)
+            covariates_dropout,
+            dropout_fit_with_covariates = NULL,
+            fix_parameter)
         } else {
           event_pred <- predictEvent(
             df = df, target_d,
@@ -1437,7 +1438,9 @@ getPrediction <- function(
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
             covariates_event, event_fit1_w_x,
-            fix_parameter = fix_parameter)
+            covariates_dropout,
+            dropout_fit_with_covariates = NULL,
+            fix_parameter)
         }
       }
     } else { # event prediction at design stage
@@ -1450,7 +1453,11 @@ getPrediction <- function(
           fixedFollowup, followupTime, pilevel, nyears, nreps,
           showEnrollment, showEvent, showDropout, showOngoing,
           showsummary, showplot = FALSE, by_treatment,
-          fix_parameter = fix_parameter)
+          covariates_event,
+          event_fit_with_covariates = event_prior_with_covariates,
+          covariates_dropout,
+          dropout_fit_with_covariates = dropout_prior_with_covariates,
+          fix_parameter)
       } else {
         event_pred <- predictEvent(
           df = NULL, target_d,
@@ -1460,7 +1467,11 @@ getPrediction <- function(
           fixedFollowup, followupTime, pilevel, nyears, nreps,
           showEnrollment, showEvent, showDropout, showOngoing,
           showsummary, showplot = FALSE, by_treatment,
-          fix_parameter = fix_parameter)
+          covariates_event,
+          event_fit_with_covariates = event_prior_with_covariates,
+          covariates_dropout,
+          dropout_fit_with_covariates = dropout_prior_with_covariates,
+          fix_parameter)
       }
     }
   }
@@ -1473,13 +1484,13 @@ getPrediction <- function(
       df[, `:=`(arrivalTime = as.numeric(get("randdt") - get("trialsdt")+1))]
 
       if (by_treatment) {
-        subject_data <- rbindlist(list(
+        subject_data <- data.table::rbindlist(list(
           df[, `:=`(draw = 0)][
             , mget(c("draw", "usubjid", "arrivalTime",
                      "treatment", "treatment_description"))],
           subject_data), use.names = TRUE)
       } else {
-        subject_data <- rbindlist(list(
+        subject_data <- data.table::rbindlist(list(
           df[, `:=`(draw = 0)][
             , mget(c("draw", "usubjid", "arrivalTime"))],
           subject_data), use.names = TRUE)
@@ -1494,14 +1505,14 @@ getPrediction <- function(
           get("time"))]
 
       if (by_treatment) {
-        subject_data <- rbindlist(list(
+        subject_data <- data.table::rbindlist(list(
           df[get("event") | get("dropout"), `:=`(draw = 0)][
             , mget(c("draw", "usubjid", "arrivalTime", "treatment",
                      "treatment_description", "time", "event",
                      "dropout", "totalTime"))],
           subject_data), use.names = TRUE)
       } else {
-        subject_data <- rbindlist(list(
+        subject_data <- data.table::rbindlist(list(
           df[get("event") | get("dropout"), `:=`(draw = 0)][
             , mget(c("draw", "usubjid", "arrivalTime", "time",
                      "event", "dropout", "totalTime"))],
