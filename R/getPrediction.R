@@ -83,6 +83,9 @@
 #'   it is set to 0.90.
 #' @param nyears The number of years after the data cut for prediction.
 #'   By default, it is set to 4.
+#' @param target_t The target number of days after the data cutoff
+#'   used to predict both the number of events and the probability
+#'   of achieving the target event count.
 #' @param nreps The number of replications for simulation. By default,
 #'   it is set to 500.
 #' @param showEnrollment A Boolean variable to control whether or not to
@@ -212,7 +215,8 @@ getPrediction <- function(
     k_dropout = 0, scale_dropout = "hazard",
     dropout_prior = NULL,
     fixedFollowup = FALSE, followupTime = 365,
-    pilevel = 0.90, nyears = 4, nreps = 500,
+    pilevel = 0.90, nyears = 4,
+    target_t = NA, nreps = 500,
     showEnrollment = TRUE, showEvent = TRUE,
     showDropout = FALSE, showOngoing = FALSE,
     showsummary = TRUE, showplot = TRUE,
@@ -1395,7 +1399,8 @@ getPrediction <- function(
             newSubjects = enroll_pred$newSubjects,
             event_fit = event_fit1,
             dropout_fit = dropout_fit1,
-            fixedFollowup, followupTime, pilevel, nyears, nreps,
+            fixedFollowup, followupTime, pilevel,
+            nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
             covariates_event, event_fit1_w_x,
@@ -1407,7 +1412,8 @@ getPrediction <- function(
             newSubjects = NULL,
             event_fit = event_fit1,
             dropout_fit = dropout_fit1,
-            fixedFollowup, followupTime, pilevel, nyears, nreps,
+            fixedFollowup, followupTime, pilevel,
+            nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
             covariates_event, event_fit1_w_x,
@@ -1421,7 +1427,8 @@ getPrediction <- function(
             newSubjects = enroll_pred$newSubjects,
             event_fit = event_fit1,
             dropout_fit = NULL,
-            fixedFollowup, followupTime, pilevel, nyears, nreps,
+            fixedFollowup, followupTime, pilevel,
+            nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
             covariates_event, event_fit1_w_x,
@@ -1434,7 +1441,8 @@ getPrediction <- function(
             newSubjects = NULL,
             event_fit = event_fit1,
             dropout_fit = NULL,
-            fixedFollowup, followupTime, pilevel, nyears, nreps,
+            fixedFollowup, followupTime, pilevel,
+            nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
             covariates_event, event_fit1_w_x,
@@ -1450,7 +1458,8 @@ getPrediction <- function(
           newSubjects = enroll_pred$newSubjects,
           event_fit = event_prior,
           dropout_fit = dropout_prior,
-          fixedFollowup, followupTime, pilevel, nyears, nreps,
+          fixedFollowup, followupTime, pilevel,
+          nyears, target_t, nreps,
           showEnrollment, showEvent, showDropout, showOngoing,
           showsummary, showplot = FALSE, by_treatment,
           covariates_event,
@@ -1464,7 +1473,8 @@ getPrediction <- function(
           newSubjects = enroll_pred$newSubjects,
           event_fit = event_prior,
           dropout_fit = NULL,
-          fixedFollowup, followupTime, pilevel, nyears, nreps,
+          fixedFollowup, followupTime, pilevel,
+          nyears, target_t, nreps,
           showEnrollment, showEvent, showDropout, showOngoing,
           showsummary, showplot = FALSE, by_treatment,
           covariates_event,

@@ -31,6 +31,9 @@
 #'   it is set to 0.90.
 #' @param nyears The number of years after the data cut for prediction.
 #'   By default, it is set to 4.
+#' @param target_t The target number of days after the data cutoff
+#'   used to predict both the number of events and the probability
+#'   of achieving the target event count.
 #' @param nreps The number of replications for simulation. By default,
 #'   it is set to 500. If \code{newSubjects} is not \code{NULL},
 #'   the number of draws in \code{newSubjects} should be \code{nreps}.
@@ -94,8 +97,11 @@
 #' information such as the median, lower and upper percentiles for
 #' the estimated day and date to reach the target number of events,
 #' as well as simulated event data for both ongoing and new subjects.
-#' The data for the prediction plot is also included
-#' within this list.
+#' The data for the prediction plot is also included within this list.
+#' If target_t is specified, it additionally provides the median,
+#' lower, and upper percentiles of the event count at target_t,
+#' as well as the predictive probability of achieving the target
+#' number of events by target_t.
 #'
 #' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
 #'
@@ -131,7 +137,8 @@
 predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                          event_fit = NULL, dropout_fit = NULL,
                          fixedFollowup = FALSE, followupTime = 365,
-                         pilevel = 0.90, nyears = 4, nreps = 500,
+                         pilevel = 0.90, nyears = 4,
+                         target_t = NA, nreps = 500,
                          showEnrollment = TRUE, showEvent = TRUE,
                          showDropout = FALSE, showOngoing = FALSE,
                          showsummary = TRUE, showplot = TRUE,
@@ -354,6 +361,14 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
   erify::check_bool(showsummary)
   erify::check_bool(showplot)
   erify::check_bool(fix_parameter)
+
+  if (!all(is.na(target_t))) {
+    target_t <- target_t[!is.na(target_t)]
+    if (any(target_t <= 0 | target_t > nyears*365)) {
+      stop("target_t must be positive and less than nyears*365")
+    }
+  }
+
 
   if (showplot && !(showEnrollment || showEvent ||
                     showDropout || showOngoing)) {
@@ -1537,7 +1552,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
   # T_i(target_d) is the time to reach target_d for data set i.
   sdf <- function(t, target_d, d0, newEvents) {
     sumdata <- newEvents[, list(
-      n = sum(get("totalTime") <= t & get("event")), by = "draw")]
+      n = sum(get("totalTime") <= t & get("event"))), by = "draw"]
     mean(sumdata$n < target_d - d0)
   }
 
@@ -1583,11 +1598,37 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
   }
 
 
+  # A function to evaluate the number of events at target_t
+  f_pred_at_t <- function(t, target_d, d0, newEvents) {
+    sumdata <- newEvents[, list(
+      n = sum(get("totalTime") <= t & get("event"))), by = "draw"]
+    q <- quantile(sumdata$n, probs = c(0.5, plower, pupper)) + d0
+    prob <- mean(sumdata$n >= target_d - d0)
+    data.table(t = t, median_d = q[1], pilevel = pilevel,
+               lower = q[2], upper = q[3],
+               target_d = target_d, prob_gt_target_d = prob)
+  }
+
+  if (!all(is.na(target_t))) {
+    pred_at_t <- data.table::rbindlist(
+      purrr::map(target_t, function(u) {
+        dt <- f_pred_at_t(u + t0, target_d, d0, newEvents)
+        if (!is.null(df)) {
+          dt[, `:=`(date = as.Date(get("t"), origin = trialsdt))]
+        }
+        dt
+      }))
+  }
+
+
   # observed time points
   t2 = sort(unique(c(df$arrivalTime, df$totalTime)))
 
   # future time points at which to predict number of events
   t = unique(c(t2[t2 >= tp], seq(t0, t1, 30), t1))
+  if (!all(is.na(target_t))) {
+    t = sort(unique(t, target_t + t0))
+  }
 
   if (!by_treatment) {
     # number of events, dropouts, and ongoing subjects after data cut
@@ -1805,6 +1846,20 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             xaxis = list(title = "", zeroline = FALSE),
             yaxis = list(zeroline = FALSE))
 
+        if (!all(is.na(target_t))) {
+          g1 <- g1 %>%
+            plotly::layout(
+              shapes = lapply(pred_at_t$date, function(date) {
+                list(
+                  type = "line",
+                  x0 = date, x1 = date,
+                  y0 = min(dfa$n), y1 = max(dfb$upper),
+                  line = list(color = "lightgreen", dash = "dash")
+                )
+              })
+            )
+        }
+
         if (tp < t0) {
           g1 <- g1 %>%
             plotly::add_lines(
@@ -1873,6 +1928,22 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           plotly::layout(
             xaxis = list(title = "Days since trial start", zeroline = FALSE),
             yaxis = list(zeroline = FALSE))
+
+
+        if (!all(is.na(target_t))) {
+          g1 <- g1 %>%
+            plotly::layout(
+              shapes = lapply(pred_at_t$t, function(t) {
+                list(
+                  type = "line",
+                  x0 = t, x1 = t,
+                  y0 = min(dfs$n), y1 = max(dfs$upper),
+                  line = list(color = "lightgreen", dash = "dash")
+                )
+              })
+            )
+        }
+
 
         if (showEvent) {
           g1 <- g1 %>%
@@ -2150,6 +2221,22 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                   yanchor = "bottom", font = list(size=12),
                   showarrow = FALSE))
 
+
+            if (!all(is.na(target_t))) {
+              g1[[1]] <- g1[[1]] %>%
+                plotly::layout(
+                  shapes = lapply(pred_at_t$date, function(date) {
+                    list(
+                      type = "line",
+                      x0 = date, x1 = date,
+                      y0 = min(dfai$n), y1 = max(dfbi$upper),
+                      line = list(color = "lightgreen", dash = "dash")
+                    )
+                  })
+                )
+            }
+
+
             if (tp < t0) {
               g1[[1]] <- g1[[1]] %>%
                 plotly::layout(
@@ -2231,6 +2318,20 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
 
           if (i == 9999) {
+            if (!all(is.na(target_t))) {
+              g1[[1]] <- g1[[1]] %>%
+                plotly::layout(
+                  shapes = lapply(pred_at_t$t, function(t) {
+                    list(
+                      type = "line",
+                      x0 = t, x1 = t,
+                      y0 = min(dfsi$lower), y1 = max(dfsi$upper),
+                      line = list(color = "lightgreen", dash = "dash")
+                    )
+                  })
+                )
+            }
+
             if (showEvent) {
               g1[[1]]  <- g1[[1]] %>%
                 plotly::add_lines(
@@ -2252,54 +2353,70 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
   }
 
 
-  if (showsummary) cat(s1)
+  if (showsummary) {
+    cat(s1)
+    if (!all(is.na(target_t))) {
+      print(as.data.frame(pred_at_t))
+    }
+  }
+
   if (showplot) print(g1)
 
   if (!is.null(df)) {
     if (showEnrollment | showEvent | showDropout | showOngoing) {
-      list(target_d = target_d,
-           cutoffdt = cutoffdt, cutofftpdt = cutofftpdt,
-           event_pred_day = pred_day, event_pred_date = pred_date,
-           pilevel = pilevel, nyears = nyears, nreps = nreps,
-           newEvents = newEvents,
-           enroll_pred_df = enroll_pred_df,
-           event_pred_df = event_pred_df,
-           dropout_pred_df = dropout_pred_df,
-           ongoing_pred_df = ongoing_pred_df,
-           event_pred_summary = s1, event_pred_plot = g1)
+      out <- list(
+        target_d = target_d,
+        cutoffdt = cutoffdt, cutofftpdt = cutofftpdt,
+        event_pred_day = pred_day, event_pred_date = pred_date,
+        pilevel = pilevel, nyears = nyears, nreps = nreps,
+        newEvents = newEvents,
+        enroll_pred_df = enroll_pred_df,
+        event_pred_df = event_pred_df,
+        dropout_pred_df = dropout_pred_df,
+        ongoing_pred_df = ongoing_pred_df,
+        event_pred_summary = s1, event_pred_plot = g1)
     } else {
-      list(target_d = target_d,
-           cutoffdt = cutoffdt, cutofftpdt = cutofftpdt,
-           event_pred_day = pred_day, event_pred_date = pred_date,
-           pilevel = pilevel, nyears = nyears, nreps = nreps,
-           newEvents = newEvents,
-           enroll_pred_df = enroll_pred_df,
-           event_pred_df = event_pred_df,
-           dropout_pred_df = dropout_pred_df,
-           ongoing_pred_df = ongoing_pred_df,
-           event_pred_summary = s1)
+      out <- list(
+        target_d = target_d,
+        cutoffdt = cutoffdt, cutofftpdt = cutofftpdt,
+        event_pred_day = pred_day, event_pred_date = pred_date,
+        pilevel = pilevel, nyears = nyears, nreps = nreps,
+        newEvents = newEvents,
+        enroll_pred_df = enroll_pred_df,
+        event_pred_df = event_pred_df,
+        dropout_pred_df = dropout_pred_df,
+        ongoing_pred_df = ongoing_pred_df,
+        event_pred_summary = s1)
     }
   } else {
     if (showEnrollment | showEvent | showDropout | showOngoing) {
-      list(target_d = target_d,
-           event_pred_day = pred_day,
-           pilevel = pilevel, nyears = nyears, nreps = nreps,
-           newEvents = newEvents,
-           enroll_pred_df = enroll_pred_df,
-           event_pred_df = event_pred_df,
-           dropout_pred_df = dropout_pred_df,
-           ongoing_pred_df = ongoing_pred_df,
-           event_pred_summary = s1, event_pred_plot = g1)
+      out <- list(
+        target_d = target_d,
+        event_pred_day = pred_day,
+        pilevel = pilevel, nyears = nyears, nreps = nreps,
+        newEvents = newEvents,
+        enroll_pred_df = enroll_pred_df,
+        event_pred_df = event_pred_df,
+        dropout_pred_df = dropout_pred_df,
+        ongoing_pred_df = ongoing_pred_df,
+        event_pred_summary = s1, event_pred_plot = g1)
     } else {
-      list(target_d = target_d,
-           event_pred_day = pred_day,
-           pilevel = pilevel, nyears = nyears, nreps = nreps,
-           newEvents = newEvents,
-           enroll_pred_df = enroll_pred_df,
-           event_pred_df = event_pred_df,
-           dropout_pred_df = dropout_pred_df,
-           ongoing_pred_df = ongoing_pred_df,
-           event_pred_summary = s1)
+      out <- list(
+        target_d = target_d,
+        event_pred_day = pred_day,
+        pilevel = pilevel, nyears = nyears, nreps = nreps,
+        newEvents = newEvents,
+        enroll_pred_df = enroll_pred_df,
+        event_pred_df = event_pred_df,
+        dropout_pred_df = dropout_pred_df,
+        ongoing_pred_df = ongoing_pred_df,
+        event_pred_summary = s1)
     }
   }
+
+  if (!all(is.na(target_t))) {
+    out$pred_at_t <- pred_at_t
+  }
+
+  out
 }
