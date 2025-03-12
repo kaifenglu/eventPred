@@ -4,6 +4,6 @@
 #' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
 #'
 #' @export
-runShinyApp <- function() {
+runShinyApp_eventPred <- function() {
   shiny::shinyAppDir(system.file("shinyApp", package = "eventPred"))
 }
