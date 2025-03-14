@@ -146,17 +146,17 @@ predictEnrollment <- function(df = NULL, target_n = NA,
   erify::check_bool(fix_parameter)
 
   if (is.null(df)) by_treatment = TRUE
-  if (!is.null(df)) data.table::setDT(df)
+  if (!is.null(df)) dt <- data.table::setDT(data.table::copy(df))
 
   if (by_treatment) {
     # create treatment_mapping, treatment_label, ngroups, and alloc
     if (!is.null(df)) {
-      if (!("treatment_description" %in% names(df))) {
-        df[, `:=`(treatment_description =
+      if (!("treatment_description" %in% names(dt))) {
+        dt[, `:=`(treatment_description =
                     paste("Treatment", get("treatment")))]
       }
 
-      treatment_mapping <- df[
+      treatment_mapping <- dt[
         , mget(c("treatment", "treatment_description"))][
           , .SD[.N], by = "treatment"]
 
@@ -199,24 +199,24 @@ predictEnrollment <- function(df = NULL, target_n = NA,
 
   ### obtain trialsdt, cutoffdt, n0, t0, and sort df by randdt
   if (!is.null(df)) {
-    df$trialsdt <- as.Date(df$trialsdt)
-    df$randdt <- as.Date(df$randdt)
-    df$cutoffdt <- as.Date(df$cutoffdt)
+    dt$trialsdt <- as.Date(dt$trialsdt)
+    dt$randdt <- as.Date(dt$randdt)
+    dt$cutoffdt <- as.Date(dt$cutoffdt)
 
-    trialsdt = df[1, get("trialsdt")]
-    cutoffdt = df[1, get("cutoffdt")]
-    n0 = nrow(df)
+    trialsdt = dt[1, get("trialsdt")]
+    cutoffdt = dt[1, get("cutoffdt")]
+    n0 = nrow(dt)
     t0 = as.numeric(cutoffdt - trialsdt + 1)
 
-    if (df[, any(get("randdt") < get("trialsdt"))]) {
+    if (dt[, any(get("randdt") < get("trialsdt"))]) {
       stop("randdt must be greater than or equal to trialsdt")
     }
 
-    if (df[, any(get("randdt") > get("cutoffdt"))]) {
+    if (dt[, any(get("randdt") > get("cutoffdt"))]) {
       stop("randdt must be less than or equal to cutoffdt")
     }
 
-    df[order(get("randdt")), `:=`(
+    dt[order(get("randdt")), `:=`(
       t = as.numeric(get("randdt") - get("trialsdt") + 1), n = .I)]
   } else {
     n0 = 0
@@ -417,7 +417,7 @@ predictEnrollment <- function(df = NULL, target_n = NA,
                            by = "treatment", all.x = TRUE)
 
       # add overall treatment
-      df2 <- data.table::rbindlist(list(df, data.table::copy(df)[, `:=`(
+      df2 <- data.table::rbindlist(list(dt, data.table::copy(dt)[, `:=`(
         treatment = 9999, treatment_description = "Overall")]),
         use.names = TRUE)
 
@@ -498,7 +498,7 @@ predictEnrollment <- function(df = NULL, target_n = NA,
                         mean = 0, var = 0)
 
       # arrival time for subjects already enrolled before data cut
-      dfa1 <- df[, list(
+      dfa1 <- dt[, list(
         t = get("t"), n = get("n"), pilevel = pilevel,
         lower = NA_real_, upper = NA_real_, mean = get("n"), var = 0)]
 
