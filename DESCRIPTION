@@ -1,7 +1,7 @@
 Package: eventPred
 Title: Event Prediction
-Version: 0.2.7
-Date: 2025-03-10
+Version: 0.2.8
+Date: 2025-03-14
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6160-7119"))
@@ -26,7 +26,8 @@ Imports:
     flexsurv (>= 2.2.2),
     erify (>= 0.4.0),
     stats (>= 3.5.0),
-    shiny (>= 1.7.1)
+    shiny (>= 1.7.1),
+    lrstat (>= 0.2.12)
 Suggests: 
     knitr,
     rmarkdown,
