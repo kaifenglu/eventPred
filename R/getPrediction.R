@@ -31,7 +31,8 @@
 #' @param event_model The event model used to analyze the event data
 #'   which can be set to one of the following options:
 #'   "exponential", "Weibull", "log-logistic", "log-normal",
-#'   "piecewise exponential", "model averaging", or "spline".
+#'   "piecewise exponential", "model averaging", "spline", or
+#'   "cox model".
 #'   The model averaging uses the \code{exp(-bic/2)} weighting and
 #'   combines Weibull and log-normal models. By default, it is set to
 #'   "model averaging".
@@ -50,11 +51,14 @@
 #'   as a spline function. If "odds", the log cumulative odds is
 #'   modeled as a spline function. If "normal", -qnorm(S(t)) is
 #'   modeled as a spline function.
+#' @param m The number of event time intervals to extrapolate the hazard
+#'   function beyond the last observed event time.
 #' @param event_prior The prior of event model parameters.
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options:
 #'   "none", "exponential", "Weibull", "log-logistic", "log-normal",
-#'   "piecewise exponential", "model averaging", or "spline".
+#'   "piecewise exponential", "model averaging", "spline", or
+#'   "cox model".
 #'   The model averaging uses the \code{exp(-bic/2)} weighting and
 #'   combines Weibull and log-normal models. By default, it is set to
 #'   "exponential".
@@ -73,6 +77,8 @@
 #'   is modeled as a spline function. If "odds", the log cumulative odds is
 #'   modeled as a spline function. If "normal", -qnorm(S(t)) is
 #'   modeled as a spline function.
+#' @param m_dropout The number of dropout time intervals to extrapolate
+#'   the hazard function beyond the last observed dropout time.
 #' @param dropout_prior The prior of dropout model parameters.
 #' @param fixedFollowup A Boolean variable indicating whether a fixed
 #'   follow-up design is used. By default, it is set to \code{FALSE}
@@ -161,8 +167,8 @@
 #' For the piecewise exponential event (dropout) model, the list
 #' should also include \code{piecewiseSurvivalTime}
 #' (\code{piecewiseDropoutTime}) to indicate the location of knots.
-#' It should be noted that the model averaging and spline options
-#' are not appropriate for use as prior.
+#' It should be noted that the model averaging, spline, and
+#' cox model options are not appropriate for use as prior.
 #'
 #' If the event prediction is not by treatment while the prior
 #' information is given by treatment, then each element of
@@ -209,10 +215,10 @@ getPrediction <- function(
     accrualTime = 0,
     enroll_prior = NULL,
     event_model = "model averaging", piecewiseSurvivalTime = 0,
-    k = 0, scale = "hazard",
+    k = 0, scale = "hazard", m = 5,
     event_prior = NULL,
     dropout_model = "exponential", piecewiseDropoutTime = 0,
-    k_dropout = 0, scale_dropout = "hazard",
+    k_dropout = 0, scale_dropout = "hazard", m_dropout = 5,
     dropout_prior = NULL,
     fixedFollowup = FALSE, followupTime = 365,
     pilevel = 0.90, nyears = 4,
@@ -250,11 +256,11 @@ getPrediction <- function(
   }
 
   if (is.null(df)) by_treatment = TRUE
-  if (!is.null(df)) data.table::setDT(df)
+  if (!is.null(df)) dt <- data.table::setDT(data.table::copy(df))
 
   if (by_treatment) {
     if (!is.null(df)) {
-      ngroups = df[, data.table::uniqueN(get("treatment"))]
+      ngroups = dt[, data.table::uniqueN(get("treatment"))]
     }
 
     if (is.null(alloc)) {
@@ -349,7 +355,7 @@ getPrediction <- function(
   erify::check_content(tolower(event_model),
                        c("exponential", "weibull", "log-logistic",
                          "log-normal", "piecewise exponential",
-                         "model averaging", "spline"))
+                         "model averaging", "spline", "cox model"))
 
   if (piecewiseSurvivalTime[1] != 0) {
     stop("piecewiseSurvivalTime must start with 0")
@@ -440,7 +446,7 @@ getPrediction <- function(
   erify::check_content(tolower(dropout_model),
                        c("none", "exponential", "weibull", "log-logistic",
                          "log-normal", "piecewise exponential",
-                         "model averaging", "spline"))
+                         "model averaging", "spline", "cox model"))
 
   if (piecewiseDropoutTime[1] != 0) {
     stop("piecewiseDropoutTime must start with 0")
@@ -536,6 +542,8 @@ getPrediction <- function(
   }
 
 
+  erify::check_n(m)
+  erify::check_n(m_dropout)
   erify::check_bool(fixedFollowup)
   erify::check_positive(followupTime)
   erify::check_positive(pilevel)
@@ -550,19 +558,26 @@ getPrediction <- function(
   erify::check_bool(showplot)
   erify::check_bool(fix_parameter)
 
+  if (!all(is.na(target_t))) {
+    target_t <- target_t[!is.na(target_t)]
+    if (any(target_t <= 0 | target_t > nyears*365)) {
+      stop("target_t must be positive and less than nyears*365")
+    }
+  }
+
 
   if (!is.null(covariates_event)) {
     if (is.null(df)) {
       stop("df must be provided in the presence of covariates_event")
     }
 
-    if (!all(covariates_event %in% colnames(df))) {
+    if (!all(covariates_event %in% colnames(dt))) {
       stop("All covariates_event must exist in df")
     }
 
     xnames = paste(covariates_event, collapse = "+")
     formula = as.formula(paste("~", xnames))
-    x_event = model.matrix(formula, df)  # design matrix with intercept
+    x_event = model.matrix(formula, dt)  # design matrix with intercept
     q_event = ncol(x_event) - 1
   }
 
@@ -656,13 +671,13 @@ getPrediction <- function(
       stop("df must be provided in the presence of covariates_dropout")
     }
 
-    if (!all(covariates_dropout %in% colnames(df))) {
+    if (!all(covariates_dropout %in% colnames(dt))) {
       stop("All covariates_dropout must exist in df")
     }
 
     xnames = paste(covariates_dropout, collapse = "+")
     formula = as.formula(paste("~", xnames))
-    x_dropout = model.matrix(formula, df)  # design matrix with intercept
+    x_dropout = model.matrix(formula, dt)  # design matrix with intercept
     q_dropout = ncol(x_dropout) - 1
   }
 
@@ -754,7 +769,7 @@ getPrediction <- function(
 
   # check input data set to ensure it has all the required columns
   if (!is.null(df)) {
-    cols = colnames(df)
+    cols = colnames(dt)
 
     if (tolower(to_predict) == "enrollment only") {
       req_cols = c("trialsdt", "usubjid", "randdt", "cutoffdt")
@@ -772,28 +787,28 @@ getPrediction <- function(
                  paste(req_cols[!(req_cols %in% cols)], collapse = ", ")))
     }
 
-    if (any(is.na(df[, mget(req_cols)]))) {
+    if (any(is.na(dt[, mget(req_cols)]))) {
       stop(paste("The following columns of df have missing values:",
-                 paste(req_cols[sapply(df, function(x) any(is.na(x)))],
+                 paste(req_cols[sapply(dt, function(x) any(is.na(x)))],
                        collapse = ", ")))
     }
 
     if ("treatment" %in% cols && !("treatment_description" %in% cols)) {
-      df[, `:=`(treatment_description = paste("Treatment", get("treatment")))]
+      dt[, `:=`(treatment_description = paste("Treatment", get("treatment")))]
     }
   }
 
 
   if (!is.null(df)) {
-    df$trialsdt <- as.Date(df$trialsdt)
-    df$randdt <- as.Date(df$randdt)
-    df$cutoffdt <- as.Date(df$cutoffdt)
+    dt$trialsdt <- as.Date(dt$trialsdt)
+    dt$randdt <- as.Date(dt$randdt)
+    dt$cutoffdt <- as.Date(dt$cutoffdt)
 
-    trialsdt = df[1, get("trialsdt")]
-    cutoffdt = df[1, get("cutoffdt")]
+    trialsdt = dt[1, get("trialsdt")]
+    cutoffdt = dt[1, get("cutoffdt")]
 
     # summarize observed data
-    observed <- summarizeObserved(df, to_predict, showplot, by_treatment)
+    observed <- summarizeObserved(dt, to_predict, showplot, by_treatment)
   }
 
   if (!is.null(covariates_event)) {
@@ -811,7 +826,7 @@ getPrediction <- function(
       erify::check_n(target_n - observed$n0,
                      supplement = "Enrollment target reached.")
 
-      enroll_fit <- fitEnrollment(df = df, enroll_model,
+      enroll_fit <- fitEnrollment(df = dt, enroll_model,
                                   nknots, accrualTime, showplot)
       enroll_fit1 <- enroll_fit$fit
 
@@ -847,7 +862,7 @@ getPrediction <- function(
 
       # enrollment prediction at the analysis stage
       enroll_pred <- predictEnrollment(
-        df = df, target_n, enroll_fit = enroll_fit1,
+        df = dt, target_n, enroll_fit = enroll_fit1,
         lags, pilevel, nyears, nreps, showsummary, showplot = FALSE,
         by_treatment, ngroups, alloc, treatment_label,
         fix_parameter)
@@ -869,7 +884,7 @@ getPrediction <- function(
                      supplement = "Event target reached.")
 
       if (by_treatment) {
-        sum_by_trt <- df[, list(
+        sum_by_trt <- dt[, list(
           n0 = .N, d0 = sum(get("event")), c0 = sum(get("dropout")),
           r0 = sum(!(get("event") | get("dropout")))),
           by = "treatment"]
@@ -879,7 +894,7 @@ getPrediction <- function(
       if (!is.null(event_prior) && !by_treatment &&
           !("model" %in% names(event_prior))) {
 
-        m = length(event_prior)
+        m0 = length(event_prior)
         w = sapply(event_prior, function(sub_list) sub_list$w)
         if (any(w <= 0)) {
           stop("w must be positive in event_prior")
@@ -888,8 +903,8 @@ getPrediction <- function(
 
         # check model consistency across treatments
         model = tolower(event_prior[[1]]$model)
-        if (m > 1) {
-          for (j in 2:m) {
+        if (m0 > 1) {
+          for (j in 2:m0) {
             if (tolower(event_prior[[j]]$model) != model) {
               stop(paste("Event model must be the same across",
                          "treatments in event_prior"))
@@ -897,7 +912,7 @@ getPrediction <- function(
           }
 
           if (model == "piecewise exponential") {
-            for (j in 2:m) {
+            for (j in 2:m0) {
               if (!all.equal(event_prior[[j]]$piecewiseSurvivalTime,
                              event_prior[[1]]$piecewiseSurvivalTime)) {
                 stop(paste("piecewiseSurvivalTime must be equal across",
@@ -910,13 +925,13 @@ getPrediction <- function(
 
         # prior mean
         theta = 0
-        for (j in 1:m) {
+        for (j in 1:m0) {
           theta = theta + w[j]*event_prior[[j]]$theta
         }
 
         # prior variance
         vtheta = 0
-        for (j in 1:m) {
+        for (j in 1:m0) {
           vtheta = vtheta + w[j]*(event_prior[[j]]$vtheta +
                                     event_prior[[j]]$theta %*%
                                     t(event_prior[[j]]$theta))
@@ -942,7 +957,7 @@ getPrediction <- function(
       if (!is.null(event_prior_w_x) && !by_treatment &&
           !("model" %in% names(event_prior_w_x))) {
 
-        m = length(event_prior_w_x)
+        m0 = length(event_prior_w_x)
         w = sapply(event_prior_w_x, function(sub_list) sub_list$w)
         if (any(w <= 0)) {
           stop("w must be positive in event_prior_with_covariates")
@@ -951,8 +966,8 @@ getPrediction <- function(
 
         # check model consistency across treatments
         model = tolower(event_prior_w_x[[1]]$model)
-        if (m > 1) {
-          for (j in 2:m) {
+        if (m0 > 1) {
+          for (j in 2:m0) {
             if (tolower(event_prior_w_x[[j]]$model) != model) {
               stop(paste("Event model must be equal across",
                          "treatments in event_prior_with_covariates"))
@@ -960,7 +975,7 @@ getPrediction <- function(
           }
 
           if (model == "piecewise exponential") {
-            for (j in 2:m) {
+            for (j in 2:m0) {
               if (!all.equal(event_prior_w_x[[j]]$piecewiseSurvivalTime,
                              event_prior_w_x[[1]]$piecewiseSurvivalTime)) {
                 stop(paste("piecewiseSurvivalTime must be equal across",
@@ -973,13 +988,13 @@ getPrediction <- function(
 
         # prior mean
         theta = 0
-        for (j in 1:m) {
+        for (j in 1:m0) {
           theta = theta + w[j]*event_prior_w_x[[j]]$theta
         }
 
         # prior variance
         vtheta = 0
-        for (j in 1:m) {
+        for (j in 1:m0) {
           vtheta = vtheta + w[j]*(event_prior_w_x[[j]]$vtheta +
                                     event_prior_w_x[[j]]$theta %*%
                                     t(event_prior_w_x[[j]]$theta))
@@ -1003,9 +1018,9 @@ getPrediction <- function(
 
       # fit the event model without covariates
       if (!(to_predict == "event only" && !is.null(covariates_event))) {
-        event_fit <- fitEvent(df, event_model,
+        event_fit <- fitEvent(dt, event_model,
                               piecewiseSurvivalTime,
-                              k, scale,
+                              k, scale, m,
                               showplot, by_treatment)
 
         if (!by_treatment) {
@@ -1067,9 +1082,9 @@ getPrediction <- function(
 
       # fit the event model with covariates
       if (!is.null(covariates_event)) {
-        event_fit_w_x <- fitEvent(df, event_model,
+        event_fit_w_x <- fitEvent(dt, event_model,
                                   piecewiseSurvivalTime,
-                                  k, scale,
+                                  k, scale, m,
                                   showplot, by_treatment,
                                   covariates_event)
 
@@ -1139,7 +1154,7 @@ getPrediction <- function(
         if (!is.null(dropout_prior) && !by_treatment &&
             !("model" %in% names(dropout_prior))) {
 
-          m = length(dropout_prior)
+          m0 = length(dropout_prior)
           w = sapply(dropout_prior, function(sub_list) sub_list$w)
           if (any(w <= 0)) {
             stop("w must be positive in dropout_prior")
@@ -1148,8 +1163,8 @@ getPrediction <- function(
 
           # check model consistency across treatments
           model = tolower(dropout_prior[[1]]$model)
-          if (m > 1) {
-            for (j in 2:m) {
+          if (m0 > 1) {
+            for (j in 2:m0) {
               if (tolower(dropout_prior[[j]]$model) != model) {
                 stop(paste("Dropout model must be the same across",
                            "treatments in dropout_prior"))
@@ -1157,7 +1172,7 @@ getPrediction <- function(
             }
 
             if (model == "piecewise exponential") {
-              for (j in 2:m) {
+              for (j in 2:m0) {
                 if (!all.equal(dropout_prior[[j]]$piecewiseDropoutTime,
                                dropout_prior[[1]]$piecewiseDropoutTime)) {
                   stop(paste("piecewiseDropoutTime must be equal across",
@@ -1170,13 +1185,13 @@ getPrediction <- function(
 
           # prior mean
           theta = 0
-          for (j in 1:m) {
+          for (j in 1:m0) {
             theta = theta + w[j]*dropout_prior[[j]]$theta
           }
 
           # prior variance
           vtheta = 0
-          for (j in 1:m) {
+          for (j in 1:m0) {
             vtheta = vtheta + w[j]*(dropout_prior[[j]]$vtheta +
                                       dropout_prior[[j]]$theta %*%
                                       t(dropout_prior[[j]]$theta))
@@ -1202,7 +1217,7 @@ getPrediction <- function(
         if (!is.null(dropout_prior_w_x) && !by_treatment &&
             !("model" %in% names(dropout_prior_w_x))) {
 
-          m = length(dropout_prior_w_x)
+          m0 = length(dropout_prior_w_x)
           w = sapply(dropout_prior_w_x, function(sub_list) sub_list$w)
           if (any(w <= 0)) {
             stop("w must be positive in dropout_prior_with_covariates")
@@ -1211,8 +1226,8 @@ getPrediction <- function(
 
           # check model consistency across treatments
           model = tolower(dropout_prior_w_x[[1]]$model)
-          if (m > 1) {
-            for (j in 2:m) {
+          if (m0 > 1) {
+            for (j in 2:m0) {
               if (tolower(dropout_prior_w_x[[j]]$model) != model) {
                 stop(paste("Dropout model must be the same across",
                            "treatments in dropout_prior_with_covariates"))
@@ -1220,7 +1235,7 @@ getPrediction <- function(
             }
 
             if (model == "piecewise exponential") {
-              for (j in 2:m) {
+              for (j in 2:m0) {
                 if (!all.equal(dropout_prior_w_x[[j]]$piecewiseDropoutTime,
                                dropout_prior_w_x[[1]]$piecewiseDropoutTime)) {
                   stop(paste("piecewiseDropoutTime must be equal across",
@@ -1233,13 +1248,13 @@ getPrediction <- function(
 
           # prior mean
           theta = 0
-          for (j in 1:m) {
+          for (j in 1:m0) {
             theta = theta + w[j]*dropout_prior_w_x[[j]]$theta
           }
 
           # prior variance
           vtheta = 0
-          for (j in 1:m) {
+          for (j in 1:m0) {
             vtheta = vtheta + w[j]*(dropout_prior_w_x[[j]]$vtheta +
                                       dropout_prior_w_x[[j]]$theta %*%
                                       t(dropout_prior_w_x[[j]]$theta))
@@ -1263,9 +1278,9 @@ getPrediction <- function(
 
         # fit the dropout model without covariates
         if (!(to_predict == "event only" && !is.null(covariates_dropout))) {
-          dropout_fit <- fitDropout(df, dropout_model,
+          dropout_fit <- fitDropout(dt, dropout_model,
                                     piecewiseDropoutTime,
-                                    k_dropout, scale_dropout,
+                                    k_dropout, scale_dropout, m_dropout,
                                     showplot, by_treatment)
 
           if (!by_treatment) {
@@ -1327,9 +1342,9 @@ getPrediction <- function(
 
         # fit the dropout model with covariates
         if (!is.null(covariates_dropout)) {
-          dropout_fit_w_x <- fitDropout(df, dropout_model,
+          dropout_fit_w_x <- fitDropout(dt, dropout_model,
                                         piecewiseDropoutTime,
-                                        k_dropout, scale_dropout,
+                                        k_dropout, scale_dropout, m_dropout,
                                         showplot, by_treatment,
                                         covariates_dropout)
 
@@ -1395,10 +1410,10 @@ getPrediction <- function(
         # event prediction with a dropout model
         if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
           event_pred <- predictEvent(
-            df = df, target_d,
+            df = dt, target_d,
             newSubjects = enroll_pred$newSubjects,
-            event_fit = event_fit1,
-            dropout_fit = dropout_fit1,
+            event_fit = event_fit1, m,
+            dropout_fit = dropout_fit1, m_dropout,
             fixedFollowup, followupTime, pilevel,
             nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
@@ -1408,10 +1423,10 @@ getPrediction <- function(
             fix_parameter)
         } else {
           event_pred <- predictEvent(
-            df = df, target_d,
+            df = dt, target_d,
             newSubjects = NULL,
-            event_fit = event_fit1,
-            dropout_fit = dropout_fit1,
+            event_fit = event_fit1, m,
+            dropout_fit = dropout_fit1, m_dropout,
             fixedFollowup, followupTime, pilevel,
             nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
@@ -1423,10 +1438,10 @@ getPrediction <- function(
       } else {  # no dropout model
         if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
           event_pred <- predictEvent(
-            df = df, target_d,
+            df = dt, target_d,
             newSubjects = enroll_pred$newSubjects,
-            event_fit = event_fit1,
-            dropout_fit = NULL,
+            event_fit = event_fit1, m,
+            dropout_fit = NULL, m_dropout,
             fixedFollowup, followupTime, pilevel,
             nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
@@ -1437,10 +1452,10 @@ getPrediction <- function(
             fix_parameter)
         } else {
           event_pred <- predictEvent(
-            df = df, target_d,
+            df = dt, target_d,
             newSubjects = NULL,
-            event_fit = event_fit1,
-            dropout_fit = NULL,
+            event_fit = event_fit1, m,
+            dropout_fit = NULL, m_dropout,
             fixedFollowup, followupTime, pilevel,
             nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
@@ -1456,8 +1471,8 @@ getPrediction <- function(
         event_pred <- predictEvent(
           df = NULL, target_d,
           newSubjects = enroll_pred$newSubjects,
-          event_fit = event_prior,
-          dropout_fit = dropout_prior,
+          event_fit = event_prior, m,
+          dropout_fit = dropout_prior, m_dropout,
           fixedFollowup, followupTime, pilevel,
           nyears, target_t, nreps,
           showEnrollment, showEvent, showDropout, showOngoing,
@@ -1471,8 +1486,8 @@ getPrediction <- function(
         event_pred <- predictEvent(
           df = NULL, target_d,
           newSubjects = enroll_pred$newSubjects,
-          event_fit = event_prior,
-          dropout_fit = NULL,
+          event_fit = event_prior, m,
+          dropout_fit = NULL, m_dropout,
           fixedFollowup, followupTime, pilevel,
           nyears, target_t, nreps,
           showEnrollment, showEvent, showDropout, showOngoing,
@@ -1491,17 +1506,17 @@ getPrediction <- function(
   if (tolower(to_predict) == "enrollment only") {
     subject_data <- enroll_pred$newSubjects
     if (!is.null(df)) {
-      df[, `:=`(arrivalTime = as.numeric(get("randdt") - get("trialsdt")+1))]
+      dt[, `:=`(arrivalTime = as.numeric(get("randdt") - get("trialsdt")+1))]
 
       if (by_treatment) {
         subject_data <- data.table::rbindlist(list(
-          df[, `:=`(draw = 0)][
+          dt[, `:=`(draw = 0)][
             , mget(c("draw", "usubjid", "arrivalTime",
                      "treatment", "treatment_description"))],
           subject_data), use.names = TRUE)
       } else {
         subject_data <- data.table::rbindlist(list(
-          df[, `:=`(draw = 0)][
+          dt[, `:=`(draw = 0)][
             , mget(c("draw", "usubjid", "arrivalTime"))],
           subject_data), use.names = TRUE)
       }
@@ -1509,21 +1524,21 @@ getPrediction <- function(
   } else {
     subject_data <- event_pred$newEvents
     if (!is.null(df)) {
-      df[, `:=`(
+      dt[, `:=`(
         arrivalTime = as.numeric(get("randdt") - get("trialsdt") + 1),
         totalTime = as.numeric(get("randdt") - get("trialsdt")) +
           get("time"))]
 
       if (by_treatment) {
         subject_data <- data.table::rbindlist(list(
-          df[get("event") | get("dropout"), `:=`(draw = 0)][
+          dt[get("event") | get("dropout"), `:=`(draw = 0)][
             , mget(c("draw", "usubjid", "arrivalTime", "treatment",
                      "treatment_description", "time", "event",
                      "dropout", "totalTime"))],
           subject_data), use.names = TRUE)
       } else {
         subject_data <- data.table::rbindlist(list(
-          df[get("event") | get("dropout"), `:=`(draw = 0)][
+          dt[get("event") | get("dropout"), `:=`(draw = 0)][
             , mget(c("draw", "usubjid", "arrivalTime", "time",
                      "event", "dropout", "totalTime"))],
           subject_data), use.names = TRUE)
@@ -1533,8 +1548,8 @@ getPrediction <- function(
 
   # merge in other information such as covariates from raw data
   if (!is.null(df)) {
-    varnames <- c(setdiff(names(df), names(subject_data)), "usubjid")
-    subject_data <- merge(df[, mget(varnames)], subject_data,
+    varnames <- c(setdiff(names(dt), names(subject_data)), "usubjid")
+    subject_data <- merge(dt[, mget(varnames)], subject_data,
                           by = "usubjid", all.y = TRUE)[order(get("draw"))]
   }
 
