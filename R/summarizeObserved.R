@@ -48,47 +48,47 @@ summarizeObserved <- function(df, to_predict = "event only",
   erify::check_bool(showplot)
   erify::check_bool(by_treatment)
 
-  data.table::setDT(df)
+  dt <- data.table::setDT(data.table::copy(df))
 
-  df$trialsdt <- as.Date(df$trialsdt)
-  df$randdt <- as.Date(df$randdt)
-  df$cutoffdt <- as.Date(df$cutoffdt)
+  dt$trialsdt <- as.Date(dt$trialsdt)
+  dt$randdt <- as.Date(dt$randdt)
+  dt$cutoffdt <- as.Date(dt$cutoffdt)
 
-  trialsdt = df[1, get("trialsdt")]
-  cutoffdt = df[1, get("cutoffdt")]
+  trialsdt = dt[1, get("trialsdt")]
+  cutoffdt = dt[1, get("cutoffdt")]
   t0 = as.numeric(cutoffdt - trialsdt + 1)
-  n0 = nrow(df)  # current number of subjects enrolled
+  n0 = nrow(dt)  # current number of subjects enrolled
 
-  if (df[, any(get("randdt") < get("trialsdt"))]) {
+  if (dt[, any(get("randdt") < get("trialsdt"))]) {
     stop("randdt must be greater than or equal to trialsdt")
   }
 
-  if (df[, any(get("randdt") > get("cutoffdt"))]) {
+  if (dt[, any(get("randdt") > get("cutoffdt"))]) {
     stop("randdt must be less than or equal to cutoffdt")
   }
 
   if (grepl("event", to_predict, ignore.case = TRUE)) {
-    d0 = df[, sum(get("event"))]  # current number of events
-    c0 = df[, sum(get("dropout"))] # current number of dropouts
-    r0 = df[, sum(!get("event") & !get("dropout"))] # number at risk
+    d0 = dt[, sum(get("event"))]  # current number of events
+    c0 = dt[, sum(get("dropout"))] # current number of dropouts
+    r0 = dt[, sum(!get("event") & !get("dropout"))] # number at risk
 
-    if (df[, any(get("time") < 1)]) {
+    if (dt[, any(get("time") < 1)]) {
       stop("time must be greater than or equal to 1")
     }
 
-    if (df[, any(get("event") & get("dropout"))]) {
+    if (dt[, any(get("event") & get("dropout"))]) {
       stop("event and dropout cannot both be equal to 1 simultaneously")
     }
 
-    if (df[, any(get("time") >
+    if (dt[, any(get("time") >
                  as.numeric(get("cutoffdt") - get("randdt") + 1))]) {
       stop("time must be less than or equal to cutoffdt - randdt + 1")
     }
 
-    ongoingSubjects <- df[!get("event") & !get("dropout")]
+    ongoingSubjects <- dt[!get("event") & !get("dropout")]
 
     # number of ongoing subjects with the last known date before cutoff
-    rp = df[, sum(get("time") <
+    rp = dt[, sum(get("time") <
                     as.numeric(get("cutoffdt") - get("randdt") + 1)
                   & !get("event") & !get("dropout"))]
 
@@ -100,18 +100,18 @@ summarizeObserved <- function(df, to_predict = "event only",
   }
 
   if (by_treatment) {
-    ngroups = df[, data.table::uniqueN(get("treatment"))]
+    ngroups = dt[, data.table::uniqueN(get("treatment"))]
 
-    if (!("treatment_description" %in% names(df))) {
-      df[, `:=`(treatment_description =
+    if (!("treatment_description" %in% names(dt))) {
+      dt[, `:=`(treatment_description =
                   paste("Treatment", get("treatment")))]
     }
 
     # order treatment description based on treatment
-    df[, `:=`(treatment_description = stats::reorder(as.factor(
+    dt[, `:=`(treatment_description = stats::reorder(as.factor(
       get("treatment_description")), get("treatment")))]
 
-    treatment_mapping <- df[, mget(c("treatment", "treatment_description"))][
+    treatment_mapping <- dt[, mget(c("treatment", "treatment_description"))][
       , .SD[.N], by = "treatment"]
   } else {
     ngroups = 1
@@ -124,7 +124,7 @@ summarizeObserved <- function(df, to_predict = "event only",
 
   # enrollment and event data
   if (!by_treatment) {
-    adsl <- df[order(get("randdt"))][
+    adsl <- dt[order(get("randdt"))][
       , `:=`(n = .I, parameter = "Enrollment", date = get("randdt"))]
 
     # columns to keep
@@ -141,7 +141,7 @@ summarizeObserved <- function(df, to_predict = "event only",
 
     if (grepl("event", to_predict, ignore.case = TRUE)) {
       # time to event data
-      adtte <- data.table::copy(df)[
+      adtte <- data.table::copy(dt)[
         , `:=`(adt = as.Date(get("time") - 1, origin = get("randdt")))][
         order(get("adt")), `:=`(n = cumsum(get("event")),
                                 parameter = "Event", date = get("adt"))]
@@ -162,7 +162,7 @@ summarizeObserved <- function(df, to_predict = "event only",
   } else { # by treatment
     trtcols = c("treatment", "treatment_description")
 
-    adsl <- df[, .SD[order(get("randdt"))], by = trtcols][
+    adsl <- dt[do.call("order", lapply(c(trtcols, "randdt"), as.name))][
       , `:=`(n = seq_len(.N), parameter = "Enrollment", date = get("randdt")),
       by = trtcols]
 
@@ -188,7 +188,7 @@ summarizeObserved <- function(df, to_predict = "event only",
       # time to event data
       trtcols = c("treatment", "treatment_description")
 
-      adtte <- data.table::copy(df)[
+      adtte <- data.table::copy(dt)[
         , `:=`(adt = as.Date(get("time") - 1, origin = get("randdt")))][
           do.call("order", lapply(c(trtcols, "adt"), as.name))][
             , `:=`(n = cumsum(get("event")),
