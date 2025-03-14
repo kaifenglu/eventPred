@@ -8,7 +8,7 @@
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options:
 #'   "exponential", "Weibull", "log-logistic", "log-normal",
-#'   "piecewise exponential", "model averaging", or "spline".
+#'   "piecewise exponential", "model averaging", "spline", or "cox model".
 #'   The model averaging uses the \code{exp(-bic/2)} weighting and
 #'   combines Weibull and log-normal models. The spline model of
 #'   Royston and Parmar (2002) assumes that a transformation of
@@ -28,6 +28,8 @@
 #'   as a spline function. If "odds", the log cumulative odds is
 #'   modeled as a spline function. If "normal", -qnorm(S(t)) is
 #'   modeled as a spline function.
+#' @param m_dropout The number of dropout time intervals to extrapolate
+#'   the hazard function beyond the last observed dropout time.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the fitted time-to-dropout survival curve. By default, it is
 #'   set to \code{TRUE}.
@@ -54,6 +56,27 @@
 #' If the spline option is chosen, the \code{knots} and \code{scale}
 #' will be included in the list of results.
 #'
+#' If the cox model option is chosen, the list of results will include
+#' \code{model}, \code{theta}, \code{vtheta}, \code{aic}, \code{bic}, and
+#' \code{piecewiseDropoutTime}. Here
+#' \deqn{\theta = (\log(\lambda_1), \ldots, \log(\lambda_M), \beta^T)^T,}
+#' \eqn{M} denotes the number of distinct observed dropout times,
+#' \eqn{t_1 < \cdots < t_M},
+#' \eqn{\lambda_j} denotes the estimated hazard rate in the \eqn{j}th
+#' dropout time interval, \eqn{(t_{j-1}, t_j]}, and
+#' \eqn{\beta} represents the regression
+#' coefficients (log hazard ratios) from the Cox model.
+#' For a fair comparison, the estimation of baseline hazards is
+#' incorporated into the \code{aic} and \code{bic} values.
+#' In addition, \eqn{\mbox{piecewiseDropoutTime} = (0, t_1, \ldots, t_M)}.
+#' To extend the survival curve
+#' beyond the last observed dropout time, a weighted average of the hazard
+#' rates from the final \code{m_dropout} dropout time intervals is used.
+#' The weights are proportional to the lengths of those intervals, i.e.,
+#' \deqn{\lambda_{M+1} = \sum_{j=M-m_{\rm{dropout}}+1}^{M} w_j \lambda_j,}
+#' where \eqn{w_j = (t_j - t_{j-1})/(t_M - t_{M-m_{\rm{dropout}}})} for
+#' \eqn{j=M-m_{\rm{dropout}}+1,\ldots,M}.
+#'
 #' When fitting the dropout model by treatment, the outcome is presented
 #' as a list of lists, where each list element corresponds to a
 #' specific treatment group.
@@ -79,6 +102,7 @@
 fitDropout <- function(df, dropout_model = "exponential",
                        piecewiseDropoutTime = 0,
                        k_dropout = 0, scale_dropout = "hazard",
+                       m_dropout = 5,
                        showplot = TRUE, by_treatment = FALSE,
                        covariates = NULL) {
 
@@ -87,7 +111,7 @@ fitDropout <- function(df, dropout_model = "exponential",
   erify::check_content(tolower(dropout_model),
                        c("exponential", "weibull", "log-logistic",
                          "log-normal", "piecewise exponential",
-                         "model averaging", "spline"))
+                         "model averaging", "spline", "cox model"))
 
   if (piecewiseDropoutTime[1] != 0) {
     stop("piecewiseDropoutTime must start with 0");
@@ -99,6 +123,7 @@ fitDropout <- function(df, dropout_model = "exponential",
 
   erify::check_n(k_dropout, zero = TRUE)
   erify::check_content(tolower(scale_dropout), c("hazard", "odds", "normal"))
+  erify::check_n(m_dropout)
 
   erify::check_bool(showplot)
   erify::check_bool(by_treatment)
@@ -116,20 +141,18 @@ fitDropout <- function(df, dropout_model = "exponential",
     formula = survival::Surv(time, dropout) ~ 1
   }
 
-
-  data.table::setDT(df)
-
+  dt <- data.table::setDT(data.table::copy(df))
 
   if (by_treatment) {
-    ngroups = df[, data.table::uniqueN(get("treatment"))]
+    ngroups = dt[, data.table::uniqueN(get("treatment"))]
 
-    if (!("treatment_description" %in% names(df))) {
-      df[, `:=`(treatment_description =
+    if (!("treatment_description" %in% names(dt))) {
+      dt[, `:=`(treatment_description =
                   paste("Treatment", get("treatment")))]
     }
   } else {
     ngroups = 1
-    df[, `:=`(treatment = 1)]
+    dt[, `:=`(treatment = 1)]
   }
 
   if (ngroups == 1) {
@@ -141,7 +164,7 @@ fitDropout <- function(df, dropout_model = "exponential",
   dropout_fit <- list()
 
   for (i in 1:ngroups) {
-    df1 <- df[get("treatment") == i]
+    df1 <- dt[get("treatment") == i]
 
     n0 = nrow(df1)
     c0 = df1[, sum(get("dropout"))]
@@ -254,7 +277,7 @@ fitDropout <- function(df, dropout_model = "exponential",
         , `:=`(surv = sapply(get("time"), function(t)
           mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "piecewise exponential") {
-      # lambda(t) = lambda[j] for ucut[j] <= t < ucut[j+1], j = 1,...,J
+      # lambda_0(t) = lambda[j] for ucut[j] <= t < ucut[j+1], j = 1,...,J
       # where ucut[1]=0< ucut[2] < ... < ucut[J] < ucut[J+1]=Inf are
       # the knots
       J = length(piecewiseDropoutTime)
@@ -352,6 +375,81 @@ fitDropout <- function(df, dropout_model = "exponential",
       }
 
       dffit3 <- data.table(time, surv)
+    } else if (tolower(dropout_model) == "cox model") {
+      erify::check_positive(c0 - q, supplement = paste(
+        "The number of dropouts must be >=", q + 1,
+        "to fit a Cox model."))
+
+      erify::check_positive(c0 - m_dropout + 1, supplement = paste(
+        "m_dropout must be <= the observed number of dropouts", c0))
+
+      reg <- phregr(df1, time = "time", event = "dropout",
+                    covariates = covariates)
+
+      bh <- data.table::setDT(reg$basehaz)[get("nevent") > 0]
+      haz <- bh$haz
+      vhaz <- bh$varhaz
+
+      if (q > 0) {
+        if (q == 1) {
+          ghaz <- matrix(bh$gradhaz, ncol = 1)
+        } else {
+          ghaz <- do.call(cbind, lapply(1:q, function(i)
+            bh[[paste0("gradhaz.", i)]]))
+        }
+      }
+
+      M <- nrow(bh)
+      tcut <- c(0, bh$time)
+      dt <- diff(tcut)
+      lambda1 <- haz/dt
+
+      d <- bh$nevent
+      llik <- reg$sumstat$loglik1 + sum(d*(log(d/dt) - 1))
+
+      if (q > 0) {
+        theta <- c(log(lambda1), as.numeric(reg$beta))
+        vbeta <- reg$vbeta
+        dimnames(vbeta) <- NULL
+        vtheta <- matrix(0, M+q, M+q)
+        vtheta[(M+1):(M+q),(M+1):(M+q)] <- vbeta
+        vtheta[1:M,1:M] <- diag(vhaz/(haz*haz)) + ghaz %*% vbeta %*% t(ghaz)
+        vtheta[1:M,(M+1):(M+q)] <- ghaz %*% vbeta
+        vtheta[(M+1):(M+q),1:M] <- t(vtheta[1:M,(M+1):(M+q)])
+      } else {
+        theta <- log(lambda1)
+        vtheta <- diag(vhaz/(haz*haz))
+      }
+
+      # account for the estimation of baseline hazard in AIC and BIC
+      fit3 <- list(model = "Cox model",
+                   theta = theta,
+                   vtheta = vtheta,
+                   aic = -2*llik + 2*(M+q),
+                   bic = -2*llik + (M+q)*log(n0),
+                   piecewiseDropoutTime = tcut)
+
+      # fitted survival curve
+      time = seq(0, max(df1$time))
+
+      # extrapolate beyond the last observed dropout time
+      lambda2 <- sum(bh$haz[(M-m_dropout+1):M])/
+        (bh$time[M] - bh$time[M-m_dropout])
+
+      lambda <- c(lambda1, lambda2)
+
+      # baseline survival
+      s1 <- sapply(time, function(t)
+        ppwexp(t, log(lambda), M+1, tcut, lower.tail = FALSE))
+
+      if (q > 0) {
+        xbeta <- as.numeric(as.matrix(x[,-1]) %*% reg$beta)
+        surv <- apply(outer(s1, exp(xbeta), `^`), 1, mean)
+      } else {
+        surv <- s1
+      }
+
+      dffit3 <- data.table(time, surv)
     }
 
 
@@ -362,6 +460,8 @@ fitDropout <- function(df, dropout_model = "exponential",
     } else if (tolower(fit3$model) == "spline") {
       modeltext = paste0(fit3$model, "(k = ", k_dropout, ", ", "scale = '",
                          scale_dropout, "')")
+    } else if (tolower(fit3$model) == "cox model") {
+      modeltext = paste0(fit3$model, "(m = ", m_dropout, ")")
     } else {
       modeltext = fit3$model
     }
@@ -413,7 +513,7 @@ fitDropout <- function(df, dropout_model = "exponential",
 
   # ensure that the sub plots share the same x axis range
   if (by_treatment) {
-    x_range = range(df$time)
+    x_range = range(dt$time)
     for (i in 1:ngroups) {
       dropout_fit[[i]]$fit_plot <- dropout_fit[[i]]$fit_plot %>%
         plotly::layout(xaxis = list(range = x_range))
