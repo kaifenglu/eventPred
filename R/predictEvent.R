@@ -19,9 +19,13 @@
 #'   indicating the completion of subject enrollment.
 #' @param event_fit The pre-fitted event model used to generate
 #'   predictions.
+#' @param m The number of event time intervals to extrapolate the hazard
+#'   function beyond the last observed event time.
 #' @param dropout_fit The pre-fitted dropout model used to generate
 #'   predictions. By default, it is set to \code{NULL},
 #'   indicating no dropout.
+#' @param m_dropout The number of dropout time intervals to extrapolate
+#'   the hazard function beyond the last observed dropout time.
 #' @param fixedFollowup A Boolean variable indicating whether a fixed
 #'   follow-up design is used. By default, it is set to \code{FALSE}
 #'   for a variable follow-up design.
@@ -135,7 +139,8 @@
 #' @export
 #'
 predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
-                         event_fit = NULL, dropout_fit = NULL,
+                         event_fit = NULL, m = 5,
+                         dropout_fit = NULL, m_dropout = 5,
                          fixedFollowup = FALSE, followupTime = 365,
                          pilevel = 0.90, nyears = 4,
                          target_t = NA, nreps = 500,
@@ -161,46 +166,48 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
   if (is.null(df) && "treatment" %in% names(newSubjects))
     by_treatment = TRUE
 
-  if (!is.null(df)) data.table::setDT(df)
-
+  if (!is.null(df)) dt <- data.table::setDT(data.table::copy(df))
+  if (!is.null(newSubjects)) {
+    nt <- data.table::setDT(data.table::copy(newSubjects))
+  }
 
   # number of treatment groups and add treatment description
   if (by_treatment) {
     if (!is.null(df)) {
-      if (!("treatment" %in% names(df))) {
+      if (!("treatment" %in% names(dt))) {
         stop("df must contain treatment")
       }
-      ngroups = df[, data.table::uniqueN(get("treatment"))]
+      ngroups = dt[, data.table::uniqueN(get("treatment"))]
     } else {
-      ngroups = newSubjects[, data.table::uniqueN(get("treatment"))]
+      ngroups = nt[, data.table::uniqueN(get("treatment"))]
     }
 
     if (!is.null(df) && !is.null(newSubjects) &&
-        length(table(df$treatment)) !=
-        length(table(newSubjects$treatment))) {
+        length(table(dt$treatment)) !=
+        length(table(nt$treatment))) {
       stop("Number of treatments must match between df and newSubjects")
     }
 
     if (!is.null(df)) {
-      if (!("treatment_description" %in% names(df))) {
-        df[, `:=`(treatment_description =
+      if (!("treatment_description" %in% names(dt))) {
+        dt[, `:=`(treatment_description =
                     paste("Treatment", get("treatment")))]
       }
     }
 
     if (!is.null(newSubjects)) {
-      if (!("treatment_description" %in% names(newSubjects))) {
-        newSubjects[, `:=`(treatment_description =
-                             paste("Treatment", get("treatment")))]
+      if (!("treatment_description" %in% names(nt))) {
+        nt[, `:=`(treatment_description =
+                    paste("Treatment", get("treatment")))]
       }
     }
   } else {  # treat as a special case of by-treatment calculation
     ngroups = 1
     if (!is.null(df)) {
-      df[, `:=`(treatment = 1, treatment_description = "Overall")]
+      dt[, `:=`(treatment = 1, treatment_description = "Overall")]
     }
     if (!is.null(newSubjects)) {
-      newSubjects[, `:=`(treatment = 1, treatment_description = "Overall")]
+      nt[, `:=`(treatment = 1, treatment_description = "Overall")]
     }
   }
 
@@ -229,7 +236,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         erify::check_content(tolower(event_fit[[j]]$model),
                              c("exponential", "weibull", "log-logistic",
                                "log-normal", "piecewise exponential",
-                               "model averaging", "spline"))
+                               "model averaging", "spline", "cox model"))
       }
     } else {
       for (j in 1:ngroups) {
@@ -259,7 +266,9 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           (model == "piecewise exponential" &&
            p != length(event_fit[[j]]$piecewiseSurvivalTime)) ||
           (model == "model averaging" && p != 4) ||
-          (model == "spline" && p != length(event_fit[[j]]$knots))) {
+          (model == "spline" && p != length(event_fit[[j]]$knots)) ||
+          (model == "cox model" &&
+           p != length(event_fit[[j]]$piecewiseSurvivalTime) - 1)) {
         stop(paste("Length of theta must be compatible with model",
                    "in event_fit"))
       }
@@ -299,7 +308,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         erify::check_content(tolower(dropout_fit[[j]]$model),
                              c("exponential", "weibull", "log-logistic",
                                "log-normal", "piecewise exponential",
-                               "model averaging", "spline"))
+                               "model averaging", "spline", "cox model"))
       }
     } else {
       for (j in 1:ngroups) {
@@ -329,7 +338,9 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           (model == "piecewise exponential" &&
            p != length(dropout_fit[[j]]$piecewiseDropoutTime)) ||
           (model == "model averaging" && p != 4) ||
-          (model == "spline" && p != length(dropout_fit[[j]]$knots))) {
+          (model == "spline" && p != length(dropout_fit[[j]]$knots)) ||
+          (model == "cox model" &&
+           p != length(dropout_fit[[j]]$piecewiseDropoutTime) - 1)) {
         stop(paste("Length of theta must be compatible with model",
                    "in dropout_fit"))
       }
@@ -348,6 +359,8 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     }
   }
 
+  erify::check_n(m)
+  erify::check_n(m_dropout)
   erify::check_bool(fixedFollowup)
   erify::check_positive(followupTime)
   erify::check_positive(pilevel)
@@ -383,13 +396,13 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
       stop("df must be provided in the presence of covariates_event")
     }
 
-    if (!all(covariates_event %in% colnames(df))) {
+    if (!all(covariates_event %in% colnames(dt))) {
       stop("All covariates_event must exist in df")
     }
 
     xnames = paste(covariates_event, collapse = "+")
     formula = as.formula(paste("~", xnames))
-    x_event = model.matrix(formula, df)  # design matrix with intercept
+    x_event = model.matrix(formula, dt)  # design matrix with intercept
     q_event = ncol(x_event) - 1
 
 
@@ -416,7 +429,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         erify::check_content(tolower(event_fit_w_x[[j]]$model),
                              c("exponential", "weibull", "log-logistic",
                                "log-normal", "piecewise exponential",
-                               "model averaging", "spline"))
+                               "model averaging", "spline", "cox model"))
       }
     } else {
       for (j in 1:ngroups) {
@@ -448,6 +461,9 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
            q_event) ||
           (model == "model averaging" && p != 2*(2 + q_event)) ||
           (model == "spline" && p != length(event_fit_w_x[[j]]$knots) +
+           q_event) ||
+          (model == "cox model" &&
+           p != length(event_fit_w_x[[j]]$piecewiseSurvivalTime) - 1 +
            q_event)) {
         stop(paste("Length of theta must be compatible with model",
                    "in event_fit_with_covariates"))
@@ -475,13 +491,13 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
       stop("df must be provided in the presence of covariates_dropout")
     }
 
-    if (!all(covariates_dropout %in% colnames(df))) {
+    if (!all(covariates_dropout %in% colnames(dt))) {
       stop("All covariates_dropout must exist in df")
     }
 
     xnames = paste(covariates_dropout, collapse = "+")
     formula = as.formula(paste("~", xnames))
-    x_dropout = model.matrix(formula, df)  # design matrix with intercept
+    x_dropout = model.matrix(formula, dt)  # design matrix with intercept
     q_dropout = ncol(x_dropout) - 1
 
 
@@ -508,7 +524,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         erify::check_content(tolower(dropout_fit_w_x[[j]]$model),
                              c("exponential", "weibull", "log-logistic",
                                "log-normal", "piecewise exponential",
-                               "model averaging", "spline"))
+                               "model averaging", "spline", "cox model"))
       }
     } else {
       for (j in 1:ngroups) {
@@ -540,6 +556,9 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
            q_dropout) ||
           (model == "model averaging" && p != 2*(2 + q_dropout)) ||
           (model == "spline" && p != length(dropout_fit_w_x[[j]]$knots) +
+           q_dropout) ||
+          (model == "cox model" &&
+           p != length(dropout_fit_w_x[[j]]$piecewiseDropoutTime) - 1 +
            q_dropout)) {
         stop(paste("Length of theta must be compatible with model",
                    "in dropout_fit_with_covariates"))
@@ -562,46 +581,46 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
   # check input data and extract ongoing subjects
   if (!is.null(df)) {
-    df$trialsdt <- as.Date(df$trialsdt)
-    df$randdt <- as.Date(df$randdt)
-    df$cutoffdt <- as.Date(df$cutoffdt)
+    dt$trialsdt <- as.Date(dt$trialsdt)
+    dt$randdt <- as.Date(dt$randdt)
+    dt$cutoffdt <- as.Date(dt$cutoffdt)
 
-    trialsdt = df[1, get("trialsdt")]
-    cutoffdt = df[1, get("cutoffdt")]
+    trialsdt = dt[1, get("trialsdt")]
+    cutoffdt = dt[1, get("cutoffdt")]
     t0 = as.numeric(cutoffdt - trialsdt + 1)
 
-    if (df[, any(get("randdt") < get("trialsdt"))]) {
+    if (dt[, any(get("randdt") < get("trialsdt"))]) {
       stop("randdt must be greater than or equal to trialsdt")
     }
 
-    if (df[, any(get("randdt") > get("cutoffdt"))]) {
+    if (dt[, any(get("randdt") > get("cutoffdt"))]) {
       stop("randdt must be less than or equal to cutoffdt")
     }
 
-    if (df[, any(get("time") < 1)]) {
+    if (dt[, any(get("time") < 1)]) {
       stop("time must be greater than or equal to 1")
     }
 
-    if (df[, any(get("event") & get("dropout"))]) {
+    if (dt[, any(get("event") & get("dropout"))]) {
       stop("event and dropout cannot both be equal to 1 simultaneously")
     }
 
-    if (df[, any(get("time") >
+    if (dt[, any(get("time") >
                  as.numeric(get("cutoffdt") - get("randdt") + 1))]) {
       stop("time must be less than or equal to cutoffdt - randdt + 1")
     }
 
-    df[, `:=`(
+    dt[, `:=`(
       arrivalTime = as.numeric(get("randdt") - get("trialsdt") + 1),
       totalTime = as.numeric(get("randdt") - get("trialsdt")) + get("time"))]
 
-    if (!("usubjid" %in% names(df))) {
-      df[, `:=`(usubjid = paste0("A-", 100000 + .I))]
+    if (!("usubjid" %in% names(dt))) {
+      dt[, `:=`(usubjid = paste0("A-", 100000 + .I))]
     }
 
     # subset to extract ongoing subjects
-    iOngoing = df[, which(!get("event") & !get("dropout"))]
-    ongoingSubjects = df[iOngoing]
+    iOngoing = dt[, which(!get("event") & !get("dropout"))]
+    ongoingSubjects = dt[iOngoing]
     if (!is.null(covariates_event)) {
       x_eventOngoing <- x_event[iOngoing,]
     }
@@ -616,13 +635,13 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     time0Ongoing <- ongoingSubjects$time
     tp = ongoingSubjects[, min(get("totalTime"))]
     cutofftpdt = as.Date(tp - 1, origin = trialsdt)
-    n0 = df[, .N]
-    d0 = df[, sum(get("event"))]
-    c0 = df[, sum(get("dropout"))]
+    n0 = dt[, .N]
+    d0 = dt[, sum(get("event"))]
+    c0 = dt[, sum(get("dropout"))]
     r0 = ongoingSubjects[, .N]
 
     # subjects who have had the event or dropped out
-    stoppedSubjects <- df[get("event") | get("dropout")]
+    stoppedSubjects <- dt[get("event") | get("dropout")]
   } else {
     t0 = 1
     tp = 1
@@ -643,7 +662,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
   if (!is.null(newSubjects)) {
     # predicted enrollment end day
-    new1 <- newSubjects[, .SD[.N], by = get("draw")]
+    new1 <- nt[, .SD[.N], by = get("draw")]
     pred_day1 <- ceiling(quantile(new1$arrivalTime, c(0.5, plower, pupper)))
 
     # future time points at which to predict number of subjects
@@ -661,7 +680,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
       # predicted number of subjects enrolled after data cut
       dfb1 <- merge(
         data.table(t = t, dummy = 1),
-        data.table::copy(newSubjects)[, `:=`(dummy = 1)],
+        data.table::copy(nt)[, `:=`(dummy = 1)],
         by = "dummy", allow.cartesian = TRUE)[
           , list(nenrolled = sum(get("arrivalTime") <= get("t")) + n0),
           by = c("t", "draw")][
@@ -681,7 +700,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                         mean = 0, var = 0)
 
       # arrival time for subjects already enrolled before data cut
-      dfa1 <- df[order(get("randdt")), list(
+      dfa1 <- dt[order(get("randdt")), list(
         t = as.numeric(get("randdt") - get("trialsdt") + 1),
         n = .I, pilevel = pilevel, lower = NA, upper = NA,
         mean = .I, var = 0)]
@@ -721,7 +740,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     # summary of observed data by treatment
     if (!is.null(df)) {
       # add overall treatment
-      df2 <- data.table::rbindlist(list(df, data.table::copy(df)[, `:=`(
+      df2 <- data.table::rbindlist(list(dt, data.table::copy(dt)[, `:=`(
         treatment = 9999, treatment_description = "Overall")]),
         use.names = TRUE)
 
@@ -733,7 +752,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     if (!is.null(newSubjects)) {
       # add overall treatment
       newSubjects2 <- data.table::rbindlist(list(
-        newSubjects, data.table::copy(newSubjects)[, `:=`(
+        nt, data.table::copy(nt)[, `:=`(
           treatment = 9999, treatment_description = "Overall")]),
         use.names = TRUE)
 
@@ -773,12 +792,11 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         upper = NA, mean = 0, var = 0)]
 
       # arrival time for subjects already enrolled before data cut
-      dfa1 <- df2[do.call("order", lapply(c(
-        "treatment", "treatment_description", "randdt"), as.name))][
-          , list(t = as.numeric(get("randdt") - get("trialsdt") + 1),
-                 n = seq_len(.N), pilevel = pilevel, lower = NA,
-                 upper = NA, mean = seq_len(.N), var = 0),
-          by = trtcols]
+      dfa1 <- df2[do.call("order", lapply(c(trtcols, "randdt"), as.name))][
+        , list(t = as.numeric(get("randdt") - get("trialsdt") + 1),
+               n = seq_len(.N), pilevel = pilevel, lower = NA,
+               upper = NA, mean = seq_len(.N), var = 0),
+        by = trtcols]
 
       dft0 <- sum_by_trt[, list(
         treatment = get("treatment"),
@@ -922,7 +940,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
   # generate the event and dropout times
   if (!is.null(newSubjects)) {
-    m1 = nrow(newSubjects)
+    m1 = nrow(nt)
   } else {
     m1 = 0
   }
@@ -935,16 +953,16 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
   for (i in 1:nreps) {
     # number of new subjects in the simulated data set
     if (m1 > 0) {
-      n1 = newSubjects[get("draw") == i, .N]
+      n1 = nt[get("draw") == i, .N]
     } else {
       n1 = 0
     }
 
-    m = r0 + n1
+    m0 = r0 + n1
 
     # usubjid, arrival time, treatment, and time offset for new subjects
     if (n1 > 0) {
-      newSubjects1 <- newSubjects[get("draw") == i]
+      newSubjects1 <- nt[get("draw") == i]
       usubjidNew = newSubjects1$usubjid
       arrivalTimeNew = newSubjects1$arrivalTime
       treatmentNew = newSubjects1$treatment
@@ -1034,6 +1052,15 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
             survivalTimeNew[cols] = flexsurv::rsurvspline(
               ncols, theta, knots = knots, scale = scale)
+          } else if (model == "cox model") {
+            tcut = event_fit[[j]]$piecewiseSurvivalTime
+            M = length(tcut) - 1
+            w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
+            lambda1 = exp(theta[1:M])
+            lambda2 = sum(w*lambda1[(M-m+1):M])
+            gamma = c(theta[1:M], log(lambda2))
+            survivalTimeNew[cols] = qpwexp(
+              runif(ncols), gamma, M+1, tcut, lower.tail = FALSE)
           }
         }
       }
@@ -1118,6 +1145,16 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             survivalTimeOngoing[cols] = flexsurv::qsurvspline(
               runif(ncols)*p, theta, knots = knots, scale = scale,
               lower.tail = FALSE)
+          } else if (model == "cox model") {
+            tcut = event_fit[[j]]$piecewiseSurvivalTime
+            M = length(tcut) - 1
+            w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
+            lambda1 = exp(theta[1:M])
+            lambda2 = sum(w*lambda1[(M-m+1):M])
+            gamma = c(theta[1:M], log(lambda2))
+            p = ppwexp(u0, gamma, M+1, tcut, lower.tail = FALSE)
+            survivalTimeOngoing[cols] = qpwexp(
+              runif(ncols)*p, gamma, M+1, tcut, lower.tail = FALSE)
           }
         }
       }
@@ -1163,7 +1200,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           } else if (model == "piecewise exponential") {
             J = length(theta) - q_event    # number of intervals
             gamma = theta[1:J]
-            tcut = event_fit[[j]]$piecewiseSurvivalTime
+            tcut = event_fit_w_x[[j]]$piecewiseSurvivalTime
             xbeta = as.numeric(as.matrix(x1[,-1]) %*%
                                  theta[(J+1):(J+q_event)])
             p = ppwexp(u0, gamma, J, tcut, lower.tail = FALSE)
@@ -1213,6 +1250,19 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                 u1[l]*p, gamma, knots = knots, scale = scale,
                 offset = xbeta[l], lower.tail = FALSE)
             })
+          } else if (model == "cox model") {
+            tcut = event_fit_w_x[[j]]$piecewiseSurvivalTime
+            M = length(tcut) - 1
+            w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
+            lambda1 = exp(theta[1:M])
+            lambda2 = sum(w*lambda1[(M-m+1):M])
+            gamma = c(theta[1:M], log(lambda2))
+            xbeta = as.numeric(as.matrix(x1[,-1]) %*%
+                                 theta[(M+1):(M+q_event)])
+            p = ppwexp(u0, gamma, M+1, tcut, lower.tail = FALSE)
+            survivalTimeOngoing[cols] = qpwexp(
+              runif(ncols)^exp(-xbeta)*p, gamma, M+1, tcut,
+              lower.tail = FALSE)
           }
         }
       }
@@ -1287,6 +1337,16 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
             dropoutTimeNew[cols] = flexsurv::rsurvspline(
               ncols, theta, knots = knots, scale = scale)
+          } else if (model == "cox model") {
+            tcut = dropout_fit[[j]]$piecewiseDropoutTime
+            M = length(tcut) - 1
+            w = diff(tcut)[(M-m_dropout+1):M]/
+              (tcut[M+1] - tcut[M-m_dropout+1])
+            lambda1 = exp(theta[1:M])
+            lambda2 = sum(w*lambda1[(M-m_dropout+1):M])
+            gamma = c(theta[1:M], log(lambda2))
+            dropoutTimeNew[cols] = qpwexp(
+              runif(ncols), gamma, M+1, tcut, lower.tail = FALSE)
           }
         }
       }
@@ -1371,6 +1431,17 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             dropoutTimeOngoing[cols] = flexsurv::qsurvspline(
               runif(ncols)*p, theta, knots = knots, scale = scale,
               lower.tail = FALSE)
+          } else if (model == "cox model") {
+            tcut = dropout_fit[[j]]$piecewiseDropoutTime
+            M = length(tcut) - 1
+            w = diff(tcut)[(M-m_dropout+1):M]/
+              (tcut[M+1] - tcut[M-m_dropout+1])
+            lambda1 = exp(theta[1:M])
+            lambda2 = sum(w*lambda1[(M-m_dropout+1):M])
+            gamma = c(theta[1:M], log(lambda2))
+            p = ppwexp(u0, gamma, M+1, tcut, lower.tail = FALSE)
+            dropoutTimeOngoing[cols] = qpwexp(
+              runif(ncols)*p, gamma, M+1, tcut, lower.tail = FALSE)
           }
         }
       }
@@ -1416,7 +1487,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           } else if (model == "piecewise exponential") {
             J = length(theta) - q_dropout    # number of intervals
             gamma = theta[1:J]
-            tcut = dropout_fit[[j]]$piecewiseDropoutTime
+            tcut = dropout_fit_w_x[[j]]$piecewiseDropoutTime
             xbeta = as.numeric(as.matrix(x1[,-1]) %*%
                                  theta[(J+1):(J+q_dropout)])
             p = ppwexp(u0, gamma, J, tcut, lower.tail = FALSE)
@@ -1466,6 +1537,20 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                 u1[l]*p, gamma, knots = knots, scale = scale,
                 offset = xbeta[l], lower.tail = FALSE)
             })
+          } else if (model == "cox model") {
+            tcut = dropout_fit_w_x[[j]]$piecewiseDropoutTime
+            M = length(tcut) - 1
+            w = diff(tcut)[(M-m_dropout+1):M]/
+              (tcut[M+1] - tcut[M-m_dropout+1])
+            lambda1 = exp(theta[1:M])
+            lambda2 = sum(w*lambda1[(M-m_dropout+1):M])
+            gamma = c(theta[1:M], log(lambda2))
+            xbeta = as.numeric(as.matrix(x1[,-1]) %*%
+                                 theta[(M+1):(M+q_dropout)])
+            p = ppwexp(u0, gamma, M+1, tcut, lower.tail = FALSE)
+            dropoutTimeOngoing[cols] = qpwexp(
+              runif(ncols)^exp(-xbeta)*p, gamma, M+1, tcut,
+              lower.tail = FALSE)
           }
         }
       }
@@ -1506,7 +1591,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     }
 
     # fill out the ith block of output data frame
-    index = offset + (1:m)
+    index = offset + (1:m0)
 
     newEvents[index, `:=`(
       draw = i,
@@ -1518,7 +1603,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
       event = eventx,
       dropout = dropoutx)]
 
-    offset = offset + m
+    offset = offset + m0
   }
 
 
@@ -1603,29 +1688,36 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     sumdata <- newEvents[, list(
       n = sum(get("totalTime") <= t & get("event"))), by = "draw"]
     q <- quantile(sumdata$n, probs = c(0.5, plower, pupper)) + d0
+    mean1 <- mean(sumdata$n) + d0
+    var1 <- var(sumdata$n)
     prob <- mean(sumdata$n >= target_d - d0)
-    data.table(t = t, median_d = q[1], pilevel = pilevel,
+    data.table(t = t, n = q[1], pilevel = pilevel,
                lower = q[2], upper = q[3],
+               mean = mean1, var = var1,
                target_d = target_d, prob_gt_target_d = prob)
   }
 
   if (!all(is.na(target_t))) {
     pred_at_t <- data.table::rbindlist(
       purrr::map(target_t, function(u) {
-        dt <- f_pred_at_t(u + t0, target_d, d0, newEvents)
+        dx <- f_pred_at_t(u + t0, target_d, d0, newEvents)
         if (!is.null(df)) {
-          dt[, `:=`(date = as.Date(get("t"), origin = trialsdt))]
+          dx[, `:=`(date = as.Date(get("t"), origin = trialsdt))]
         }
-        dt
+        dx
       }))
   }
 
 
   # observed time points
-  t2 = sort(unique(c(df$arrivalTime, df$totalTime)))
+  if (!is.null(df)) {
+    t2 = sort(unique(c(dt$arrivalTime, dt$totalTime)))
+    t = unique(c(t2[t2 >= tp], seq(t0, t1, 30), t1))
+  } else {
+    t = unique(c(seq(t0, t1, 30), t1))
+  }
 
   # future time points at which to predict number of events
-  t = unique(c(t2[t2 >= tp], seq(t0, t1, 30), t1))
   if (!all(is.na(target_t))) {
     t = sort(unique(t, target_t + t0))
   }
@@ -1679,7 +1771,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
       # observed number of events before data cut
       dfa2 <- data.table::rbindlist(list(
-        df0, df[order(get("totalTime")), list(
+        df0, dt[order(get("totalTime")), list(
           t = get("totalTime"),
           n = cumsum(get("event")),
           pilevel = pilevel,
@@ -1691,7 +1783,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
       # observed number of dropouts before data cut
       dfa3 <- data.table::rbindlist(list(
-        df0, df[order(get("totalTime")), list(
+        df0, dt[order(get("totalTime")), list(
           t = get("totalTime"),
           n = cumsum(get("dropout")),
           pilevel = pilevel,
@@ -1704,7 +1796,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
       # observed number of ongoing subjects before data cutoff
       dfa4 <- data.table::rbindlist(list(
         df0, merge(data.table(t = t2, dummy = 1),
-                   data.table::copy(df)[, `:=`(dummy = 1)],
+                   data.table::copy(dt)[, `:=`(dummy = 1)],
                    by = "dummy", allow.cartesian = TRUE)[, list(
                      n = sum(get("arrivalTime") <= get("t") &
                                (get("totalTime") > get("t") |
@@ -1840,25 +1932,11 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             showlegend = FALSE) %>%
           plotly::layout(
             annotations = list(
-              x = cutoffdt, y = 0, text = 'cutoff',
-              xanchor = "left", yanchor = "bottom",
+              x = cutoffdt, y = 0, text = "cutoff",
+              xanchor = "left", yanchor = "bottom", textangle = -90,
               font = list(size=12), showarrow = FALSE),
             xaxis = list(title = "", zeroline = FALSE),
             yaxis = list(zeroline = FALSE))
-
-        if (!all(is.na(target_t))) {
-          g1 <- g1 %>%
-            plotly::layout(
-              shapes = lapply(pred_at_t$date, function(date) {
-                list(
-                  type = "line",
-                  x0 = date, x1 = date,
-                  y0 = min(dfa$n), y1 = max(dfb$upper),
-                  line = list(color = "lightgreen", dash = "dash")
-                )
-              })
-            )
-        }
 
         if (tp < t0) {
           g1 <- g1 %>%
@@ -1868,8 +1946,8 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
               line = list(dash="dash", color="grey"), showlegend = FALSE) %>%
             plotly::layout(
               annotations = list(
-                x = cutofftpdt, y = 0, text = 'prediction start',
-                xanchor = "left", yanchor = "bottom",
+                x = cutofftpdt, y = 0, text = "prediction start",
+                xanchor = "left", yanchor = "bottom", textangle = -90,
                 font = list(size=12), showarrow = FALSE))
         }
 
@@ -1928,22 +2006,6 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           plotly::layout(
             xaxis = list(title = "Days since trial start", zeroline = FALSE),
             yaxis = list(zeroline = FALSE))
-
-
-        if (!all(is.na(target_t))) {
-          g1 <- g1 %>%
-            plotly::layout(
-              shapes = lapply(pred_at_t$t, function(t) {
-                list(
-                  type = "line",
-                  x0 = t, x1 = t,
-                  y0 = min(dfs$n), y1 = max(dfs$upper),
-                  line = list(color = "lightgreen", dash = "dash")
-                )
-              })
-            )
-        }
-
 
         if (showEvent) {
           g1 <- g1 %>%
@@ -2217,32 +2279,16 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             g1[[1]] <- g1[[1]] %>%
               plotly::layout(
                 annotations = list(
-                  x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
-                  yanchor = "bottom", font = list(size=12),
-                  showarrow = FALSE))
-
-
-            if (!all(is.na(target_t))) {
-              g1[[1]] <- g1[[1]] %>%
-                plotly::layout(
-                  shapes = lapply(pred_at_t$date, function(date) {
-                    list(
-                      type = "line",
-                      x0 = date, x1 = date,
-                      y0 = min(dfai$n), y1 = max(dfbi$upper),
-                      line = list(color = "lightgreen", dash = "dash")
-                    )
-                  })
-                )
-            }
-
+                  x = cutoffdt, y = 0, text = "cutoff",
+                  xanchor = "left", yanchor = "bottom", textangle = -90,
+                  font = list(size=12), showarrow = FALSE))
 
             if (tp < t0) {
               g1[[1]] <- g1[[1]] %>%
                 plotly::layout(
                   annotations = list(
-                    x = cutofftpdt, y = 0, text = 'prediction start',
-                    xanchor = "left", yanchor = "bottom",
+                    x = cutofftpdt, y = 0, text = "prediction start",
+                    xanchor = "left", yanchor = "bottom", textangle = -90,
                     font = list(size=12), showarrow = FALSE))
             }
 
@@ -2318,20 +2364,6 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
 
           if (i == 9999) {
-            if (!all(is.na(target_t))) {
-              g1[[1]] <- g1[[1]] %>%
-                plotly::layout(
-                  shapes = lapply(pred_at_t$t, function(t) {
-                    list(
-                      type = "line",
-                      x0 = t, x1 = t,
-                      y0 = min(dfsi$lower), y1 = max(dfsi$upper),
-                      line = list(color = "lightgreen", dash = "dash")
-                    )
-                  })
-                )
-            }
-
             if (showEvent) {
               g1[[1]]  <- g1[[1]] %>%
                 plotly::add_lines(
@@ -2356,7 +2388,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
   if (showsummary) {
     cat(s1)
     if (!all(is.na(target_t))) {
-      print(as.data.frame(pred_at_t))
+      print(as.data.frame(pred_at_t[, -c("mean", "var")]))
     }
   }
 
