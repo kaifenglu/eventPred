@@ -68,31 +68,31 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
 
   erify::check_bool(showplot)
 
-  data.table::setDT(df)
+  dt <- data.table::setDT(data.table::copy(df))
 
-  df$trialsdt <- as.Date(df$trialsdt)
-  df$randdt <- as.Date(df$randdt)
-  df$cutoffdt <- as.Date(df$cutoffdt)
+  dt$trialsdt <- as.Date(dt$trialsdt)
+  dt$randdt <- as.Date(dt$randdt)
+  dt$cutoffdt <- as.Date(dt$cutoffdt)
 
-  trialsdt = df[1, get("trialsdt")]
-  cutoffdt = df[1, get("cutoffdt")]
-  n0 = nrow(df)
+  trialsdt = dt[1, get("trialsdt")]
+  cutoffdt = dt[1, get("cutoffdt")]
+  n0 = nrow(dt)
 
   # up to the last randomization date to account for enrollment completion
-  t0 = df[, max(as.numeric(get("randdt") - get("trialsdt") + 1))]
+  t0 = dt[, max(as.numeric(get("randdt") - get("trialsdt") + 1))]
 
   erify::check_positive(n0, supplement = paste(
     "The number of subjects must be positive to fit an enrollment model."))
 
-  if (df[, any(get("randdt") < get("trialsdt"))]) {
+  if (dt[, any(get("randdt") < get("trialsdt"))]) {
     stop("randdt must be greater than or equal to trialsdt")
   }
 
-  if (df[, any(get("randdt") > get("cutoffdt"))]) {
+  if (dt[, any(get("randdt") > get("cutoffdt"))]) {
     stop("randdt must be less than or equal to cutoffdt")
   }
 
-  df1 <- df[order(get("randdt"))][, `:=`(
+  df1 <- dt[order(get("randdt"))][, `:=`(
     t = as.numeric(get("randdt") - get("trialsdt") + 1), n = .I)]
 
   # remove duplicates
