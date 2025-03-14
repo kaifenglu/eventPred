@@ -1,7 +1,20 @@
+# eventPred 0.2.8
+
+* adjusted the log-likelihood for Cox model for a fair comparison with parametric regression models
+
 # eventPred 0.2.7
 
-* update the documentation of fitEvent and fitDropout
+* use regression and math notation in eventPred-package documentation
 * replace dplyr with data.table
+* change time intervals to left-closed, right-open for piecewise exponential distributions
+* change the algorithm for fitting piecewise exponential regression to that using profile likelihood
+* use x to denote the covariates vector or design matrix with intercept
+* use q to denote the length of covariates vector or number of columns of the covariates matrix excluding the intercept
+* add enrolldf, dffit and text to fitEnrollment output
+* add kmdf, dffit and text to fitEvent and fitDropout output
+* add target_t to predictEvent and getPrediction
+* add a default value to the x parameter in piecewise exponential utility functions
+* add cox model as a model option for fitEvent and fitDropout, and update predictEvent and getPrediction accordingly
 
 # eventPred 0.2.6
 
