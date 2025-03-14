@@ -23,7 +23,7 @@
 #'
 #' @export
 #'
-ppwexp <- function(t, theta, J, tcut, q = 0, x, lower.tail = TRUE,
+ppwexp <- function(t, theta, J, tcut, q = 0, x = 1, lower.tail = TRUE,
                    log.p = FALSE) {
 
   lambda = exp(theta[1:J]) # hazard rates in the intervals
@@ -77,7 +77,7 @@ ppwexp <- function(t, theta, J, tcut, q = 0, x, lower.tail = TRUE,
 #'
 #' @export
 #'
-qpwexp <- function(p, theta, J, tcut, q = 0, x, lower.tail = TRUE,
+qpwexp <- function(p, theta, J, tcut, q = 0, x = 1, lower.tail = TRUE,
                    log.p = FALSE) {
 
   lambda = exp(theta[1:J]) # hazard rates in the intervals
@@ -110,7 +110,7 @@ qpwexp <- function(p, theta, J, tcut, q = 0, x, lower.tail = TRUE,
 #' @description Obtains the profile log likelihood value for piecewise
 #' exponential regression.
 #'
-#' @param beta The regression coefficients with respect the covariates.
+#' @param beta The regression coefficients with respect to the covariates.
 #' @param time The survival time.
 #' @param event The event indicator.
 #' @param J The number of time intervals.
@@ -163,7 +163,7 @@ pllik_pwexp <- function(beta, time, event, J, tcut, x) {
 #'
 #' @export
 #'
-pwexpreg <- function(time, event, J, tcut, q = 0, x) {
+pwexpreg <- function(time, event, J, tcut, q = 0, x = 1) {
   # get the variable name as a character string
   if (grepl("dropout", deparse(substitute(event)), ignore.case = TRUE)) {
     variable_name = "dropout"
@@ -306,7 +306,8 @@ pwexpreg <- function(time, event, J, tcut, q = 0, x) {
 #'
 #' @export
 #'
-pmodavg <- function(t, theta, w1, q, x, lower.tail = TRUE, log.p = FALSE) {
+pmodavg <- function(t, theta, w1, q = 0, x = 1, lower.tail = TRUE,
+                    log.p = FALSE) {
   shape = exp(-theta[q+2])
   scale = exp(sum(x * theta[1:(q+1)]))
   meanlog = sum(x * theta[(q+3):(2*q+3)])
