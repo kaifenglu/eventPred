@@ -8,7 +8,7 @@
 #' @param dropout_model The dropout model used to analyze the dropout data
 #'   which can be set to one of the following options:
 #'   "exponential", "Weibull", "log-logistic", "log-normal",
-#'   "piecewise exponential", "model averaging", "spline", or "cox model".
+#'   "piecewise exponential", "model averaging", "spline", or "cox".
 #'   The model averaging uses the \code{exp(-bic/2)} weighting and
 #'   combines Weibull and log-normal models. The spline model of
 #'   Royston and Parmar (2002) assumes that a transformation of
@@ -24,12 +24,14 @@
 #'   The knots are chosen as equally-spaced quantiles of the log
 #'   uncensored survival times. The boundary knots are chosen as the
 #'   minimum and maximum log uncensored survival times.
-#' @param scale_dropout If "hazard", the log cumulative hazard is modeled
-#'   as a spline function. If "odds", the log cumulative odds is
-#'   modeled as a spline function. If "normal", -qnorm(S(t)) is
-#'   modeled as a spline function.
+#' @param scale_dropout  The scale of the spline. The default is "hazard",
+#'   in which case the log cumulative hazard is modeled as a spline
+#'   function. If \code{scale = "odds"}, the log cumulative odds is
+#'   modeled as a spline function. If \code{scale = "normal"},
+#'   \code{-qnorm(S(t))} is modeled as a spline function.
 #' @param m_dropout The number of dropout time intervals to extrapolate
-#'   the hazard function beyond the last observed dropout time.
+#'   the hazard function beyond the last observed dropout time when
+#'   \code{dropout_model = "cox"}.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the fitted time-to-dropout survival curve. By default, it is
 #'   set to \code{TRUE}.
@@ -56,14 +58,14 @@
 #' If the spline option is chosen, the \code{knots} and \code{scale}
 #' will be included in the list of results.
 #'
-#' If the cox model option is chosen, the list of results will include
+#' If the cox option is chosen, the list of results will include
 #' \code{model}, \code{theta}, \code{vtheta}, \code{aic}, \code{bic}, and
 #' \code{piecewiseDropoutTime}. Here
 #' \deqn{\theta = (\log(\lambda_1), \ldots, \log(\lambda_M), \beta^T)^T,}
 #' \eqn{M} denotes the number of distinct observed dropout times,
 #' \eqn{t_1 < \cdots < t_M},
-#' \eqn{\lambda_j} denotes the estimated hazard rate in the \eqn{j}th
-#' dropout time interval, \eqn{(t_{j-1}, t_j]}, and
+#' \eqn{\lambda_j} denotes the estimated baseline hazard rate in
+#' the \eqn{j}th dropout time interval, \eqn{(t_{j-1}, t_j]}, and
 #' \eqn{\beta} represents the regression
 #' coefficients (log hazard ratios) from the Cox model.
 #' For a fair comparison, the estimation of baseline hazards is
@@ -111,7 +113,7 @@ fitDropout <- function(df, dropout_model = "exponential",
   erify::check_content(tolower(dropout_model),
                        c("exponential", "weibull", "log-logistic",
                          "log-normal", "piecewise exponential",
-                         "model averaging", "spline", "cox model"))
+                         "model averaging", "spline", "cox"))
 
   if (piecewiseDropoutTime[1] != 0) {
     stop("piecewiseDropoutTime must start with 0");
@@ -375,7 +377,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       }
 
       dffit3 <- data.table(time, surv)
-    } else if (tolower(dropout_model) == "cox model") {
+    } else if (tolower(dropout_model) == "cox") {
       erify::check_positive(c0 - q, supplement = paste(
         "The number of dropouts must be >=", q + 1,
         "to fit a Cox model."))
@@ -422,7 +424,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       }
 
       # account for the estimation of baseline hazard in AIC and BIC
-      fit3 <- list(model = "Cox model",
+      fit3 <- list(model = "Cox",
                    theta = theta,
                    vtheta = vtheta,
                    aic = -2*llik + 2*(M+q),
@@ -460,7 +462,7 @@ fitDropout <- function(df, dropout_model = "exponential",
     } else if (tolower(fit3$model) == "spline") {
       modeltext = paste0(fit3$model, "(k = ", k_dropout, ", ", "scale = '",
                          scale_dropout, "')")
-    } else if (tolower(fit3$model) == "cox model") {
+    } else if (tolower(fit3$model) == "cox") {
       modeltext = paste0(fit3$model, "(m = ", m_dropout, ")")
     } else {
       modeltext = fit3$model

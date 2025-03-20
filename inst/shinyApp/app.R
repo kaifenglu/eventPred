@@ -443,7 +443,7 @@ eventPanel <- tabPanel(
                     "Piecewise exponential",
                     "Model averaging",
                     "Spline",
-                    "Cox model"),
+                    "Cox"),
         selected = "Model averaging",
         inline = FALSE)
       ),
@@ -486,7 +486,7 @@ eventPanel <- tabPanel(
              ),
 
              conditionalPanel(
-               condition = "input.event_model == 'Cox model'",
+               condition = "input.event_model == 'Cox'",
 
                numericInput(
                  "m_event",
@@ -551,7 +551,7 @@ dropoutPanel <- tabPanel(
                     "Piecewise exponential",
                     "Model averaging",
                     "Spline",
-                    "Cox model"),
+                    "Cox"),
         selected = "Exponential",
         inline = FALSE)
       ),
@@ -595,7 +595,7 @@ dropoutPanel <- tabPanel(
              ),
 
              conditionalPanel(
-               condition = "input.dropout_model == 'Cox model'",
+               condition = "input.dropout_model == 'Cox'",
 
                numericInput(
                  "m_dropout",
@@ -1844,7 +1844,7 @@ server <- function(input, output, session) {
           need(target_d() > observed()$d0,
                "Target number of events has been reached."))
 
-        if (input$event_model == "Cox model") {
+        if (input$event_model == "Cox") {
           shiny::validate(
             need(observed()$d0 >= m_event(), paste(
               "The number of event time intervals must be less than",
@@ -1857,7 +1857,7 @@ server <- function(input, output, session) {
               "The number of dropouts must be positive",
               "to fit a dropout model.")))
 
-          if (input$dropout_model == "Cox model") {
+          if (input$dropout_model == "Cox") {
             shiny::validate(
               need(observed()$c0 >= m_dropout(), paste(
                 "The number of dropout time intervals must be less than",
@@ -1902,7 +1902,7 @@ server <- function(input, output, session) {
           need(target_d() > observed()$d0,
                "Target number of events has been reached."))
 
-        if (input$event_model == "Cox model") {
+        if (input$event_model == "Cox") {
           shiny::validate(
             need(observed()$d0 >= m_event(), paste(
               "The number of event time intervals must be less than",
@@ -1915,7 +1915,7 @@ server <- function(input, output, session) {
               "The number of dropouts must be positive",
               "to fit a dropout model.")))
 
-          if (input$dropout_model == "Cox model") {
+          if (input$dropout_model == "Cox") {
             shiny::validate(
               need(observed()$c0 >= m_dropout(), paste(
                 "The number of dropout time intervals must be less than",
@@ -3292,7 +3292,7 @@ server <- function(input, output, session) {
           updateNumericInput(session, "spline_k", value=x$spline_k)
           updateRadioButtons(session, "spline_scale",
                              selected=x$spline_scale)
-        } else if (x$event_model == "Cox model") {
+        } else if (x$event_model == "Cox") {
           updateNumericInput(session, "m_event",
                              value=x$m_event)
         }
@@ -3351,7 +3351,7 @@ server <- function(input, output, session) {
                              value=x$spline_k_dropout)
           updateRadioButtons(session, "spline_scale_dropout",
                              selected=x$spline_scale_dropout)
-        } else if (x$dropout_model == "Cox model") {
+        } else if (x$dropout_model == "Cox") {
           updateNumericInput(session, "m_dropout",
                              value=x$m_dropout)
         }

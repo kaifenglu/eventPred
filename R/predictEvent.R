@@ -236,7 +236,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         erify::check_content(tolower(event_fit[[j]]$model),
                              c("exponential", "weibull", "log-logistic",
                                "log-normal", "piecewise exponential",
-                               "model averaging", "spline", "cox model"))
+                               "model averaging", "spline", "cox"))
       }
     } else {
       for (j in 1:ngroups) {
@@ -267,7 +267,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
            p != length(event_fit[[j]]$piecewiseSurvivalTime)) ||
           (model == "model averaging" && p != 4) ||
           (model == "spline" && p != length(event_fit[[j]]$knots)) ||
-          (model == "cox model" &&
+          (model == "cox" &&
            p != length(event_fit[[j]]$piecewiseSurvivalTime) - 1)) {
         stop(paste("Length of theta must be compatible with model",
                    "in event_fit"))
@@ -308,7 +308,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         erify::check_content(tolower(dropout_fit[[j]]$model),
                              c("exponential", "weibull", "log-logistic",
                                "log-normal", "piecewise exponential",
-                               "model averaging", "spline", "cox model"))
+                               "model averaging", "spline", "cox"))
       }
     } else {
       for (j in 1:ngroups) {
@@ -339,7 +339,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
            p != length(dropout_fit[[j]]$piecewiseDropoutTime)) ||
           (model == "model averaging" && p != 4) ||
           (model == "spline" && p != length(dropout_fit[[j]]$knots)) ||
-          (model == "cox model" &&
+          (model == "cox" &&
            p != length(dropout_fit[[j]]$piecewiseDropoutTime) - 1)) {
         stop(paste("Length of theta must be compatible with model",
                    "in dropout_fit"))
@@ -429,7 +429,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         erify::check_content(tolower(event_fit_w_x[[j]]$model),
                              c("exponential", "weibull", "log-logistic",
                                "log-normal", "piecewise exponential",
-                               "model averaging", "spline", "cox model"))
+                               "model averaging", "spline", "cox"))
       }
     } else {
       for (j in 1:ngroups) {
@@ -462,7 +462,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           (model == "model averaging" && p != 2*(2 + q_event)) ||
           (model == "spline" && p != length(event_fit_w_x[[j]]$knots) +
            q_event) ||
-          (model == "cox model" &&
+          (model == "cox" &&
            p != length(event_fit_w_x[[j]]$piecewiseSurvivalTime) - 1 +
            q_event)) {
         stop(paste("Length of theta must be compatible with model",
@@ -524,7 +524,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
         erify::check_content(tolower(dropout_fit_w_x[[j]]$model),
                              c("exponential", "weibull", "log-logistic",
                                "log-normal", "piecewise exponential",
-                               "model averaging", "spline", "cox model"))
+                               "model averaging", "spline", "cox"))
       }
     } else {
       for (j in 1:ngroups) {
@@ -557,7 +557,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           (model == "model averaging" && p != 2*(2 + q_dropout)) ||
           (model == "spline" && p != length(dropout_fit_w_x[[j]]$knots) +
            q_dropout) ||
-          (model == "cox model" &&
+          (model == "cox" &&
            p != length(dropout_fit_w_x[[j]]$piecewiseDropoutTime) - 1 +
            q_dropout)) {
         stop(paste("Length of theta must be compatible with model",
@@ -1052,7 +1052,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
             survivalTimeNew[cols] = flexsurv::rsurvspline(
               ncols, theta, knots = knots, scale = scale)
-          } else if (model == "cox model") {
+          } else if (model == "cox") {
             tcut = event_fit[[j]]$piecewiseSurvivalTime
             M = length(tcut) - 1
             w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
@@ -1145,7 +1145,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             survivalTimeOngoing[cols] = flexsurv::qsurvspline(
               runif(ncols)*p, theta, knots = knots, scale = scale,
               lower.tail = FALSE)
-          } else if (model == "cox model") {
+          } else if (model == "cox") {
             tcut = event_fit[[j]]$piecewiseSurvivalTime
             M = length(tcut) - 1
             w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
@@ -1250,7 +1250,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                 u1[l]*p, gamma, knots = knots, scale = scale,
                 offset = xbeta[l], lower.tail = FALSE)
             })
-          } else if (model == "cox model") {
+          } else if (model == "cox") {
             tcut = event_fit_w_x[[j]]$piecewiseSurvivalTime
             M = length(tcut) - 1
             w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
@@ -1337,7 +1337,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
             dropoutTimeNew[cols] = flexsurv::rsurvspline(
               ncols, theta, knots = knots, scale = scale)
-          } else if (model == "cox model") {
+          } else if (model == "cox") {
             tcut = dropout_fit[[j]]$piecewiseDropoutTime
             M = length(tcut) - 1
             w = diff(tcut)[(M-m_dropout+1):M]/
@@ -1431,7 +1431,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             dropoutTimeOngoing[cols] = flexsurv::qsurvspline(
               runif(ncols)*p, theta, knots = knots, scale = scale,
               lower.tail = FALSE)
-          } else if (model == "cox model") {
+          } else if (model == "cox") {
             tcut = dropout_fit[[j]]$piecewiseDropoutTime
             M = length(tcut) - 1
             w = diff(tcut)[(M-m_dropout+1):M]/
@@ -1537,7 +1537,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                 u1[l]*p, gamma, knots = knots, scale = scale,
                 offset = xbeta[l], lower.tail = FALSE)
             })
-          } else if (model == "cox model") {
+          } else if (model == "cox") {
             tcut = dropout_fit_w_x[[j]]$piecewiseDropoutTime
             M = length(tcut) - 1
             w = diff(tcut)[(M-m_dropout+1):M]/

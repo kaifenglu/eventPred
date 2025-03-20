@@ -8,8 +8,7 @@
 #' @param event_model The event model used to analyze the event data
 #'   which can be set to one of the following options:
 #'   "exponential", "Weibull", "log-logistic", "log-normal",
-#'   "piecewise exponential", "model averaging", "spline", or
-#'   "cox model".
+#'   "piecewise exponential", "model averaging", "spline", or "cox".
 #'   The model averaging uses the \code{exp(-bic/2)} weighting and
 #'   combines Weibull and log-normal models. The spline model of
 #'   Royston and Parmar (2002) assumes that a transformation of
@@ -25,12 +24,14 @@
 #'   The knots are chosen as equally-spaced quantiles of the log
 #'   uncensored survival times. The boundary knots are chosen as the
 #'   minimum and maximum log uncensored survival times.
-#' @param scale If "hazard", the log cumulative hazard is modeled
-#'   as a spline function. If "odds", the log cumulative odds is
-#'   modeled as a spline function. If "normal", -qnorm(S(t)) is
-#'   modeled as a spline function.
+#' @param scale The scale of the spline. The default is "hazard",
+#'   in which case the log cumulative hazard is modeled as a spline
+#'   function. If \code{scale = "odds"}, the log cumulative odds is
+#'   modeled as a spline function. If \code{scale = "normal"},
+#'   \code{-qnorm(S(t))} is modeled as a spline function.
 #' @param m The number of event time intervals to extrapolate the hazard
-#'   function beyond the last observed event time.
+#'   function beyond the last observed event time when
+#'   \code{event_model = "cox"}.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the fitted time-to-event survival curve. By default, it is
 #'   set to \code{TRUE}.
@@ -57,14 +58,14 @@
 #' If the spline option is chosen, the \code{knots} and \code{scale}
 #' will be included in the list of results.
 #'
-#' If the cox model option is chosen, the list of results will include
+#' If the cox option is chosen, the list of results will include
 #' \code{model}, \code{theta}, \code{vtheta}, \code{aic}, \code{bic}, and
 #' \code{piecewiseSurvivalTime}. Here
 #' \deqn{\theta = (\log(\lambda_1), \ldots, \log(\lambda_M), \beta^T)^T,}
 #' \eqn{M} denotes the number of distinct observed event times,
 #' \eqn{t_1 < \cdots < t_M},
-#' \eqn{\lambda_j} denotes the estimated hazard rate in the \eqn{j}th
-#' event time interval, \eqn{(t_{j-1}, t_j]}, and
+#' \eqn{\lambda_j} denotes the estimated baseline hazard rate in
+#' the \eqn{j}th event time interval, \eqn{(t_{j-1}, t_j]}, and
 #' \eqn{\beta} represents the regression
 #' coefficients (log hazard ratios) from the Cox model.
 #' For a fair comparison, the estimation of baseline hazards is
@@ -112,7 +113,7 @@ fitEvent <- function(df, event_model = "model averaging",
   erify::check_content(tolower(event_model),
                        c("exponential", "weibull", "log-logistic",
                          "log-normal", "piecewise exponential",
-                         "model averaging", "spline", "cox model"))
+                         "model averaging", "spline", "cox"))
 
   if (piecewiseSurvivalTime[1] != 0) {
     stop("piecewiseSurvivalTime must start with 0");
@@ -374,7 +375,7 @@ fitEvent <- function(df, event_model = "model averaging",
       }
 
       dffit2 <- data.table(time, surv)
-    } else if (tolower(event_model) == "cox model") {
+    } else if (tolower(event_model) == "cox") {
       erify::check_positive(d0 - q, supplement = paste(
         "The number of events must be >=", q + 1,
         "to fit a Cox model."))
@@ -421,7 +422,7 @@ fitEvent <- function(df, event_model = "model averaging",
       }
 
       # account for the estimation of baseline hazard in AIC and BIC
-      fit2 <- list(model = "Cox model",
+      fit2 <- list(model = "Cox",
                    theta = theta,
                    vtheta = vtheta,
                    aic = -2*llik + 2*(M+q),
@@ -457,7 +458,7 @@ fitEvent <- function(df, event_model = "model averaging",
     } else if (tolower(fit2$model) == "spline") {
       modeltext = paste0(fit2$model, "(k = ", k, ", ", "scale = '",
                          scale, "')")
-    } else if (tolower(fit2$model) == "cox model") {
+    } else if (tolower(fit2$model) == "cox") {
       modeltext = paste0(fit2$model, "(m = ", m, ")")
     } else {
       modeltext = fit2$model
