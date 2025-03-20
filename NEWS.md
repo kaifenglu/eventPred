@@ -1,6 +1,8 @@
 # eventPred 0.2.8
 
-* adjusted the log-likelihood for Cox model for a fair comparison with parametric regression models
+* adjust the log-likelihood for Cox model for a fair comparison with parametric regression models
+* update the package description to add cox event and dropout model parameterization
+* add unit tests
 
 # eventPred 0.2.7
 
@@ -14,7 +16,7 @@
 * add kmdf, dffit and text to fitEvent and fitDropout output
 * add target_t to predictEvent and getPrediction
 * add a default value to the x parameter in piecewise exponential utility functions
-* add cox model as a model option for fitEvent and fitDropout, and update predictEvent and getPrediction accordingly
+* add cox as a model option for fitEvent and fitDropout, and update predictEvent and getPrediction accordingly
 
 # eventPred 0.2.6
 
