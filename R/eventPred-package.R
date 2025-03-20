@@ -30,7 +30,7 @@
 #'
 #' The \code{eventPred} package also offers several time-to-event models,
 #' including exponential, Weibull, log-logistic, log-normal, piecewise
-#' exponential, model averaging of Weibull and log-normal, and spline.
+#' exponential, model averaging of Weibull and log-normal, spline, and cox.
 #' For time to dropout, the same set of model options are considered.
 #' If enrollment is complete, ongoing subjects who have not had the event
 #' of interest or dropped out of the study before the data cut contribute
@@ -131,6 +131,13 @@
 #'     }
 #'     The hazard, odds, and normal scales correspond to extensions of
 #'     the Weibull, log-logistic, and log-normal distributions, respectively.
+#'     \item Cox: Let \eqn{t_1 < \cdots < t_M} denote the distinct
+#'     observed event times, \eqn{\lambda_j} denote the estimated baseline
+#'     hazard rate in the \eqn{j}th time interval, \eqn{(t_{j-1}, t_j]},
+#'     and \eqn{\beta} denote the regression coefficients (log hazard
+#'     ratios) from the Cox model. The model parameters including
+#'     the baseline hazards are
+#'     \eqn{\theta = (\log(\lambda_1),\ldots,\log(\lambda_M), \beta^T)^T}.
 #'   }
 #' }
 #'
