@@ -38,3 +38,4 @@ VignetteBuilder: knitr
 LazyData: true
 URL: https://github.com/kaifenglu/eventPred
 BugReports: https://github.com/kaifenglu/eventPred/issues
+Config/testthat/edition: 3
