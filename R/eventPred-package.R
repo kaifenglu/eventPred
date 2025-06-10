@@ -183,6 +183,7 @@
 #' @importFrom erify check_bool check_class check_content check_n
 #'   check_positive
 #' @importFrom lrstat phregr
+#' @importFrom rlang .data
 #' @importFrom shiny shinyAppDir
 #'
 NULL
