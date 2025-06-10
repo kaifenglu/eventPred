@@ -13,6 +13,9 @@
 #'   2 accrual intervals: [0, 30) and [30, Inf). By default, it is set to 0.
 #' @param showplot A Boolean variable to control whether or not to
 #'   show the fitted enrollment curve. By default, it is set to \code{TRUE}.
+#' @param generate_plot Whether to generate plots.
+#' @param interactive_plot Whether to produce interactive plots using
+#'   plotly or static plots using ggplot2.
 #'
 #' @details
 #' For the time-decay model, the mean function is
@@ -49,7 +52,9 @@
 #' @export
 #'
 fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
-                          accrualTime = 0, showplot = TRUE) {
+                          accrualTime = 0, showplot = TRUE,
+                          generate_plot = TRUE,
+                          interactive_plot = TRUE) {
 
   erify::check_class(df, "data.frame")
 
@@ -99,20 +104,20 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   df1u <- df1[, .SD[.N], by = "randdt"][, mget(c("t", "n"))]
 
   # add day 1
-  df0 <- data.table(t = 1, n = 0)
+  df0 <- data.table::data.table(t = 1, n = 0)
   df1u <- data.table::rbindlist(list(df0, df1u), use.names = TRUE)
 
   # fit enrollment model
   if (tolower(enroll_model) == "poisson") {
     # lambda(t) = lambda
     # mu(t) = lambda*t
-    fit1 <- list(model = 'Poisson',
+    fit1 <- list(model = "Poisson",
                  theta = log(n0/t0),
                  vtheta = 1/n0,
                  aic = -2*(-n0 + n0*log(n0/t0)) + 2,
                  bic = -2*(-n0 + n0*log(n0/t0)) + log(n0))
 
-    dffit1 <- data.table(t = seq(1, t0))[
+    dffit1 <- data.table::data.table(t = seq(1, t0))[
       , `:=`(n = exp(fit1$theta)*get("t"))]
   } else if (tolower(enroll_model) == "time-decay") {
     # lambda(t) = mu/delta*(1 - exp(-delta*t))
@@ -148,10 +153,10 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
                  aic = -2*opt1$value + 4,
                  bic = -2*opt1$value + 2*log(n0))
 
-    dffit1 <- data.table(t = seq(1, t0))[
+    dffit1 <- data.table::data.table(t = seq(1, t0))[
       , `:=`(n = fmu_td(get("t"), fit1$theta))]
   } else if (tolower(enroll_model) == "b-spline") {
-    # lambda(t) = exp(theta' bs(t))
+    # lambda(t) = exp(theta* bs(t))
     # mu(t) = sum(lambda(u), {u,1,t})
 
     # number of inner knots
@@ -187,7 +192,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
       lambdasum[t]
     }
 
-    dffit1 <- data.table(t = seq(1, t0))[
+    dffit1 <- data.table::data.table(t = seq(1, t0))[
       , `:=`(n = fmu_bs(get("t"), fit1$theta, x))]
   } else if (tolower(enroll_model) == "piecewise poisson") {
     # truncate the time intervals by data cut
@@ -209,7 +214,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     }
 
     # constant enrollment rate in each interval
-    fit1 <- list(model = 'Piecewise Poisson',
+    fit1 <- list(model = "Piecewise Poisson",
                  theta = log(n/t),
                  vtheta = vtheta,
                  aic = -2*sum(-n + n*log(n/t)) + 2*length(u),
@@ -222,7 +227,7 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
     j = findInterval(time, u)
     m = psum[j] + lambda[j]*(time - u[j]) # cumulative enrollment by day
 
-    dffit1 <- data.table(t = time, n = m)
+    dffit1 <- data.table::data.table(t = time, n = m)
   }
 
 
@@ -240,25 +245,55 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   bictext = paste("BIC:", formatC(fit1$bic, format = "f", digits = 2))
 
   # plot the enrollment curve
-  fittedEnroll <- plotly::plot_ly() %>%
-    plotly::add_lines(
-      data=df1u, x=~t, y=~n, name="observed", line=list(shape="hv")) %>%
-    plotly::add_lines(data=dffit1, x=~t, y=~n, name="fitted") %>%
-    plotly::layout(
-      xaxis = list(title = "Days since trial start", zeroline = FALSE),
-      yaxis = list(title = "Subjects", zeroline = FALSE),
-      title = list(text = "Fitted enrollment curve"),
-      annotations = list(
-        x = c(0.05, 0.05, 0.05), y = c(0.95, 0.80, 0.65),
-        xref = "paper", yref = "paper",
-        text = paste('<i>', c(modeltext, aictext, bictext), '</i>'),
-        xanchor = "left",
-        font = list(size = 14, color = "red"), showarrow = FALSE)) %>%
-    plotly::hide_legend()
+  if (generate_plot) {
+    if (interactive_plot) {
+      fittedEnroll <- plotly::plot_ly() %>%
+        plotly::add_lines(
+          data=df1u, x=~t, y=~n, name="observed", line=list(shape="hv")) %>%
+        plotly::add_lines(data=dffit1, x=~t, y=~n, name="fitted") %>%
+        plotly::layout(
+          xaxis = list(title = "Days since trial start", zeroline = FALSE),
+          yaxis = list(title = "Subjects", zeroline = FALSE),
+          title = list(text = "Fitted enrollment curve"),
+          annotations = list(
+            x = c(0.05, 0.05, 0.05), y = c(0.95, 0.90, 0.85),
+            xref = "paper", yref = "paper",
+            text = paste("<i>", c(modeltext, aictext, bictext), "</i>"),
+            xanchor = "left",
+            font = list(size = 14, color = "red"), showarrow = FALSE)) %>%
+        plotly::hide_legend()
+    } else {
+      fittedEnroll <- ggplot2::ggplot() +
+        ggplot2::geom_step(data = df1u, ggplot2::aes(
+          x = .data$t, y = .data$n)) +
+        ggplot2::geom_line(data = dffit1, ggplot2::aes(
+          x = .data$t, y = .data$n), colour = "red") +
+        ggplot2::labs(
+          x = "Days since trial start",
+          y = "Subjects",
+          title = "Fitted enrollment curve") +
+        ggplot2::annotate("text", x = -Inf, y = Inf, label = modeltext,
+                          hjust = -0.1, vjust = 1.5, colour = "red",
+                          size = 5, fontface = "italic") +
+        ggplot2::annotate("text", x = -Inf, y = Inf, label = aictext,
+                          hjust = -0.1, vjust = 3.5, colour = "red",
+                          size = 5, fontface = "italic") +
+        ggplot2::annotate("text", x = -Inf, y = Inf, label = bictext,
+                          hjust = -0.1, vjust = 5.5, colour = "red",
+                          size = 5, fontface = "italic") +
+        ggplot2::theme(legend.position = "none")
+    }
 
-  if (showplot) print(fittedEnroll)
+    if (showplot) print(fittedEnroll)
+  }
 
-  list(fit = fit1, fit_plot = fittedEnroll,
-       enrolldf = df1u, dffit = dffit1,
-       text = c(modeltext, aictext, bictext))
+
+  if (generate_plot) {
+    list(fit = fit1, fit_plot = fittedEnroll,
+         enrolldf = df1u, dffit = dffit1,
+         text = c(modeltext, aictext, bictext))
+  } else {
+    list(fit = fit1, enrolldf = df1u, dffit = dffit1,
+         text = c(modeltext, aictext, bictext))
+  }
 }

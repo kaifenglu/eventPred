@@ -135,6 +135,9 @@
 #'   likelihood estimates when generating new data for prediction.
 #'   Defaults to \code{FALSE}, in which case, parameters will be drawn from
 #'   their approximate posterior distribution.
+#' @param generate_plot Whether to generate plots.
+#' @param interactive_plot Whether to produce interactive plots using
+#'   plotly or static plots using ggplot2.
 #'
 #' @details
 #' For the time-decay model, the mean function is
@@ -230,7 +233,9 @@ getPrediction <- function(
     event_prior_with_covariates = NULL,
     covariates_dropout = NULL,
     dropout_prior_with_covariates = NULL,
-    fix_parameter = FALSE) {
+    fix_parameter = FALSE,
+    generate_plot = TRUE,
+    interactive_plot = TRUE) {
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
 
@@ -806,7 +811,9 @@ getPrediction <- function(
     cutoffdt = dt[1, get("cutoffdt")]
 
     # summarize observed data
-    observed <- summarizeObserved(dt, to_predict, showplot, by_treatment)
+    observed <- summarizeObserved(dt, to_predict, showplot,
+                                  by_treatment,
+                                  generate_plot, interactive_plot)
   }
 
   if (!is.null(covariates_event)) {
@@ -825,7 +832,8 @@ getPrediction <- function(
                      supplement = "Enrollment target reached.")
 
       enroll_fit <- fitEnrollment(df = dt, enroll_model,
-                                  nknots, accrualTime, showplot)
+                                  nknots, accrualTime, showplot,
+                                  generate_plot, interactive_plot)
       enroll_fit1 <- enroll_fit$fit
 
       # combine prior and likelihood to yield posterior
@@ -863,14 +871,14 @@ getPrediction <- function(
         df = dt, target_n, enroll_fit = enroll_fit1,
         lags, pilevel, nyears, nreps, showsummary, showplot = FALSE,
         by_treatment, ngroups, alloc, treatment_label,
-        fix_parameter)
+        fix_parameter, generate_plot, interactive_plot)
     } else {
       # enrollment prediction at the design stage
       enroll_pred <- predictEnrollment(
         df = NULL, target_n, enroll_fit = enroll_prior,
         lags, pilevel, nyears, nreps, showsummary, showplot = FALSE,
         by_treatment, ngroups, alloc, treatment_label,
-        fix_parameter)
+        fix_parameter, generate_plot, interactive_plot)
     }
   }
 
@@ -1019,7 +1027,9 @@ getPrediction <- function(
         event_fit <- fitEvent(dt, event_model,
                               piecewiseSurvivalTime,
                               k, scale, m,
-                              showplot, by_treatment)
+                              showplot, by_treatment,
+                              NULL,
+                              generate_plot, interactive_plot)
 
         if (!by_treatment) {
           event_fit1 <- list()
@@ -1084,7 +1094,8 @@ getPrediction <- function(
                                   piecewiseSurvivalTime,
                                   k, scale, m,
                                   showplot, by_treatment,
-                                  covariates_event)
+                                  covariates_event,
+                                  generate_plot, interactive_plot)
 
         if (!by_treatment) {
           event_fit1_w_x <- list()
@@ -1279,7 +1290,9 @@ getPrediction <- function(
           dropout_fit <- fitDropout(dt, dropout_model,
                                     piecewiseDropoutTime,
                                     k_dropout, scale_dropout, m_dropout,
-                                    showplot, by_treatment)
+                                    showplot, by_treatment,
+                                    NULL,
+                                    generate_plot, interactive_plot)
 
           if (!by_treatment) {
             dropout_fit1 <- list()
@@ -1344,7 +1357,8 @@ getPrediction <- function(
                                         piecewiseDropoutTime,
                                         k_dropout, scale_dropout, m_dropout,
                                         showplot, by_treatment,
-                                        covariates_dropout)
+                                        covariates_dropout,
+                                        generate_plot, interactive_plot)
 
           if (!by_treatment) {
             dropout_fit1_w_x <- list()
@@ -1404,7 +1418,6 @@ getPrediction <- function(
           dropout_fit1_w_x <- NULL
         }
 
-
         # event prediction with a dropout model
         if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
           event_pred <- predictEvent(
@@ -1418,7 +1431,7 @@ getPrediction <- function(
             showsummary, showplot = FALSE, by_treatment,
             covariates_event, event_fit1_w_x,
             covariates_dropout, dropout_fit1_w_x,
-            fix_parameter)
+            fix_parameter, generate_plot, interactive_plot)
         } else {
           event_pred <- predictEvent(
             df = dt, target_d,
@@ -1431,7 +1444,7 @@ getPrediction <- function(
             showsummary, showplot = FALSE, by_treatment,
             covariates_event, event_fit1_w_x,
             covariates_dropout, dropout_fit1_w_x,
-            fix_parameter)
+            fix_parameter, generate_plot, interactive_plot)
         }
       } else {  # no dropout model
         if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
@@ -1447,7 +1460,7 @@ getPrediction <- function(
             covariates_event, event_fit1_w_x,
             covariates_dropout,
             dropout_fit_with_covariates = NULL,
-            fix_parameter)
+            fix_parameter, generate_plot, interactive_plot)
         } else {
           event_pred <- predictEvent(
             df = dt, target_d,
@@ -1461,7 +1474,7 @@ getPrediction <- function(
             covariates_event, event_fit1_w_x,
             covariates_dropout,
             dropout_fit_with_covariates = NULL,
-            fix_parameter)
+            fix_parameter, generate_plot, interactive_plot)
         }
       }
     } else { # event prediction at design stage
@@ -1479,7 +1492,7 @@ getPrediction <- function(
           event_fit_with_covariates = event_prior_with_covariates,
           covariates_dropout,
           dropout_fit_with_covariates = dropout_prior_with_covariates,
-          fix_parameter)
+          fix_parameter, generate_plot, interactive_plot)
       } else {
         event_pred <- predictEvent(
           df = NULL, target_d,
@@ -1494,7 +1507,7 @@ getPrediction <- function(
           event_fit_with_covariates = event_prior_with_covariates,
           covariates_dropout,
           dropout_fit_with_covariates = dropout_prior_with_covariates,
-          fix_parameter)
+          fix_parameter, generate_plot, interactive_plot)
       }
     }
   }
@@ -1555,14 +1568,14 @@ getPrediction <- function(
   # output results
   if (is.null(df)) { # design stage prediction
     if (tolower(to_predict) == "enrollment only") {
-      if (showplot) print(enroll_pred$enroll_pred_plot)
+      if (generate_plot && showplot) print(enroll_pred$enroll_pred_plot)
 
       list(stage = "Design stage",
            to_predict = "Enrollment only",
            enroll_fit = enroll_prior, enroll_pred = enroll_pred,
            subject_data = subject_data)
     } else if (tolower(to_predict) == "enrollment and event") {
-      if (showplot) print(event_pred$event_pred_plot)
+      if (generate_plot && showplot) print(event_pred$event_pred_plot)
 
       if (!is.null(dropout_prior)) {
         list(stage = "Design stage",
@@ -1581,7 +1594,7 @@ getPrediction <- function(
     }
   } else { # analysis stage prediction
     if (tolower(to_predict) == "enrollment only") {
-      if (showplot) print(enroll_pred$enroll_pred_plot)
+      if (generate_plot && showplot) print(enroll_pred$enroll_pred_plot)
 
       list(stage = "Real-time before enrollment completion",
            to_predict = "Enrollment only",
@@ -1589,7 +1602,7 @@ getPrediction <- function(
            enroll_pred = enroll_pred,
            subject_data = subject_data)
     } else if (tolower(to_predict) == "enrollment and event") {
-      if (showplot) print(event_pred$event_pred_plot)
+      if (generate_plot && showplot) print(event_pred$event_pred_plot)
 
       if (tolower(dropout_model) != "none") {
         if (!is.null(covariates_event) &&
@@ -1657,7 +1670,7 @@ getPrediction <- function(
         }
       }
     } else if (tolower(to_predict) == "event only") {
-      if (showplot) print(event_pred$event_pred_plot)
+      if (generate_plot && showplot) print(event_pred$event_pred_plot)
 
       if (tolower(dropout_model) != "none") {
         if (!is.null(covariates_event) &&

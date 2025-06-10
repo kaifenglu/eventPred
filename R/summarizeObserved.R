@@ -20,6 +20,9 @@
 #' @param by_treatment A Boolean variable to control whether or not to
 #'   summarize observed data by treatment group. By default,
 #'   it is set to \code{FALSE}.
+#' @param generate_plot Whether to generate plots.
+#' @param interactive_plot Whether to produce interactive plots using
+#'   plotly or static plots using ggplot2.
 #'
 #' @return A list that includes a range of summary statistics,
 #' data sets, and plots depending on the value of \code{to_predict}.
@@ -39,7 +42,9 @@
 #' @export
 #'
 summarizeObserved <- function(df, to_predict = "event only",
-                              showplot = TRUE, by_treatment = FALSE) {
+                              showplot = TRUE, by_treatment = FALSE,
+                              generate_plot = TRUE,
+                              interactive_plot = TRUE) {
 
   erify::check_class(df, "data.frame")
   erify::check_content(tolower(to_predict),
@@ -134,7 +139,8 @@ summarizeObserved <- function(df, to_predict = "event only",
     adslu <- adsl[, .SD[.N], by = "randdt"][, mget(cols)]
 
     # dummy subject to initialize time axis at trial start
-    adsl0 <- data.table(n = 0, parameter = "Enrollment", date = trialsdt)
+    adsl0 <- data.table::data.table(n = 0, parameter = "Enrollment",
+                                    date = trialsdt)
 
     # extend enrollment information to cutoff date
     adsl1 <- adsl[.N][, `:=`(date = get("cutoffdt"))][, mget(cols)]
@@ -143,14 +149,15 @@ summarizeObserved <- function(df, to_predict = "event only",
       # time to event data
       adtte <- data.table::copy(dt)[
         , `:=`(adt = as.Date(get("time") - 1, origin = get("randdt")))][
-        order(get("adt")), `:=`(n = cumsum(get("event")),
-                                parameter = "Event", date = get("adt"))]
+          order(get("adt")), `:=`(n = cumsum(get("event")),
+                                  parameter = "Event", date = get("adt"))]
 
       # remove duplicate
       adtteu <- adtte[, .SD[.N], by = "adt"][, mget(cols)]
 
       # dummy subject to initialize time axis at trial start
-      adtte0 <- data.table(n = 0, parameter = "Event", date = trialsdt)
+      adtte0 <- data.table::data.table(n = 0, parameter = "Event",
+                                       date = trialsdt)
 
       # combine enrollment and time to event data
       ad <- data.table::rbindlist(list(
@@ -174,7 +181,7 @@ summarizeObserved <- function(df, to_predict = "event only",
       "treatment", "treatment_description", "randdt")][, mget(cols)]
 
     # dummy subject to initialize time axis at trial start
-    adsl0 <- merge(data.table(
+    adsl0 <- merge(data.table::data.table(
       treatment = 1:ngroups, n = 0, parameter = "Enrollment",
       date = trialsdt),
       treatment_mapping, by = "treatment", all.x = TRUE)
@@ -200,7 +207,7 @@ summarizeObserved <- function(df, to_predict = "event only",
         "treatment", "treatment_description", "adt")][, mget(cols)]
 
       # dummy subject to initialize time axis at trial start
-      adtte0 <- merge(data.table(
+      adtte0 <- merge(data.table::data.table(
         treatment = 1:ngroups, n = 0, parameter = "Event", date = trialsdt),
         treatment_mapping, by = "treatment", all.x = TRUE)
 
@@ -215,51 +222,98 @@ summarizeObserved <- function(df, to_predict = "event only",
 
 
   # plot cumulative enrollment and event data
-  if (!by_treatment) {
-    if (ad[, data.table::uniqueN(get("parameter")) > 1]) {
-      cumAccrual <- plotly::plot_ly(
-        ad, x=~date, y=~n, color=~parameter, colors=c("blue", "red")) %>%
-        plotly::add_lines(line = list(shape = "hv")) %>%
-        plotly::layout(
-          xaxis = list(title = ""),
-          yaxis = list(zeroline = FALSE),
-          legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                        orientation = 'h'))
-    } else {
-      cumAccrual <- plotly::plot_ly(ad, x=~date, y=~n) %>%
-        plotly::add_lines(line = list(shape = "hv")) %>%
-        plotly::layout(
-          xaxis = list(title = ""),
-          yaxis = list(zeroline = FALSE),
-          title = list(text = "Cumulative enrollment"))
-    }
+  if (generate_plot) {
+    if (!by_treatment) {
+      if (ad[, data.table::uniqueN(get("parameter")) > 1]) {
+        if (interactive_plot) {
+          cumAccrual <- plotly::plot_ly(
+            ad, x=~date, y=~n, color=~parameter, colors=c("blue", "red")) %>%
+            plotly::add_lines(line = list(shape = "hv")) %>%
+            plotly::layout(
+              xaxis = list(title = ""),
+              yaxis = list(zeroline = FALSE),
+              legend = list(x = 0, y = 1.05, yanchor = "bottom",
+                            orientation = "h"))
+        } else {
+          cumAccrual <- ggplot2::ggplot(
+            ad, ggplot2::aes(x = .data$date, y = .data$n,
+                             group = .data$parameter,
+                             colour = .data$parameter)) +
+            ggplot2::geom_step() +
+            ggplot2::scale_color_manual(values = c(
+              "Enrollment" = "blue", "Event" = "red")) +
+            ggplot2::labs(x = "") +
+            ggplot2::theme(legend.position = "top")
+        }
+      } else {
+        if (interactive_plot) {
+          cumAccrual <- plotly::plot_ly(ad, x=~date, y=~n) %>%
+            plotly::add_lines(line = list(shape = "hv")) %>%
+            plotly::layout(
+              xaxis = list(title = ""),
+              yaxis = list(zeroline = FALSE),
+              title = list(text = "Cumulative enrollment"))
+        } else {
+          cumAccrual <- ggplot2::ggplot(ad, ggplot2::aes(
+            x = .data$date, y = .data$n)) +
+            ggplot2::geom_step() +
+            ggplot2::labs(x = "", title = "Cumulative enrollment")
+        }
+      }
 
-    if (showplot) print(cumAccrual)
-  } else { # by treatment
-    if (ad[, data.table::uniqueN(get("parameter")) > 1]) {
-      cumAccrual <- plotly::plot_ly(
-        ad, x=~date, y=~n, color=~parameter, colors=c("blue", "red"),
-        linetype=~treatment_description) %>%
-        plotly::add_lines(line = list(shape = "hv")) %>%
-        plotly::layout(
-          xaxis = list(title = ""),
-          yaxis = list(zeroline = FALSE),
-          legend = list(x = 0, y = 1.05, yanchor = "bottom",
-                        orientation = 'h'))
-    } else {
-      cumAccrual <- plotly::plot_ly(
-        ad, x=~date, y=~n, linetype=~treatment_description) %>%
-        plotly::add_lines(line = list(shape = "hv")) %>%
-        plotly::layout(
-          xaxis = list(title = ""),
-          yaxis = list(zeroline = FALSE),
-          legend = list(x = 0, y = 1, yanchor = "middle",
-                        orientation = 'h'),
-          title = list(text = "Cumulative enrollment"))
-    }
+      if (showplot) print(cumAccrual)
+    } else { # by treatment
+      if (ad[, data.table::uniqueN(get("parameter")) > 1]) {
+        if (interactive_plot) {
+          cumAccrual <- plotly::plot_ly(
+            ad, x=~date, y=~n, color=~parameter, colors=c("blue", "red"),
+            linetype=~treatment_description) %>%
+            plotly::add_lines(line = list(shape = "hv")) %>%
+            plotly::layout(
+              xaxis = list(title = ""),
+              yaxis = list(zeroline = FALSE),
+              legend = list(x = 0, y = 1.05, yanchor = "bottom",
+                            orientation = "h"))
+        } else {
+          cumAccrual <- ggplot2::ggplot(
+            ad, ggplot2::aes(x = .data$date, y = .data$n,
+                             group = interaction(.data$treatment_description,
+                                                 .data$parameter),
+                             linetype = .data$treatment_description,
+                             colour = .data$parameter)) +
+            ggplot2::geom_step() +
+            ggplot2::scale_color_manual(values = c(
+              "Enrollment" = "blue", "Event" = "red")) +
+            ggplot2::labs(x = "", linetype = "treatment") +
+            ggplot2::theme(legend.position = "top")
+        }
+      } else {
+        if (interactive_plot) {
+          cumAccrual <- plotly::plot_ly(
+            ad, x=~date, y=~n, linetype=~treatment_description) %>%
+            plotly::add_lines(line = list(shape = "hv")) %>%
+            plotly::layout(
+              xaxis = list(title = ""),
+              yaxis = list(zeroline = FALSE),
+              legend = list(x = 0, y = 1, yanchor = "middle",
+                            orientation = "h"),
+              title = list(text = "Cumulative enrollment"))
+        } else {
+          cumAccrual <- ggplot2::ggplot(
+            ad, ggplot2::aes(x = .data$date, y = .data$n,
+                             group = .data$treatment_description,
+                             linetype = .data$treatment_description)) +
+            ggplot2::geom_step() +
+            ggplot2::labs(x = "", linetype = "treatment",
+                          title = "Cumulative enrollment") +
+            ggplot2::theme(legend.position = "top")
+        }
+      }
 
-    if (showplot) print(cumAccrual)
+      if (showplot) print(cumAccrual)
+    }
   }
+
 
 
   # daily enrollment plot with loess smoothing
@@ -268,23 +322,35 @@ summarizeObserved <- function(df, to_predict = "event only",
     days = seq(1, t0)
     n = as.numeric(table(factor(t, levels = days)))
 
-    enroll <- data.table(day = days, n = n,
-                         date = as.Date(days - 1, origin = trialsdt))
+    enroll <- data.table::data.table(
+      day = days, n = n, date = as.Date(days - 1, origin = trialsdt))
 
-    fit <- loess.smooth(enroll$date, enroll$n,
-                        span = 1/3, degree = 1, family = "gaussian")
+    if (generate_plot) {
+      fit <- loess.smooth(enroll$date, enroll$n,
+                          span = 1/3, degree = 1, family = "gaussian")
 
-    dailyAccrual <- plotly::plot_ly(
-      enroll, x=~date, y=~n, name="observed", type='scatter',
-      mode='markers') %>%
-      plotly::add_lines(x = fit$x, y = fit$y, name="loess") %>%
-      plotly::layout(
-        xaxis = list(title = ""),
-        yaxis = list(zeroline = FALSE),
-        title = list(text = "Daily enrollment")) %>%
-      plotly::hide_legend()
+      if (interactive_plot) {
+        dailyAccrual <- plotly::plot_ly(
+          enroll, x=~date, y=~n, name="observed", type="scatter",
+          mode="markers") %>%
+          plotly::add_lines(x = fit$x, y = fit$y, name="loess") %>%
+          plotly::layout(
+            xaxis = list(title = ""),
+            yaxis = list(zeroline = FALSE),
+            title = list(text = "Daily enrollment")) %>%
+          plotly::hide_legend()
+      } else {
+        dailyAccrual <- ggplot2::ggplot() +
+          ggplot2::geom_point(data = enroll, ggplot2::aes(
+            x = .data$date, y = .data$n)) +
+          ggplot2::geom_line(ggplot2::aes(x = fit$x, y = fit$y),
+                             colour = "red") +
+          ggplot2::labs(x = "", title = "Daily enrollment") +
+          ggplot2::theme(legend.position = "none")
+      }
 
-    if (showplot) print(dailyAccrual)
+      if (showplot) print(dailyAccrual)
+    }
   }
 
 
@@ -294,43 +360,71 @@ summarizeObserved <- function(df, to_predict = "event only",
       kmfitEvent <- survival::survfit(survival::Surv(time, event) ~ 1,
                                       data = adtte)
 
-      kmdfEvent <- data.table(time = kmfitEvent$time,
-                              surv = kmfitEvent$surv)
+      kmdfEvent <- data.table::data.table(time = kmfitEvent$time,
+                                          surv = kmfitEvent$surv)
       # add day 1
       if (kmdfEvent[, min(get("time")) > 1]) {
         kmdfEvent <- data.table::rbindlist(list(
-          data.table(time = 1, surv = 1), kmdfEvent), use.names = TRUE)
+          data.table::data.table(time = 1, surv = 1), kmdfEvent),
+          use.names = TRUE)
       }
 
-      kmEvent <- plotly::plot_ly(kmdfEvent, x=~time, y=~surv) %>%
-        plotly::add_lines(line = list(shape = "hv")) %>%
-        plotly::layout(
-          xaxis = list(title = "Days since randomization", zeroline = FALSE),
-          yaxis = list(title = "Survival probability", zeroline = FALSE),
-          title = list(text = "Kaplan-Meier plot for time to event"))
+      if (generate_plot) {
+        if (interactive_plot) {
+          kmEvent <- plotly::plot_ly(kmdfEvent, x=~time, y=~surv) %>%
+            plotly::add_lines(line = list(shape = "hv")) %>%
+            plotly::layout(
+              xaxis = list(title = "Days since randomization",
+                           zeroline = FALSE),
+              yaxis = list(title = "Survival probability", zeroline = FALSE),
+              title = list(text = "Kaplan-Meier plot for time to event"))
+        } else {
+          kmEvent <- ggplot2::ggplot(
+            kmdfEvent, ggplot2::aes(x = .data$time, y = .data$surv)) +
+            ggplot2::geom_step() +
+            ggplot2::labs(
+              x = "Days since randomization",
+              y = "Survival probability",
+              title = "Kaplan-Meier plot for time to event")
+        }
 
-      if (showplot) print(kmEvent)
+        if (showplot) print(kmEvent)
+      }
 
       # time to dropout
       kmfitDropout <- survival::survfit(survival::Surv(time, dropout) ~ 1,
                                         data = adtte)
 
-      kmdfDropout <- data.table(time = kmfitDropout$time,
-                                surv = kmfitDropout$surv)
+      kmdfDropout <- data.table::data.table(time = kmfitDropout$time,
+                                            surv = kmfitDropout$surv)
       # add day 1
       if (kmdfDropout[, min(get("time")) > 1]) {
         kmdfDropout <- data.table::rbindlist(list(
-          data.table(time = 1, surv = 1), kmdfDropout), use.names = TRUE)
+          data.table::data.table(time = 1, surv = 1), kmdfDropout),
+          use.names = TRUE)
       }
 
-      kmDropout <- plotly::plot_ly(kmdfDropout, x=~time, y=~surv) %>%
-        plotly::add_lines(line = list(shape = "hv")) %>%
-        plotly::layout(
-          xaxis = list(title = "Days since randomization", zeroline = FALSE),
-          yaxis = list(title = "Survival probability", zeroline = FALSE),
-          title = list(text = "Kaplan-Meier plot for time to dropout"))
+      if (generate_plot) {
+        if (interactive_plot) {
+          kmDropout <- plotly::plot_ly(kmdfDropout, x=~time, y=~surv) %>%
+            plotly::add_lines(line = list(shape = "hv")) %>%
+            plotly::layout(
+              xaxis = list(title = "Days since randomization",
+                           zeroline = FALSE),
+              yaxis = list(title = "Survival probability", zeroline = FALSE),
+              title = list(text = "Kaplan-Meier plot for time to dropout"))
+        } else {
+          kmDropout <- ggplot2::ggplot(
+            kmdfDropout, ggplot2::aes(x = .data$time, y = .data$surv)) +
+            ggplot2::geom_step() +
+            ggplot2::labs(
+              x = "Days since randomization",
+              y = "Survival probability",
+              title = "Kaplan-Meier plot for time to dropout")
+        }
 
-      if (showplot) print(kmDropout)
+        if (showplot) print(kmDropout)
+      }
     } else { # by treatment
       kmfitEvent <- survival::survfit(survival::Surv(time, event) ~
                                         treatment, data = adtte)
@@ -341,28 +435,47 @@ summarizeObserved <- function(df, to_predict = "event only",
         get("treatment") %in% treatment, get("treatment_description")]
 
       kmdfEvent <- data.table::rbindlist(list(
-        data.table(treatment = treatment,
-                   treatment_description = treatment_description,
-                   time = 1, surv = 1),
-        data.table(treatment = rep(treatment, kmfitEvent$strata),
-                   treatment_description =
-                     rep(treatment_description, kmfitEvent$strata),
-                   time = kmfitEvent$time,
-                   surv = kmfitEvent$surv)),
+        data.table::data.table(
+          treatment = treatment,
+          treatment_description = treatment_description,
+          time = 1, surv = 1),
+        data.table::data.table(
+          treatment = rep(treatment, kmfitEvent$strata),
+          treatment_description =
+            rep(treatment_description, kmfitEvent$strata),
+          time = kmfitEvent$time,
+          surv = kmfitEvent$surv)),
         use.names = TRUE)[
           , .SD[.N], by = c("treatment", "treatment_description", "time")]
 
-      kmEvent <- plotly::plot_ly(
-        kmdfEvent, x=~time, y=~surv, linetype=~treatment_description) %>%
-        plotly::add_lines(line = list(shape = "hv")) %>%
-        plotly::layout(
-          xaxis = list(title = "Days since randomization", zeroline = FALSE),
-          yaxis = list(title = "Survival probability", zeroline = FALSE),
-          legend = list(x = 0, y = 1,  yanchor = "middle",
-                        orientation = 'h'),
-          title = list(text = "Kaplan-Meier plot for time to event"))
+      if (generate_plot) {
+        if (interactive_plot) {
+          kmEvent <- plotly::plot_ly(
+            kmdfEvent, x=~time, y=~surv, linetype=~treatment_description) %>%
+            plotly::add_lines(line = list(shape = "hv")) %>%
+            plotly::layout(
+              xaxis = list(title = "Days since randomization",
+                           zeroline = FALSE),
+              yaxis = list(title = "Survival probability", zeroline = FALSE),
+              legend = list(x = 0, y = 1,  yanchor = "middle",
+                            orientation = "h"),
+              title = list(text = "Kaplan-Meier plot for time to event"))
+        } else {
+          kmEvent <- ggplot2::ggplot(
+            kmdfEvent, ggplot2::aes(
+              x = .data$time, y = .data$surv,
+              group = .data$treatment_description,
+              linetype = .data$treatment_description)) +
+            ggplot2::geom_step() +
+            ggplot2::labs(
+              x = "Days since randomization",
+              y = "Survival probability", linetype = "treatment",
+              title = "Kaplan-Meier plot for time to event") +
+            ggplot2::theme(legend.position = "top")
+        }
 
-      if (showplot) print(kmEvent)
+        if (showplot) print(kmEvent)
+      }
 
       # time to dropout
       kmfitDropout <- survival::survfit(survival::Surv(time, dropout) ~
@@ -374,28 +487,48 @@ summarizeObserved <- function(df, to_predict = "event only",
         get("treatment") %in% treatment, get("treatment_description")]
 
       kmdfDropout <- data.table::rbindlist(list(
-        data.table(treatment = treatment,
-                   treatment_description = treatment_description,
-                   time = 1, surv = 1),
-        data.table(treatment = rep(treatment, kmfitDropout$strata),
-                   treatment_description =
-                     rep(treatment_description, kmfitDropout$strata),
-                   time = kmfitDropout$time,
-                   surv = kmfitDropout$surv)),
+        data.table::data.table(
+          treatment = treatment,
+          treatment_description = treatment_description,
+          time = 1, surv = 1),
+        data.table::data.table(
+          treatment = rep(treatment, kmfitDropout$strata),
+          treatment_description =
+            rep(treatment_description, kmfitDropout$strata),
+          time = kmfitDropout$time,
+          surv = kmfitDropout$surv)),
         use.names = TRUE)[
           , .SD[.N], by = c("treatment", "treatment_description", "time")]
 
-      kmDropout <- plotly::plot_ly(
-        kmdfDropout, x=~time, y=~surv, linetype=~treatment_description) %>%
-        plotly::add_lines(line = list(shape = "hv")) %>%
-        plotly::layout(
-          xaxis = list(title = "Days since randomization", zeroline = FALSE),
-          yaxis = list(title = "Survival probability", zeroline = FALSE),
-          legend = list(x = 0, y = 1, yanchor = "middle",
-                        orientation = 'h'),
-          title = list(text = "Kaplan-Meier plot for time to dropout"))
+      if (generate_plot) {
+        if (interactive_plot) {
+          kmDropout <- plotly::plot_ly(
+            kmdfDropout, x=~time, y=~surv,
+            linetype=~treatment_description) %>%
+            plotly::add_lines(line = list(shape = "hv")) %>%
+            plotly::layout(
+              xaxis = list(title = "Days since randomization",
+                           zeroline = FALSE),
+              yaxis = list(title = "Survival probability", zeroline = FALSE),
+              legend = list(x = 0, y = 1, yanchor = "middle",
+                            orientation = "h"),
+              title = list(text = "Kaplan-Meier plot for time to dropout"))
+        } else {
+          kmDropout <- ggplot2::ggplot(
+            kmdfDropout, ggplot2::aes(
+              x = .data$time, y = .data$surv,
+              group = .data$treatment_description,
+              linetype = .data$treatment_description)) +
+            ggplot2::geom_step() +
+            ggplot2::labs(
+              x = "Days since randomization",
+              y = "Survival probability", linetype = "treatment",
+              title = "Kaplan-Meier plot for time to dropout") +
+            ggplot2::theme(legend.position = "top")
+        }
 
-      if (showplot) print(kmDropout)
+        if (showplot) print(kmDropout)
+      }
     }
   }
 
@@ -404,36 +537,64 @@ summarizeObserved <- function(df, to_predict = "event only",
   if (grepl("event", to_predict, ignore.case = TRUE)) {
     if (grepl("enrollment", to_predict, ignore.case = TRUE)) {
       # enrollment and event
-      list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
-           n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
-           tp = tp, cutofftpdt = cutofftpdt,
-           adsl = adsl, adtte = adtte,
-           cum_accrual_df = ad,
-           daily_accrual_df = enroll,
-           event_km_df = kmdfEvent,
-           dropout_km_df = kmdfDropout,
-           cum_accrual_plot = cumAccrual,
-           daily_accrual_plot = dailyAccrual,
-           event_km_plot = kmEvent,
-           dropout_km_plot = kmDropout)
+      if (generate_plot) {
+        list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+             n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
+             tp = tp, cutofftpdt = cutofftpdt,
+             adsl = adsl, adtte = adtte,
+             cum_accrual_df = ad,
+             daily_accrual_df = enroll,
+             event_km_df = kmdfEvent,
+             dropout_km_df = kmdfDropout,
+             cum_accrual_plot = cumAccrual,
+             daily_accrual_plot = dailyAccrual,
+             event_km_plot = kmEvent,
+             dropout_km_plot = kmDropout)
+      } else {
+        list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+             n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
+             tp = tp, cutofftpdt = cutofftpdt,
+             adsl = adsl, adtte = adtte,
+             cum_accrual_df = ad,
+             daily_accrual_df = enroll,
+             event_km_df = kmdfEvent,
+             dropout_km_df = kmdfDropout)
+      }
     } else { # event only
-      list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
-           n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
-           tp = tp, cutofftpdt = cutofftpdt,
-           adsl = adsl, adtte = adtte,
-           cum_accrual_df = ad,
-           event_km_df = kmdfEvent,
-           dropout_km_df = kmdfDropout,
-           cum_accrual_plot = cumAccrual,
-           event_km_plot = kmEvent,
-           dropout_km_plot = kmDropout)
+      if (generate_plot) {
+        list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+             n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
+             tp = tp, cutofftpdt = cutofftpdt,
+             adsl = adsl, adtte = adtte,
+             cum_accrual_df = ad,
+             event_km_df = kmdfEvent,
+             dropout_km_df = kmdfDropout,
+             cum_accrual_plot = cumAccrual,
+             event_km_plot = kmEvent,
+             dropout_km_plot = kmDropout)
+      } else {
+        list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+             n0 = n0, d0 = d0, c0 = c0, r0 = r0, rp = rp,
+             tp = tp, cutofftpdt = cutofftpdt,
+             adsl = adsl, adtte = adtte,
+             cum_accrual_df = ad,
+             event_km_df = kmdfEvent,
+             dropout_km_df = kmdfDropout)
+      }
     }
   } else { # enrollment only
-    list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
-         n0 = n0, adsl = adsl,
-         cum_accrual_df = ad,
-         daily_accrual_df = enroll,
-         cum_accrual_plot = cumAccrual,
-         daily_accrual_plot = dailyAccrual)
+    if (generate_plot) {
+      list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+           n0 = n0, adsl = adsl,
+           cum_accrual_df = ad,
+           daily_accrual_df = enroll,
+           cum_accrual_plot = cumAccrual,
+           daily_accrual_plot = dailyAccrual)
+    } else {
+      list(trialsdt = trialsdt, cutoffdt = cutoffdt, t0 = t0,
+           n0 = n0, adsl = adsl,
+           cum_accrual_df = ad,
+           daily_accrual_df = enroll)
+    }
   }
 }

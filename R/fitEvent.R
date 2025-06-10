@@ -41,6 +41,9 @@
 #' @param covariates The names of baseline covariates from the input
 #'   data frame to include in the event model, e.g., c("age", "sex").
 #'   Factor variables need to be declared in the input data frame.
+#' @param generate_plot Whether to generate plots.
+#' @param interactive_plot Whether to produce interactive plots using
+#'   plotly or static plots using ggplot2.
 #'
 #' @return A list of results from the model fit including key information
 #' such as the event model, \code{model}, the estimated model parameters,
@@ -106,7 +109,9 @@ fitEvent <- function(df, event_model = "model averaging",
                      piecewiseSurvivalTime = 0,
                      k = 0, scale = "hazard", m = 5,
                      showplot = TRUE, by_treatment = FALSE,
-                     covariates = NULL) {
+                     covariates = NULL,
+                     generate_plot = TRUE,
+                     interactive_plot = TRUE) {
 
   erify::check_class(df, "data.frame")
 
@@ -176,8 +181,8 @@ fitEvent <- function(df, event_model = "model averaging",
     q = ncol(x) - 1
 
     kmfit <- survival::survfit(survival::Surv(time, event) ~ 1, data = df1)
-    kmdf <- data.table(time = kmfit$time, surv = kmfit$surv)
-    df0 <- data.table(time = 0, surv = 1)
+    kmdf <- data.table::data.table(time = kmfit$time, surv = kmfit$surv)
+    df0 <- data.table::data.table(time = 0, surv = 1)
     kmdf <- data.table::rbindlist(list(df0, kmdf), use.names = TRUE)
 
     if (tolower(event_model) == "exponential") {
@@ -191,7 +196,7 @@ fitEvent <- function(df, event_model = "model averaging",
       reg <- survival::survreg(formula, data = df1, dist = "exponential")
 
       # use the more common parameterization for the exponential distribution
-      fit2 <- list(model = 'Exponential',
+      fit2 <- list(model = "Exponential",
                    theta = -as.numeric(reg$coefficients),
                    vtheta = reg$var,
                    aic = -2*reg$loglik[1] + 2*(q+1),
@@ -200,7 +205,7 @@ fitEvent <- function(df, event_model = "model averaging",
       # fitted survival curve
       rate = exp(as.numeric(x %*% fit2$theta))
 
-      dffit2 <- data.table(time = seq(0, max(df1$time)))[
+      dffit2 <- data.table::data.table(time = seq(0, max(df1$time)))[
         , `:=`(surv = sapply(get("time"), function(t)
           mean(pexp(t, rate, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "weibull") {
@@ -226,7 +231,7 @@ fitEvent <- function(df, event_model = "model averaging",
       shape = exp(-fit2$theta[q+2])
       scale = exp(as.numeric(x %*% fit2$theta[1:(q+1)]))
 
-      dffit2 <- data.table(time = seq(0, max(df1$time)))[
+      dffit2 <- data.table::data.table(time = seq(0, max(df1$time)))[
         , `:=`(surv = sapply(get("time"), function(t)
           mean(pweibull(t, shape, scale, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "log-logistic") {
@@ -251,7 +256,7 @@ fitEvent <- function(df, event_model = "model averaging",
       location = as.numeric(x %*% fit2$theta[1:(q+1)])
       scale = exp(fit2$theta[q+2])
 
-      dffit2 <- data.table(time = seq(0, max(df1$time)))[
+      dffit2 <- data.table::data.table(time = seq(0, max(df1$time)))[
         , `:=`(surv = sapply(get("time"), function(t)
           mean(plogis(log(t), location, scale, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "log-normal") {
@@ -275,7 +280,7 @@ fitEvent <- function(df, event_model = "model averaging",
       meanlog = as.numeric(x %*% fit2$theta[1:(q+1)])
       sdlog = exp(fit2$theta[q+2])
 
-      dffit2 <- data.table(time = seq(0, max(df1$time)))[
+      dffit2 <- data.table::data.table(time = seq(0, max(df1$time)))[
         , `:=`(surv = sapply(get("time"), function(t)
           mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))]
     } else if (tolower(event_model) == "piecewise exponential") {
@@ -299,7 +304,7 @@ fitEvent <- function(df, event_model = "model averaging",
                q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-      dffit2 <- data.table(time, surv)
+      dffit2 <- data.table::data.table(time, surv)
     } else if (tolower(event_model) == "model averaging") {
       erify::check_positive(d0 - q - 1, supplement = paste(
         "The number of events must be >=", q + 2,
@@ -338,7 +343,7 @@ fitEvent <- function(df, event_model = "model averaging",
         pmodavg(time, fit2$theta, w1, q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-      dffit2 <- data.table(time, surv)
+      dffit2 <- data.table::data.table(time, surv)
     } else if (tolower(event_model) == "spline") {
       erify::check_positive(d0 - k - q - 1, supplement = paste(
         "The number of events must be >=", k + q + 2,
@@ -374,7 +379,7 @@ fitEvent <- function(df, event_model = "model averaging",
           lower.tail = FALSE)
       }
 
-      dffit2 <- data.table(time, surv)
+      dffit2 <- data.table::data.table(time, surv)
     } else if (tolower(event_model) == "cox") {
       erify::check_positive(d0 - q, supplement = paste(
         "The number of events must be >=", q + 1,
@@ -447,7 +452,7 @@ fitEvent <- function(df, event_model = "model averaging",
         surv <- s1
       }
 
-      dffit2 <- data.table(time, surv)
+      dffit2 <- data.table::data.table(time, surv)
     }
 
 
@@ -474,56 +479,104 @@ fitEvent <- function(df, event_model = "model averaging",
       bictext = paste("BIC:", formatC(fit2$bic, format = "f", digits = 2))
     }
 
-    fittedEvent <- plotly::plot_ly() %>%
-      plotly::add_lines(
-        data=kmdf, x=~time, y=~surv, name="Kaplan-Meier",
-        line=list(shape="hv")) %>%
-      plotly::add_lines(
-        data=dffit2, x=~time, y=~surv, name="fitted") %>%
-      plotly::layout(
-        xaxis = list(title = "Days since randomization", zeroline = FALSE),
-        yaxis = list(title = "Survival probability", zeroline = FALSE),
-        title = list(text = "Fitted time to event survival curve"),
-        annotations = list(
-          x = c(0.7, 0.7, 0.7), y = c(0.95, 0.80, 0.65), xref = "paper",
-          yref = "paper", text = paste('<i>', c(modeltext, aictext,
-                                                bictext), '</i>'),
-          xanchor = "left", font = list(size = 14, color = "red"),
-          showarrow = FALSE)) %>%
-      plotly::hide_legend()
+    if (generate_plot) {
+      if (interactive_plot) {
+        fittedEvent <- plotly::plot_ly() %>%
+          plotly::add_lines(
+            data=kmdf, x=~time, y=~surv, name="Kaplan-Meier",
+            line=list(shape="hv")) %>%
+          plotly::add_lines(
+            data=dffit2, x=~time, y=~surv, name="fitted") %>%
+          plotly::layout(
+            xaxis = list(title = "Days since randomization",
+                         zeroline = FALSE),
+            yaxis = list(title = "Survival probability", zeroline = FALSE),
+            title = list(text = "Fitted time to event survival curve"),
+            annotations = list(
+              x = c(0.7, 0.7, 0.7), y = c(0.95, 0.90, 0.85), xref = "paper",
+              yref = "paper", text = paste("<i>", c(modeltext, aictext,
+                                                    bictext), "</i>"),
+              xanchor = "left", font = list(size = 14, color = "red"),
+              showarrow = FALSE)) %>%
+          plotly::hide_legend()
+      } else {
+        fittedEvent <- ggplot2::ggplot() +
+          ggplot2::geom_step(data = kmdf[-1,], ggplot2::aes(
+            x = .data$time, y = .data$surv)) +
+          ggplot2::geom_line(data = dffit2[-1,], ggplot2::aes(
+            x = .data$time, y = .data$surv), colour = "red") +
+          ggplot2::labs(
+            x = "Days since randomization",
+            y = "Survival probability",
+            title = "Fitted time to event survival curve") +
+          ggplot2::annotate("text", x = Inf, y = Inf, label = modeltext,
+                            hjust = 1.1, vjust = 1.5, size = 5,
+                            colour = "red", fontface = "italic") +
+          ggplot2::annotate("text", x = Inf, y = Inf, label = aictext,
+                            hjust = 1.1, vjust = 3.5, size = 5,
+                            colour = "red", fontface = "italic") +
+          ggplot2::annotate("text", x = Inf, y = Inf, label = bictext,
+                            hjust = 1.1, vjust = 5.5, size = 5,
+                            colour = "red", fontface = "italic") +
+          ggplot2::theme(legend.position = "none")
+      }
+    }
 
     if (by_treatment) {
-      fittedEvent <- fittedEvent %>%
-        plotly::layout(annotations = list(
-          x = 0.5, y = 1,
-          text = paste0("<b>", df1$treatment_description[1], "</b>"),
-          xanchor = "center", yanchor = "middle", showarrow = FALSE,
-          xref = 'paper', yref = 'paper'))
+      if (generate_plot) {
+        if (interactive_plot) {
+          fittedEvent <- fittedEvent %>%
+            plotly::layout(annotations = list(
+              x = 0.5, y = 1,
+              text = paste0("<b>", df1$treatment_description[1], "</b>"),
+              xanchor = "center", yanchor = "middle", showarrow = FALSE,
+              xref = "paper", yref = "paper"))
+        } else {
+          fittedEvent <- fittedEvent +
+            ggplot2::labs(subtitle = df1$treatment_description[1])
+        }
+      }
 
       fit2$treatment = df1$treatment[1]
       fit2$treatment_description = df1$treatment_description[1]
     }
 
-    event_fit[[i]] = list(fit = fit2, fit_plot = fittedEvent,
-                          kmdf = kmdf, dffit = dffit2,
-                          text = c(modeltext, aictext, bictext))
+    if (generate_plot) {
+      event_fit[[i]] = list(fit = fit2, fit_plot = fittedEvent,
+                            kmdf = kmdf, dffit = dffit2,
+                            text = c(modeltext, aictext, bictext))
+    } else {
+      event_fit[[i]] = list(fit = fit2, kmdf = kmdf, dffit = dffit2,
+                            text = c(modeltext, aictext, bictext))
+    }
   }
 
   # ensure that the sub plots share the same x axis range
   if (by_treatment) {
-    x_range = range(dt$time)
-    for (i in 1:ngroups) {
-      event_fit[[i]]$fit_plot <- event_fit[[i]]$fit_plot %>%
-        plotly::layout(xaxis = list(range = x_range))
+    if (generate_plot) {
+      x_range = range(dt$time)
+      for (i in 1:ngroups) {
+        if (interactive_plot) {
+          event_fit[[i]]$fit_plot <- event_fit[[i]]$fit_plot %>%
+            plotly::layout(xaxis = list(range = x_range))
+        } else {
+          event_fit[[i]]$fit_plot <- event_fit[[i]]$fit_plot +
+            ggplot2::scale_x_continuous(limits = x_range)
+        }
+      }
     }
   } else {
-    event_fit = list(fit = fit2, fit_plot = fittedEvent,
-                     kmdf = kmdf, dffit = dffit2,
-                     text = c(modeltext, aictext, bictext))
-
+    if (generate_plot) {
+      event_fit = list(fit = fit2, fit_plot = fittedEvent,
+                       kmdf = kmdf, dffit = dffit2,
+                       text = c(modeltext, aictext, bictext))
+    } else {
+      event_fit = list(fit = fit2, kmdf = kmdf, dffit = dffit2,
+                       text = c(modeltext, aictext, bictext))
+    }
   }
 
-  if (showplot) {
+  if (generate_plot && showplot) {
     if (by_treatment) {
       for (i in 1:ngroups) {
         print(event_fit[[i]]$fit_plot)

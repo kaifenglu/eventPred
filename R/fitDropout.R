@@ -41,6 +41,9 @@
 #' @param covariates The names of baseline covariates from the input
 #'   data frame to include in the dropout model, e.g., c("age", "sex").
 #'   Factor variables need to be declared in the input data frame.
+#' @param generate_plot Whether to generate plots.
+#' @param interactive_plot Whether to produce interactive plots using
+#'   plotly or static plots using ggplot2.
 #'
 #' @return A list of results from the model fit including key information
 #' such as the dropout model, \code{model}, the estimated model parameters,
@@ -106,7 +109,9 @@ fitDropout <- function(df, dropout_model = "exponential",
                        k_dropout = 0, scale_dropout = "hazard",
                        m_dropout = 5,
                        showplot = TRUE, by_treatment = FALSE,
-                       covariates = NULL) {
+                       covariates = NULL,
+                       generate_plot = TRUE,
+                       interactive_plot = TRUE) {
 
   erify::check_class(df, "data.frame")
 
@@ -176,8 +181,8 @@ fitDropout <- function(df, dropout_model = "exponential",
     q = ncol(x) - 1
 
     kmfit <- survival::survfit(survival::Surv(time, dropout) ~ 1, data = df1)
-    kmdf <- data.table(time = kmfit$time, surv = kmfit$surv)
-    df0 <- data.table(time = 0, surv = 1)
+    kmdf <- data.table::data.table(time = kmfit$time, surv = kmfit$surv)
+    df0 <- data.table::data.table(time = 0, surv = 1)
     kmdf <- data.table::rbindlist(list(df0, kmdf), use.names = TRUE)
 
     if (tolower(dropout_model) == "exponential") {
@@ -191,7 +196,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       reg <- survival::survreg(formula, data = df1, dist = "exponential")
 
       # use the more common parameterization for the exponential distribution
-      fit3 <- list(model = 'Exponential',
+      fit3 <- list(model = "Exponential",
                    theta = -as.numeric(reg$coefficients),
                    vtheta = reg$var,
                    aic = -2*reg$loglik[1] + 2*(q+1),
@@ -200,7 +205,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       # fitted survival curve
       rate = exp(as.numeric(x %*% fit3$theta))
 
-      dffit3 <- data.table(time = seq(0, max(df1$time)))[
+      dffit3 <- data.table::data.table(time = seq(0, max(df1$time)))[
         , `:=`(surv = sapply(get("time"), function(t)
           mean(pexp(t, rate, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "weibull") {
@@ -226,7 +231,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       shape = exp(-fit3$theta[q+2])
       scale = exp(as.numeric(x %*% fit3$theta[1:(q+1)]))
 
-      dffit3 <- data.table(time = seq(0, max(df1$time)))[
+      dffit3 <- data.table::data.table(time = seq(0, max(df1$time)))[
         , `:=`(surv = sapply(get("time"), function(t)
           mean(pweibull(t, shape, scale, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "log-logistic") {
@@ -251,7 +256,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       location = as.numeric(x %*% fit3$theta[1:(q+1)])
       scale = exp(fit3$theta[q+2])
 
-      dffit3 <- data.table(time = seq(0, max(df1$time)))[
+      dffit3 <- data.table::data.table(time = seq(0, max(df1$time)))[
         , `:=`(surv = sapply(get("time"), function(t)
           mean(plogis(log(t), location, scale, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "log-normal") {
@@ -275,7 +280,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       meanlog = as.numeric(x %*% fit3$theta[1:(q+1)])
       sdlog = exp(fit3$theta[q+2])
 
-      dffit3 <- data.table(time = seq(0, max(df1$time)))[
+      dffit3 <- data.table::data.table(time = seq(0, max(df1$time)))[
         , `:=`(surv = sapply(get("time"), function(t)
           mean(plnorm(t, meanlog, sdlog, lower.tail = FALSE))))]
     } else if (tolower(dropout_model) == "piecewise exponential") {
@@ -299,7 +304,7 @@ fitDropout <- function(df, dropout_model = "exponential",
                q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-      dffit3 <- data.table(time, surv)
+      dffit3 <- data.table::data.table(time, surv)
     } else if (tolower(dropout_model) == "model averaging") {
       erify::check_positive(c0 - q - 1, supplement = paste(
         "The number of dropouts must be >=", q + 2,
@@ -338,7 +343,7 @@ fitDropout <- function(df, dropout_model = "exponential",
         pmodavg(time, fit3$theta, w1, q, x[l,], lower.tail = FALSE))
       surv = apply(matrix(purrr::list_c(surv), ncol = n0), 1, mean)
 
-      dffit3 <- data.table(time, surv)
+      dffit3 <- data.table::data.table(time, surv)
     } else if (tolower(dropout_model) == "spline") {
       erify::check_positive(c0 - k_dropout - q - 1, supplement = paste(
         "The number of dropouts must be >=", k_dropout + q + 2,
@@ -376,7 +381,7 @@ fitDropout <- function(df, dropout_model = "exponential",
           lower.tail = FALSE)
       }
 
-      dffit3 <- data.table(time, surv)
+      dffit3 <- data.table::data.table(time, surv)
     } else if (tolower(dropout_model) == "cox") {
       erify::check_positive(c0 - q, supplement = paste(
         "The number of dropouts must be >=", q + 1,
@@ -451,7 +456,7 @@ fitDropout <- function(df, dropout_model = "exponential",
         surv <- s1
       }
 
-      dffit3 <- data.table(time, surv)
+      dffit3 <- data.table::data.table(time, surv)
     }
 
 
@@ -478,55 +483,107 @@ fitDropout <- function(df, dropout_model = "exponential",
       bictext = paste("BIC:", formatC(fit3$bic, format = "f", digits = 2))
     }
 
-    fittedDropout <- plotly::plot_ly() %>%
-      plotly::add_lines(
-        data=kmdf, x=~time, y=~surv, name="Kaplan-Meier",
-        line=list(shape="hv")) %>%
-      plotly::add_lines(
-        data=dffit3, x=~time, y=~surv, name="fitted") %>%
-      plotly::layout(
-        xaxis = list(title = "Days since randomization", zeroline = FALSE),
-        yaxis = list(title = "Survival probability", zeroline = FALSE),
-        title = list(text = "Fitted time to dropout survival curve"),
-        annotations = list(
-          x = c(0.7, 0.7, 0.7), y = c(0.95, 0.80, 0.65), xref = "paper",
-          yref = "paper", text = paste('<i>', c(modeltext, aictext,
-                                                bictext), '</i>'),
-          xanchor = "left", font = list(size = 14, color = "red"),
-          showarrow = FALSE)) %>%
-      plotly::hide_legend()
+    if (generate_plot) {
+      if (interactive_plot) {
+        fittedDropout <- plotly::plot_ly() %>%
+          plotly::add_lines(
+            data=kmdf, x=~time, y=~surv, name="Kaplan-Meier",
+            line=list(shape="hv")) %>%
+          plotly::add_lines(
+            data=dffit3, x=~time, y=~surv, name="fitted") %>%
+          plotly::layout(
+            xaxis = list(title = "Days since randomization",
+                         zeroline = FALSE),
+            yaxis = list(title = "Survival probability", zeroline = FALSE),
+            title = list(text = "Fitted time to dropout survival curve"),
+            annotations = list(
+              x = c(0.7, 0.7, 0.7), y = c(0.95, 0.90, 0.85), xref = "paper",
+              yref = "paper", text = paste("<i>", c(modeltext, aictext,
+                                                    bictext), "</i>"),
+              xanchor = "left", font = list(size = 14, color = "red"),
+              showarrow = FALSE)) %>%
+          plotly::hide_legend()
+      } else {
+        x_pos <- max(kmdf$time, na.rm = TRUE)
+        y_pos <- max(kmdf$surv, na.rm = TRUE)
+
+        fittedDropout <- ggplot2::ggplot() +
+          ggplot2::geom_step(data = kmdf[-1,], ggplot2::aes(
+            x = .data$time, y = .data$surv)) +
+          ggplot2::geom_line(data = dffit3[-1,], ggplot2::aes(
+            x = .data$time, y = .data$surv), colour = "red") +
+          ggplot2::labs(
+            x = "Days since randomization",
+            y = "Survival probability",
+            title = "Fitted time to dropout survival curve") +
+          ggplot2::annotate("text", x = x_pos, y = y_pos, label = modeltext,
+                            hjust = 1.1, vjust = 1.5, size = 5,
+                            colour = "red", fontface = "italic") +
+          ggplot2::annotate("text", x = x_pos, y = y_pos, label = aictext,
+                            hjust = 1.1, vjust = 3.5, size = 5,
+                            colour = "red", fontface = "italic") +
+          ggplot2::annotate("text", x = x_pos, y = y_pos, label = bictext,
+                            hjust = 1.1, vjust = 5.5, size = 5,
+                            colour = "red", fontface = "italic") +
+          ggplot2::theme(legend.position = "none")
+      }
+    }
 
     if (by_treatment) {
-      fittedDropout <- fittedDropout %>%
-        plotly::layout(annotations = list(
-          x = 0.5, y = 1,
-          text = paste0("<b>", df1$treatment_description[1], "</b>"),
-          xanchor = "center", yanchor = "middle", showarrow = FALSE,
-          xref = 'paper', yref = 'paper'))
+      if (generate_plot) {
+        if (interactive_plot) {
+          fittedDropout <- fittedDropout %>%
+            plotly::layout(annotations = list(
+              x = 0.5, y = 1,
+              text = paste0("<b>", df1$treatment_description[1], "</b>"),
+              xanchor = "center", yanchor = "middle", showarrow = FALSE,
+              xref = "paper", yref = "paper"))
+        } else {
+          fittedDropout <- fittedDropout +
+            ggplot2::labs(subtitle = df1$treatment_description[1])
+        }
+      }
 
       fit3$treatment = df1$treatment[1]
       fit3$treatment_description = df1$treatment_description[1]
     }
 
-    dropout_fit[[i]] = list(fit = fit3, fit_plot = fittedDropout,
-                            kmdf = kmdf, dffit = dffit3,
-                            text = c(modeltext, aictext, bictext))
+    if (generate_plot) {
+      dropout_fit[[i]] = list(fit = fit3, fit_plot = fittedDropout,
+                              kmdf = kmdf, dffit = dffit3,
+                              text = c(modeltext, aictext, bictext))
+    } else {
+      dropout_fit[[i]] = list(fit = fit3, kmdf = kmdf, dffit = dffit3,
+                              text = c(modeltext, aictext, bictext))
+    }
   }
 
   # ensure that the sub plots share the same x axis range
   if (by_treatment) {
-    x_range = range(dt$time)
-    for (i in 1:ngroups) {
-      dropout_fit[[i]]$fit_plot <- dropout_fit[[i]]$fit_plot %>%
-        plotly::layout(xaxis = list(range = x_range))
+    if (generate_plot) {
+      x_range = range(dt$time)
+      for (i in 1:ngroups) {
+        if (interactive_plot) {
+          dropout_fit[[i]]$fit_plot <- dropout_fit[[i]]$fit_plot %>%
+            plotly::layout(xaxis = list(range = x_range))
+        } else {
+          dropout_fit[[i]]$fit_plot <- dropout_fit[[i]]$fit_plot +
+            ggplot2::scale_x_continuous(limits = x_range)
+        }
+      }
     }
   } else {
-    dropout_fit = list(fit = fit3, fit_plot = fittedDropout,
-                       kmdf = kmdf, dffit = dffit3,
-                       text = c(modeltext, aictext, bictext))
+    if (generate_plot) {
+      dropout_fit = list(fit = fit3, fit_plot = fittedDropout,
+                         kmdf = kmdf, dffit = dffit3,
+                         text = c(modeltext, aictext, bictext))
+    } else {
+      dropout_fit = list(fit = fit3, kmdf = kmdf, dffit = dffit3,
+                         text = c(modeltext, aictext, bictext))
+    }
   }
 
-  if (showplot) {
+  if (generate_plot && showplot) {
     if (by_treatment) {
       for (i in 1:ngroups) {
         print(dropout_fit[[i]]$fit_plot)

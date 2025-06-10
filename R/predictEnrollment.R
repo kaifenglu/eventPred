@@ -43,6 +43,9 @@
 #'   likelihood estimates when generating new data for prediction.
 #'   Defaults to FALSE, in which case, parameters will be drawn from
 #'   their approximate posterior distributions.
+#' @param generate_plot Whether to generate plots.
+#' @param interactive_plot Whether to produce interactive plots using
+#'   plotly or static plots using ggplot2.
 #'
 #' @details
 #' The \code{enroll_fit} variable can be used for enrollment prediction
@@ -95,7 +98,9 @@ predictEnrollment <- function(df = NULL, target_n = NA,
                               showsummary = TRUE, showplot = TRUE,
                               by_treatment = FALSE, ngroups = 1,
                               alloc = NULL, treatment_label = NULL,
-                              fix_parameter = FALSE) {
+                              fix_parameter = FALSE,
+                              generate_plot = TRUE,
+                              interactive_plot = TRUE) {
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_n)
@@ -163,10 +168,10 @@ predictEnrollment <- function(df = NULL, target_n = NA,
       ngroups = nrow(treatment_mapping)
       treatment_label = treatment_mapping$treatment_description
     } else if (!is.null(treatment_label)) {
-      treatment_mapping <- data.table(
+      treatment_mapping <- data.table::data.table(
         treatment = 1:ngroups, treatment_description = treatment_label)
     } else {
-      treatment_mapping <- data.table(
+      treatment_mapping <- data.table::data.table(
         treatment = 1:ngroups,
         treatment_description = paste("Treatment", 1:ngroups))
       treatment_label = treatment_mapping$treatment_description
@@ -427,7 +432,7 @@ predictEnrollment <- function(df = NULL, target_n = NA,
       newSubjects <- merge(newSubjects, treatment_mapping,
                            by = "treatment", all.x = TRUE)
 
-      sum_by_trt <- data.table(
+      sum_by_trt <- data.table::data.table(
         treatment = c(1:ngroups, 9999),
         treatment_description = c(treatment_label, "Overall"),
         n0 = 0)
@@ -435,7 +440,7 @@ predictEnrollment <- function(df = NULL, target_n = NA,
       newSubjects[, `:=`(treatment_description =
                            paste("Treatment", get("treatment")))]
 
-      sum_by_trt <- data.table(
+      sum_by_trt <- data.table::data.table(
         treatment = c(1:ngroups, 9999),
         treatment_description = c(paste("Treatment", 1:ngroups), "Overall"),
         n0 = 0)
@@ -478,7 +483,7 @@ predictEnrollment <- function(df = NULL, target_n = NA,
   if (!by_treatment) {
     # predicted number of subjects enrolled after data cut
     dfb1 <- merge(
-      data.table(t = t, dummy = 1),
+      data.table::data.table(t = t, dummy = 1),
       data.table::copy(newSubjects)[, `:=`(dummy = 1)],
       by = "dummy", allow.cartesian = TRUE)[
         , list(nenrolled = sum(get("arrivalTime") <= get("t")) + n0),
@@ -493,18 +498,18 @@ predictEnrollment <- function(df = NULL, target_n = NA,
 
     if (!is.null(df)) {
       # day 1
-      df0 <- data.table(t = 1, n = 0, pilevel = pilevel,
-                        lower = NA_real_, upper = NA_real_,
-                        mean = 0, var = 0)
+      df0 <- data.table::data.table(t = 1, n = 0, pilevel = pilevel,
+                                    lower = NA_real_, upper = NA_real_,
+                                    mean = 0, var = 0)
 
       # arrival time for subjects already enrolled before data cut
       dfa1 <- dt[, list(
         t = get("t"), n = get("n"), pilevel = pilevel,
         lower = NA_real_, upper = NA_real_, mean = get("n"), var = 0)]
 
-      dft0 <- data.table(t = t0, n = n0, pilevel = pilevel,
-                         lower = NA_real_, upper = NA_real_,
-                         mean = n0, var = 0)
+      dft0 <- data.table::data.table(t = t0, n = n0, pilevel = pilevel,
+                                     lower = NA_real_, upper = NA_real_,
+                                     mean = n0, var = 0)
 
       dfa1 <- data.table::rbindlist(list(
         df0, dfa1, dft0), use.names = TRUE)[, .SD[.N], by = "t"]
@@ -514,48 +519,81 @@ predictEnrollment <- function(df = NULL, target_n = NA,
         order(get("t")), `:=`(
           date = as.Date(get("t") - 1, origin = get("trialsdt")))]
 
-      # separate data into observed and predicted
-      dfa <- dfs[is.na(get("lower"))]
-      dfb <- dfs[!is.na(get("lower"))]
+      if (generate_plot) {
+        # separate data into observed and predicted
+        dfa <- dfs[is.na(get("lower"))]
+        dfb <- dfs[!is.na(get("lower"))]
 
-      # plot the enrollment data with date as x-axis
-      g1 <- plotly::plot_ly() %>%
-        plotly::add_lines(
-          data = dfa, x = ~date, y = ~n,
-          line = list(shape="hv", width=2),
-          name = "observed") %>%
-        plotly::add_lines(
-          data = dfb, x = ~date, y = ~n,
-          line = list(width=2),
-          name = "median prediction") %>%
-        plotly::add_ribbons(
-          data = dfb, x = ~date, ymin = ~lower, ymax = ~upper,
-          fill = "tonexty", line = list(width=0),
-          name = "prediction interval") %>%
-        plotly::add_lines(
-          x = rep(cutoffdt, 2), y = c(min(dfa$n), max(dfb$upper)),
-          name = "cutoff", line = list(dash="dash"),
-          showlegend = FALSE) %>%
-        plotly::layout(
-          annotations = list(
-            x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
-            yanchor = "bottom", font = list(size=12),
-            showarrow = FALSE),
-          xaxis = list(title = "", zeroline = FALSE),
-          yaxis = list(title = "Subjects", zeroline = FALSE))
+        # plot the enrollment data with date as x-axis
+        if (interactive_plot) {
+          g1 <- plotly::plot_ly() %>%
+            plotly::add_lines(
+              data = dfa, x = ~date, y = ~n,
+              line = list(shape="hv", width=2),
+              name = "observed") %>%
+            plotly::add_lines(
+              data = dfb, x = ~date, y = ~n,
+              line = list(width=2),
+              name = "median prediction") %>%
+            plotly::add_ribbons(
+              data = dfb, x = ~date, ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval") %>%
+            plotly::add_lines(
+              x = rep(cutoffdt, 2), y = c(min(dfa$n), max(dfb$upper)),
+              name = "cutoff", line = list(dash="dash"),
+              showlegend = FALSE) %>%
+            plotly::layout(
+              annotations = list(
+                x = cutoffdt, y = 0, text = "cutoff", xanchor = "left",
+                yanchor = "bottom", textangle = -90,
+                font = list(size=12), showarrow = FALSE),
+              xaxis = list(title = "", zeroline = FALSE),
+              yaxis = list(title = "Subjects", zeroline = FALSE))
+        } else {
+          g1 <- ggplot2::ggplot() +
+            ggplot2::geom_step(data = dfa, ggplot2::aes(
+              x = .data$date, y = .data$n, colour = "observed")) +
+            ggplot2::geom_line(data = dfb, ggplot2::aes(
+              x = .data$date, y = .data$n, colour = "median prediction")) +
+            ggplot2::geom_ribbon(data = dfb, ggplot2::aes(
+              x = .data$date, ymin = .data$lower, ymax = .data$upper,
+              fill = "prediction interval"), alpha = 0.3) +
+            ggplot2::geom_vline(xintercept = cutoffdt, linetype = "dashed") +
+            ggplot2::annotate("text", x = cutoffdt, y = 0, label = "cutoff",
+                              angle = 90, hjust = 0, vjust = -0.5, size = 4) +
+            ggplot2::labs(x = "", y = "Subjects", colour = NULL, fill = NULL)
+        }
+      }
     } else {
-      # plot the enrollment data with day as x-axis
-      g1 <- plotly::plot_ly(dfb1, x = ~t) %>%
-        plotly::add_lines(
-          y = ~n, line = list(width=2),
-          name = "median prediction") %>%
-        plotly::add_ribbons(
-          ymin = ~lower, ymax = ~upper,
-          fill = "tonexty", line = list(width=0),
-          name = "prediction interval") %>%
-        plotly::layout(
-          xaxis = list(title = "Days since trial start", zeroline = FALSE),
-          yaxis = list(title = "Subjects", zeroline = FALSE))
+      if (generate_plot) {
+        # plot the enrollment data with day as x-axis
+        if (interactive_plot) {
+          g1 <- plotly::plot_ly(dfb1, x = ~t) %>%
+            plotly::add_lines(
+              y = ~n, line = list(width=2),
+              name = "median prediction") %>%
+            plotly::add_ribbons(
+              ymin = ~lower, ymax = ~upper,
+              fill = "tonexty", line = list(width=0),
+              name = "prediction interval") %>%
+            plotly::layout(
+              xaxis = list(title = "Days since trial start",
+                           zeroline = FALSE),
+              yaxis = list(title = "Subjects", zeroline = FALSE))
+        } else {
+          g1 <- ggplot2::ggplot() +
+            ggplot2::geom_line(data = dfb1, ggplot2::aes(
+              x = .data$t, y = .data$n, colour = "median prediction")) +
+            ggplot2::geom_ribbon(data = dfb1, ggplot2::aes(
+              x = .data$t, ymin = .data$lower, ymax = .data$upper,
+              fill = "prediction interval"),
+              alpha = 0.3) +
+            ggplot2::labs(
+              x = "Days since trial start", y = "Subjects",
+              colour = NULL, fill = NULL)
+        }
+      }
     }
   } else { # by treatment
     # add overall treatment
@@ -566,7 +604,7 @@ predictEnrollment <- function(df = NULL, target_n = NA,
 
     # predicted number of subjects enrolled by treatment after cutoff
     dfb1 <- merge(
-      data.table(t = t, dummy = 1),
+      data.table::data.table(t = t, dummy = 1),
       data.table::copy(newSubjects2)[, `:=`(dummy = 1)],
       by = "dummy", allow.cartesian = TRUE)[
         , list(nenrolled = sum(get("arrivalTime") <= get("t"))),
@@ -583,7 +621,6 @@ predictEnrollment <- function(df = NULL, target_n = NA,
         by = c("treatment", "treatment_description", "t")]
 
     if (!is.null(df)) {
-
       # day 1
       df0 <- sum_by_trt[, list(
         treatment = get("treatment"),
@@ -606,102 +643,159 @@ predictEnrollment <- function(df = NULL, target_n = NA,
 
       dfa1 <- data.table::rbindlist(list(
         dfa1, df0, dft0), use.names = TRUE)[
-        , .SD[.N], by = c("treatment", "treatment_description", "t")]
+          , .SD[.N], by = c("treatment", "treatment_description", "t")]
 
       # concatenate subjects enrolled before and after data cut
       dfs <- data.table::rbindlist(list(dfa1, dfb1), use.names = TRUE)[
         do.call("order", mget(c("treatment", "t"))), `:=`(
           date = as.Date(get("t") - 1, origin = get("trialsdt")))]
 
-      # separate data into observed and predicted
-      dfa <- dfs[is.na(get("lower"))]
-      dfb <- dfs[!is.na(get("lower"))]
+      if (generate_plot) {
+        # separate data into observed and predicted
+        dfa <- dfs[is.na(get("lower"))]
+        dfb <- dfs[!is.na(get("lower"))]
 
-      g1 <- list()
-      for (i in c(9999, 1:ngroups)) {
-        dfsi <- dfs[get("treatment") == i]
-        dfbi <- dfb[get("treatment") == i]
-        dfai <- dfa[get("treatment") == i]
+        g1 <- list()
+        for (i in c(9999, 1:ngroups)) {
+          dfsi <- dfs[get("treatment") == i]
+          dfbi <- dfb[get("treatment") == i]
+          dfai <- dfa[get("treatment") == i]
 
-        g1[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
-          plotly::add_lines(
-            data = dfai, x = ~date, y = ~n,
-            line = list(shape="hv", width=2),
-            name = "observed") %>%
-          plotly::add_lines(
-            data = dfbi, x = ~date, y = ~n,
-            line = list(width=2),
-            name = "median prediction") %>%
-          plotly::add_ribbons(
-            data = dfbi, x = ~date, ymin = ~lower, ymax = ~upper,
-            fill = "tonexty", line = list(width=0),
-            name = "prediction interval") %>%
-          plotly::add_lines(
-            x = rep(cutoffdt, 2), y = c(min(dfai$n), max(dfbi$upper)),
-            name = "cutoff", line = list(dash="dash"),
-            showlegend = FALSE) %>%
-          plotly::layout(
-            xaxis = list(title = "", zeroline = FALSE),
-            yaxis = list(title = "Subjects", zeroline = FALSE)) %>%
-          plotly::layout(
-            annotations = list(
-              x = 0.5, y = 1,
-              text = paste0("<b>", dfbi$treatment_description[1], "</b>"),
-              xanchor = "center", yanchor = "bottom",
-              showarrow = FALSE, xref='paper', yref='paper'))
+          if (interactive_plot) {
+            g1[[(i+1) %% 9999]] <- plotly::plot_ly() %>%
+              plotly::add_lines(
+                data = dfai, x = ~date, y = ~n,
+                line = list(shape="hv", width=2),
+                name = "observed") %>%
+              plotly::add_lines(
+                data = dfbi, x = ~date, y = ~n,
+                line = list(width=2),
+                name = "median prediction") %>%
+              plotly::add_ribbons(
+                data = dfbi, x = ~date, ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval") %>%
+              plotly::add_lines(
+                x = rep(cutoffdt, 2), y = c(min(dfai$n), max(dfbi$upper)),
+                name = "cutoff", line = list(dash="dash"),
+                showlegend = FALSE) %>%
+              plotly::layout(
+                xaxis = list(title = "", zeroline = FALSE),
+                yaxis = list(title = "Subjects", zeroline = FALSE)) %>%
+              plotly::layout(
+                annotations = list(
+                  x = 0.5, y = 1,
+                  text = paste0("<b>", dfbi$treatment_description[1], "</b>"),
+                  xanchor = "center", yanchor = "bottom",
+                  showarrow = FALSE, xref="paper", yref="paper"))
+          } else {
+            g1[[(i+1) %% 9999]] <- ggplot2::ggplot() +
+              ggplot2::geom_step(data = dfai, ggplot2::aes(
+                x = .data$date, y = .data$n, colour = "observed")) +
+              ggplot2::geom_line(data = dfbi, ggplot2::aes(
+                x = .data$date, y = .data$n, colour = "median prediction")) +
+              ggplot2::geom_ribbon(data = dfbi, ggplot2::aes(
+                x = .data$date, ymin = .data$lower, ymax = .data$upper,
+                fill = "prediction interval"), alpha = 0.3) +
+              ggplot2::geom_vline(xintercept = cutoffdt,
+                                  linetype = "dashed") +
+              ggplot2::labs(
+                x = NULL, y = "Subjects", colour = NULL, fill = NULL,
+                title = dfbi$treatment_description[1])
+          }
 
-        if (i == 9999) {
-          g1[[1]] <- g1[[1]] %>%
-            plotly::layout(
-              annotations = list(
-                x = cutoffdt, y = 0, text = 'cutoff', xanchor = "left",
-                yanchor = "bottom", font = list(size=12),
-                showarrow = FALSE))
+          if (i == 9999) {
+            if (interactive_plot) {
+              g1[[1]] <- g1[[1]] %>%
+                plotly::layout(
+                  annotations = list(
+                    x = cutoffdt, y = 0, text = "cutoff", xanchor = "left",
+                    yanchor = "bottom", textangle = -90, font = list(size=12),
+                    showarrow = FALSE))
+            } else {
+              g1[[1]] <- g1[[1]] +
+                ggplot2::annotate(
+                  "text", x = cutoffdt, y = 0, label = "cutoff",
+                  angle = 90, hjust = 0, vjust = 0, size = 4)
+            }
+          }
         }
       }
     } else { # prediction at design stage
-      g1 <- list()
-      for (i in c(9999, 1:ngroups)) {
-        dfbi <- dfb1[get("treatment") == i]
+      if (generate_plot) {
+        g1 <- list()
+        for (i in c(9999, 1:ngroups)) {
+          dfbi <- dfb1[get("treatment") == i]
 
-        g1[[(i+1) %% 9999]] <- dfbi %>%
-          plotly::plot_ly(x = ~t) %>%
-          plotly::add_lines(
-            y = ~n, line = list(width=2),
-            name = "median prediction") %>%
-          plotly::add_ribbons(
-            ymin = ~lower, ymax = ~upper,
-            fill = "tonexty", line = list(width=0),
-            name = "prediction interval") %>%
-          plotly::layout(
-            xaxis = list(title = "Days since trial start", zeroline = FALSE),
-            yaxis = list(title = "Subjects", zeroline = FALSE)) %>%
-          plotly::layout(
-            annotations = list(
-              x = 0.5, y = 1,
-              text = paste0("<b>", dfbi$treatment_description[1], "</b>"),
-              xanchor = "center", yanchor = "bottom",
-              showarrow = FALSE, xref='paper', yref='paper'))
+          if (interactive_plot) {
+            g1[[(i+1) %% 9999]] <- dfbi %>%
+              plotly::plot_ly(x = ~t) %>%
+              plotly::add_lines(
+                y = ~n, line = list(width=2),
+                name = "median prediction") %>%
+              plotly::add_ribbons(
+                ymin = ~lower, ymax = ~upper,
+                fill = "tonexty", line = list(width=0),
+                name = "prediction interval") %>%
+              plotly::layout(
+                xaxis = list(title = "Days since trial start",
+                             zeroline = FALSE),
+                yaxis = list(title = "Subjects", zeroline = FALSE)) %>%
+              plotly::layout(
+                annotations = list(
+                  x = 0.5, y = 1,
+                  text = paste0("<b>", dfbi$treatment_description[1], "</b>"),
+                  xanchor = "center", yanchor = "bottom",
+                  showarrow = FALSE, xref="paper", yref="paper"))
+          } else {
+            g1[[(i+1) %% 9999]] <- ggplot2::ggplot() +
+              ggplot2::geom_line(data = dfbi, ggplot2::aes(
+                x = .data$t, y = .data$n, colour = "median prediction")) +
+              ggplot2::geom_ribbon(data = dfbi, ggplot2::aes(
+                x = .data$t, ymin = .data$lower, ymax = .data$upper),
+                fill = "prediction interval", alpha = 0.5) +
+              ggplot2::labs(
+                x = "Days since trial start",
+                y = "Subjects", colour = NULL, fill = NULL,
+                title = dfbi$treatment_description[1])
+          }
+        }
       }
     }
   }
 
-
   if (showsummary) cat(s1)
-  if (showplot) print(g1)
+  if (generate_plot && showplot) print(g1)
 
   if (!is.null(df)) {
-    list(target_n = target_n, enroll_pred_day = pred_day,
-         enroll_pred_date = pred_date,
-         pilevel = pilevel, nyears = nyears, nreps = nreps,
-         newSubjects = newSubjects,
-         enroll_pred_df = dfs,
-         enroll_pred_summary = s1, enroll_pred_plot = g1)
+    if (generate_plot) {
+      list(target_n = target_n, enroll_pred_day = pred_day,
+           enroll_pred_date = pred_date,
+           pilevel = pilevel, nyears = nyears, nreps = nreps,
+           newSubjects = newSubjects,
+           enroll_pred_df = dfs,
+           enroll_pred_summary = s1, enroll_pred_plot = g1)
+    } else {
+      list(target_n = target_n, enroll_pred_day = pred_day,
+           enroll_pred_date = pred_date,
+           pilevel = pilevel, nyears = nyears, nreps = nreps,
+           newSubjects = newSubjects,
+           enroll_pred_df = dfs,
+           enroll_pred_summary = s1)
+    }
   } else {
-    list(target_n = target_n, enroll_pred_day = pred_day,
-         pilevel = pilevel, nyears = nyears, nreps = nreps,
-         newSubjects = newSubjects,
-         enroll_pred_df = dfb1,
-         enroll_pred_summary = s1, enroll_pred_plot = g1)
+    if (generate_plot) {
+      list(target_n = target_n, enroll_pred_day = pred_day,
+           pilevel = pilevel, nyears = nyears, nreps = nreps,
+           newSubjects = newSubjects,
+           enroll_pred_df = dfb1,
+           enroll_pred_summary = s1, enroll_pred_plot = g1)
+    } else {
+      list(target_n = target_n, enroll_pred_day = pred_day,
+           pilevel = pilevel, nyears = nyears, nreps = nreps,
+           newSubjects = newSubjects,
+           enroll_pred_df = dfb1,
+           enroll_pred_summary = s1)
+    }
   }
 }
