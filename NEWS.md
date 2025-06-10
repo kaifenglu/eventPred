@@ -1,3 +1,7 @@
+# eventPred 0.2.9
+
+* add the generate_plot and interactive_plot parameters to allow users to decide whether to generate plots and if to generate interactive or static plots
+
 # eventPred 0.2.8
 
 * adjust the log-likelihood for Cox model for a fair comparison with parametric regression models
