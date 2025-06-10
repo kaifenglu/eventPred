@@ -680,13 +680,13 @@ ui <- fluidPage(
            border-color: #2e6da4"),
 
            downloadButton("saveInputs", "Save inputs"),
-           fileInputNoExtra("loadInputs", label=NULL, accept=".rds",
+           fileInputNoExtra("loadInputs", label=NULL, accept=".RData",
                             buttonLabel=list(icon("upload"), "Load inputs"),
                             width="116px"),
            tags$a(tags$span(icon(name = "question-circle")), target="_blank",
                   href="manual.pdf"),
            style="position:absolute;right:0.5em;",
-           tags$style(type='text/css', "#saveInputs{margin-top: -5px;}")
+           tags$style(type="text/css", "#saveInputs{margin-top: -5px;}")
          ))),
     windowTitle = "Enrollment and Event Prediction"),
 
@@ -900,7 +900,7 @@ server <- function(input, output, session) {
 
   # whether to show or hide the observed data panel
   observeEvent(input$stage, {
-    if (input$stage != 'Design stage') {
+    if (input$stage != "Design stage") {
       showTab(inputId = "results", target = "observed_data_panel")
     } else {
       hideTab(inputId = "results", target = "observed_data_panel")
@@ -916,7 +916,7 @@ server <- function(input, output, session) {
 
   # what to predict at different stages
   to_predict <- reactive({
-    if (input$stage != 'Real-time after enrollment completion') {
+    if (input$stage != "Real-time after enrollment completion") {
       input$to_predict
     } else {
       input$to_predict2
@@ -926,15 +926,15 @@ server <- function(input, output, session) {
 
   # whether to show or hide enrollment, event, and dropout panels
   observeEvent(to_predict(), {
-    if (to_predict() == 'Enrollment only') {
+    if (to_predict() == "Enrollment only") {
       showTab(inputId = "results", target = "enroll_model_panel")
       hideTab(inputId = "results", target = "event_model_panel")
       hideTab(inputId = "results", target = "dropout_model_panel")
-    } else if (to_predict() == 'Enrollment and event') {
+    } else if (to_predict() == "Enrollment and event") {
       showTab(inputId = "results", target = "enroll_model_panel")
       showTab(inputId = "results", target = "event_model_panel")
       showTab(inputId = "results", target = "dropout_model_panel")
-    } else if (to_predict() == 'Event only') {
+    } else if (to_predict() == "Event only") {
       hideTab(inputId = "results", target = "enroll_model_panel")
       showTab(inputId = "results", target = "event_model_panel")
       showTab(inputId = "results", target = "dropout_model_panel")
@@ -1558,8 +1558,8 @@ server <- function(input, output, session) {
   # input data set
   df <- reactive({
     # input$file1 will be NULL initially. After the user selects
-    # and uploads a file, it will be a data frame with 'name',
-    # 'size', 'type', and 'datapath' columns. The 'datapath'
+    # and uploads a file, it will be a data frame with "name",
+    # "size", "type", and "datapath" columns. The "datapath"
     # column will contain the local filenames where the data can
     # be found.
     inFile <- input$file1
@@ -1570,14 +1570,14 @@ server <- function(input, output, session) {
     df <- data.table::setDT(readxl::read_excel(inFile$datapath))
 
     if (to_predict() == "Enrollment only") {
-      req_cols <- c('trialsdt', 'usubjid', 'randdt', 'cutoffdt')
+      req_cols <- c("trialsdt", "usubjid", "randdt", "cutoffdt")
     } else {
-      req_cols <- c('trialsdt', 'usubjid', 'randdt', 'cutoffdt',
-                    'time', 'event', 'dropout')
+      req_cols <- c("trialsdt", "usubjid", "randdt", "cutoffdt",
+                    "time", "event", "dropout")
     }
 
     if (input$by_treatment) {
-      req_cols <- c(req_cols, 'treatment')
+      req_cols <- c(req_cols, "treatment")
     }
 
     cols <- colnames(df)
@@ -1593,7 +1593,7 @@ server <- function(input, output, session) {
                        collapse = ", ")))
     }
 
-    if ('treatment' %in% cols && !('treatment_description' %in% cols)) {
+    if ("treatment" %in% cols && !("treatment_description" %in% cols)) {
       df[, `:=`(treatment_description = paste("Treatment", treatment))]
 
     }
@@ -1959,7 +1959,7 @@ server <- function(input, output, session) {
       str1 <- paste("Trial start date:", observed()$trialsdt)
       str2 <- paste("Data cutoff date:", observed()$cutoffdt)
       str3 <- paste("Days since trial start:", observed()$t0)
-      paste(str1, str2, str3, sep='<br/>')
+      paste(str1, str2, str3, sep="<br/>")
     }
   })
 
@@ -2175,13 +2175,13 @@ server <- function(input, output, session) {
 
   # enrollment predication date
   output$enroll_pred_date <- renderText({
-    if (to_predict() == 'Enrollment only' ||
-        to_predict() == 'Enrollment and event') {
+    if (to_predict() == "Enrollment only" ||
+        to_predict() == "Enrollment and event") {
 
       req(pred()$enroll_pred)
       req(pred()$stage == input$stage && pred()$to_predict == to_predict())
 
-      if (input$stage != 'Design stage') {
+      if (input$stage != "Design stage") {
         shiny::validate(
           need(!is.null(df()),
                "Please upload data for real-time prediction."))
@@ -2200,7 +2200,7 @@ server <- function(input, output, session) {
           str3 <- paste0("Prediction interval: ",
                          pred()$enroll_pred$enroll_pred_date[2], ", ",
                          pred()$enroll_pred$enroll_pred_date[3])
-          text1 <- paste(paste('<b>', str1, '</b>'), str2, str3, sep='<br/>')
+          text1 <- paste(paste("<b>", str1, "</b>"), str2, str3, sep="<br/>")
         } else {
           text1 <- NULL
         }
@@ -2213,7 +2213,7 @@ server <- function(input, output, session) {
           str3 <- paste0("Prediction interval: ",
                          pred()$enroll_pred$enroll_pred_day[2], ", ",
                          pred()$enroll_pred$enroll_pred_day[3])
-          text1 <- paste(paste('<b>', str1, '</b>'), str2, str3, sep='<br/>')
+          text1 <- paste(paste("<b>", str1, "</b>"), str2, str3, sep="<br/>")
         } else {
           text1 <- NULL
         }
@@ -2228,13 +2228,13 @@ server <- function(input, output, session) {
 
   # event predication date
   output$event_pred_date <- renderText({
-    if (to_predict() == 'Enrollment and event' ||
-        to_predict() == 'Event only') {
+    if (to_predict() == "Enrollment and event" ||
+        to_predict() == "Event only") {
 
       req(pred()$event_pred)
       req(pred()$stage == input$stage && pred()$to_predict == to_predict())
 
-      if (input$stage != 'Design stage') {
+      if (input$stage != "Design stage") {
         shiny::validate(
           need(!is.null(df()),
                "Please upload data for real-time prediction."))
@@ -2260,7 +2260,7 @@ server <- function(input, output, session) {
           str3 <- paste0("Prediction interval: ",
                          pred()$event_pred$event_pred_date[2], ", ",
                          pred()$event_pred$event_pred_date[3])
-          text2 <- paste(paste('<b>', str1, '</b>'), str2, str3, sep='<br/>')
+          text2 <- paste(paste("<b>", str1, "</b>"), str2, str3, sep="<br/>")
         } else {
           text2 <- NULL
         }
@@ -2273,7 +2273,7 @@ server <- function(input, output, session) {
           str3 <- paste0("Prediction interval: ",
                          pred()$event_pred$event_pred_day[2], ", ",
                          pred()$event_pred$event_pred_day[3])
-          text2 <- paste(paste('<b>', str1, '</b>'), str2, str3, sep='<br/>')
+          text2 <- paste(paste("<b>", str1, "</b>"), str2, str3, sep="<br/>")
         } else {
           text2 <- NULL
         }
@@ -2289,13 +2289,13 @@ server <- function(input, output, session) {
 
   # event predication at given date
   output$event_pred_at_t <- renderText({
-    if ((to_predict() == 'Enrollment and event' ||
-        to_predict() == 'Event only') && input$pred_at_t) {
+    if ((to_predict() == "Enrollment and event" ||
+        to_predict() == "Event only") && input$pred_at_t) {
 
       req(pred()$event_pred)
       req(pred()$stage == input$stage && pred()$to_predict == to_predict())
 
-      if (input$stage != 'Design stage') {
+      if (input$stage != "Design stage") {
         shiny::validate(
           need(!is.null(df()),
                "Please upload data for real-time prediction."))
@@ -2317,7 +2317,7 @@ server <- function(input, output, session) {
           str2 <- paste0("Median prediction: ", round(dx$n))
           str3 <- paste0("Prediction interval: ", round(dx$lower),
                          ", ", round(dx$upper))
-          text3 <- paste(paste('<b>', str1, '</b>'), str2, str3, sep='<br/>')
+          text3 <- paste(paste("<b>", str1, "</b>"), str2, str3, sep="<br/>")
         } else {
           text3 <- NULL
         }
@@ -2327,7 +2327,7 @@ server <- function(input, output, session) {
           str2 <- paste0("Median prediction: ", round(dx$n))
           str3 <- paste0("Prediction interval: ", round(dx$lower),
                          ", ", round(dx$upper))
-          text3 <- paste(paste('<b>', str1, '</b>'), str2, str3, sep='<br/>')
+          text3 <- paste(paste("<b>", str1, "</b>"), str2, str3, sep="<br/>")
         } else {
           text3 <- NULL
         }
@@ -2341,9 +2341,9 @@ server <- function(input, output, session) {
 
 
   output$pred_date <- renderUI({
-    if (to_predict() == 'Enrollment only') {
+    if (to_predict() == "Enrollment only") {
       htmlOutput("enroll_pred_date")
-    } else if (to_predict() == 'Event only') {
+    } else if (to_predict() == "Event only") {
       if (input$pred_at_t) {
         tagList(
           htmlOutput("event_pred_date"),
@@ -2379,7 +2379,7 @@ server <- function(input, output, session) {
       req(pred()$enroll_pred)
       req(pred()$stage == input$stage && pred()$to_predict == to_predict())
 
-      if (input$stage != 'Design stage') {
+      if (input$stage != "Design stage") {
         shiny::validate(
           need(!is.null(df()),
                "Please upload data for real-time prediction."))
@@ -2392,7 +2392,7 @@ server <- function(input, output, session) {
       enroll_pred_plot <- pred()$enroll_pred$enroll_pred_plot
       enroll_pred_df <- pred()$enroll_pred$enroll_pred_df
       if ((!input$by_treatment || k() == 1) ||
-          ((input$by_treatment || input$stage == 'Design stage') &&
+          ((input$by_treatment || input$stage == "Design stage") &&
            k() > 1 && "treatment" %in% names(enroll_pred_df) &&
            length(table(enroll_pred_df$treatment)) == k() + 1)) {
         g <- enroll_pred_plot
@@ -2408,7 +2408,7 @@ server <- function(input, output, session) {
       req(pred()$event_pred)
       req(pred()$stage == input$stage && pred()$to_predict == to_predict())
 
-      if (input$stage != 'Design stage') {
+      if (input$stage != "Design stage") {
         shiny::validate(
           need(!is.null(df()),
                "Please upload data for real-time prediction."))
@@ -2446,7 +2446,7 @@ server <- function(input, output, session) {
 
       if ((!input$by_treatment || k() == 1) &&
           !("treatment" %in% names(dfs))) { # overall
-        if (input$stage != 'Design stage') {
+        if (input$stage != "Design stage") {
           dfa <- dfs[is.na(lower)]
           dfb <- dfs[!is.na(lower)]
 
@@ -2527,7 +2527,7 @@ server <- function(input, output, session) {
                 x = rep(observed()$cutofftpdt, 2),
                 y = c(min(dfa$n), max(dfb$upper)),
                 name = "prediction start",
-                line = list(dash="dash", color="grey"),
+                line = list(dash="dash"),
                 showlegend = FALSE) %>%
               plotly::layout(
                 annotations = list(
@@ -2541,12 +2541,12 @@ server <- function(input, output, session) {
             g <- g %>%
               plotly::add_lines(
                 x = range(dfs$date), y = rep(target_d(), 2),
-                name = 'target events', showlegend = FALSE,
+                name = "target events", showlegend = FALSE,
                 line = list(dash="dot", color="rgba(128, 128, 128, 0.5")) %>%
               plotly::layout(
                 annotations = list(
                   x = 0.95, xref = "paper", y = target_d(),
-                  text = 'target events', xanchor = "right",
+                  text = "target events", xanchor = "right",
                   yanchor = "bottom", font = list(size = 12),
                   showarrow = FALSE))
           }
@@ -2598,20 +2598,20 @@ server <- function(input, output, session) {
             g <- g %>%
               plotly::add_lines(
                 x = range(dfs$t), y = rep(target_d(), 2),
-                name = 'target events', showlegend = FALSE,
+                name = "target events", showlegend = FALSE,
                 line = list(dash="dot", color="rgba(128, 128, 128, 0.5")) %>%
               plotly::layout(
                 annotations = list(
                   x = 0.95, xref = "paper", y = target_d(),
-                  text = 'target events', xanchor = "right",
+                  text = "target events", xanchor = "right",
                   yanchor = "bottom", font = list(size = 12),
                   showarrow = FALSE))
           }
         }
-      } else if (((input$by_treatment || input$stage == 'Design stage') &&
+      } else if (((input$by_treatment || input$stage == "Design stage") &&
                   k() > 1) && ("treatment" %in% names(dfs)) &&
                  (length(table(dfs$treatment)) == k() + 1)) { # by treatment
-        if (input$stage != 'Design stage') {
+        if (input$stage != "Design stage") {
           dfa <- dfs[is.na(lower)]
           dfb <- dfs[!is.na(lower)]
 
@@ -2694,7 +2694,7 @@ server <- function(input, output, session) {
                   text = paste0("<b>", dfsi$treatment_description[1],
                                 "</b>"),
                   xanchor = "center", yanchor = "bottom",
-                  showarrow = FALSE, xref='paper', yref='paper'))
+                  showarrow = FALSE, xref="paper", yref="paper"))
 
 
             if (observed()$tp < observed()$t0) {
@@ -2703,7 +2703,7 @@ server <- function(input, output, session) {
                   x = rep(observed()$cutofftpdt, 2),
                   y = c(min(dfai$n), max(dfbi$upper)),
                   name = "prediction start",
-                  line = list(dash="dash", color="grey"),
+                  line = list(dash="dash"),
                   showlegend = FALSE)
             }
 
@@ -2730,13 +2730,13 @@ server <- function(input, output, session) {
                 g[[1]] <- g[[1]] %>%
                   plotly::add_lines(
                     x = range(dfsi$date), y = rep(target_d(), 2),
-                    name = 'target events', showlegend = FALSE,
+                    name = "target events", showlegend = FALSE,
                     line = list(dash="dot",
                                 color="rgba(128, 128, 128, 0.5")) %>%
                   plotly::layout(
                     annotations = list(
                       x = 0.95, xref = "paper", y = target_d(),
-                      text = 'target events', xanchor = "right",
+                      text = "target events", xanchor = "right",
                       yanchor = "bottom", font = list(size = 12),
                       showarrow = FALSE))
               }
@@ -2795,7 +2795,7 @@ server <- function(input, output, session) {
                   text = paste0("<b>", dfsi$treatment_description[1],
                                 "</b>"),
                   xanchor = "center", yanchor = "bottom",
-                  showarrow = FALSE, xref='paper', yref='paper'))
+                  showarrow = FALSE, xref="paper", yref="paper"))
 
 
             if (i == 9999) {
@@ -2803,13 +2803,13 @@ server <- function(input, output, session) {
                 g[[1]] <- g[[1]] %>%
                   plotly::add_lines(
                     x = range(dfsi$t), y = rep(target_d(), 2),
-                    name = 'target events', showlegend = FALSE,
+                    name = "target events", showlegend = FALSE,
                     line = list(dash="dot",
                                 color="rgba(128, 128, 128, 0.5")) %>%
                   plotly::layout(
                     annotations = list(
                       x = 0.95, xref = "paper", y = target_d(),
-                      text = 'target events', xanchor = "right",
+                      text = "target events", xanchor = "right",
                       yanchor = "bottom", font = list(size = 12),
                       showarrow = FALSE))
               }
@@ -2829,12 +2829,12 @@ server <- function(input, output, session) {
 
   mult_plot <- reactive({
     (to_predict() == "Enrollment only" &&
-       (input$by_treatment || input$stage == 'Design stage') && k() > 1 &&
+       (input$by_treatment || input$stage == "Design stage") && k() > 1 &&
        "treatment" %in% names(pred()$enroll_pred$enroll_pred_df) &&
        length(table(pred()$enroll_pred$enroll_pred_df$treatment)) ==
        k() + 1) ||
       (to_predict() != "Enrollment only" &&
-         (input$by_treatment || input$stage == 'Design stage') && k() > 1 &&
+         (input$by_treatment || input$stage == "Design stage") && k() > 1 &&
          "treatment" %in% names(pred()$event_pred$event_pred_df) &&
          length(table(pred()$event_pred$event_pred_df$treatment)) ==
          k() + 1)
@@ -3055,7 +3055,7 @@ server <- function(input, output, session) {
   # save inputs
   output$saveInputs <- downloadHandler(
     filename = function() {
-      paste0("inputs_", Sys.Date(), "_eventPred.rds")
+      paste0("inputs_", Sys.Date(), "_eventPred.RData")
     },
 
     content = function(file) {
@@ -3165,24 +3165,24 @@ server <- function(input, output, session) {
 
     req(file)
 
-    valid <- (ext == "rds")
-    if (!valid) showNotification("Please upload an rds file")
+    valid <- (ext == "RData")
+    if (!valid) showNotification("Please upload an RData file")
     req(valid)
 
     load(file=file$datapath)
 
     updateRadioButtons(session, "stage", selected=x$stage)
 
-    if (x$stage == 'Design stage' ||
-        x$stage == 'Real-time before enrollment completion') {
+    if (x$stage == "Design stage" ||
+        x$stage == "Real-time before enrollment completion") {
       updateRadioButtons(session, "to_predict", selected=x$to_predict)
       updateNumericInput(session, "target_n", value=x$target_n)
     } else {
       updateRadioButtons(session, "to_predict2", selected=x$to_predict2)
     }
 
-    if (x$to_predict == 'Enrollment and event' ||
-        x$stage == 'Real-time after enrollment completion') {
+    if (x$to_predict == "Enrollment and event" ||
+        x$stage == "Real-time after enrollment completion") {
       updateNumericInput(session, "target_d", value=x$target_d)
       updateCheckboxGroupInput(session, "to_show", selected=x$to_show)
     }
@@ -3190,8 +3190,8 @@ server <- function(input, output, session) {
     updateNumericInput(session, "pilevel", value=x$pilevel)
     updateNumericInput(session, "nyears", value=x$nyears)
 
-    if (x$to_predict == 'Enrollment and event' ||
-        x$stage == 'Real-time after enrollment completion') {
+    if (x$to_predict == "Enrollment and event" ||
+        x$stage == "Real-time after enrollment completion") {
       updateCheckboxInput(session, "pred_at_t", value=x$pred_at_t)
       if (x$pred_at_t) {
         updateNumericInput(session, "target_t", value=x$target_t)
@@ -3200,13 +3200,13 @@ server <- function(input, output, session) {
 
     updateCheckboxInput(session, "by_treatment", value=x$by_treatment)
 
-    if (x$stage == 'Design stage' || x$by_treatment) {
+    if (x$stage == "Design stage" || x$by_treatment) {
       updateSelectInput(session, "k", selected=x$k)
     }
 
-    if ((x$stage == 'Design stage' ||
+    if ((x$stage == "Design stage" ||
          (x$by_treatment &&
-          x$stage != 'Real-time after enrollment completion')) && x$k > 1) {
+          x$stage != "Real-time after enrollment completion")) && x$k > 1) {
       updateMatrixInput(
         session, paste0("treatment_allocation_", x$k),
         value=x$treatment_allocation)
@@ -3217,7 +3217,7 @@ server <- function(input, output, session) {
     updateNumericInput(session, "seed", value=x$seed)
 
 
-    if (x$stage == 'Design stage') {
+    if (x$stage == "Design stage") {
       updateRadioButtons(session, "enroll_prior", selected=x$enroll_prior)
 
       if (x$enroll_prior == "Poisson") {
@@ -3230,7 +3230,7 @@ server <- function(input, output, session) {
           session, "piecewise_poisson_rate", value=x$piecewise_poisson_rate)
       }
     } else {
-      if (x$stage == 'Real-time before enrollment completion') {
+      if (x$stage == "Real-time before enrollment completion") {
         updateRadioButtons(session, "enroll_model", selected=x$enroll_model)
 
         if (x$enroll_model == "B-spline") {
@@ -3244,44 +3244,44 @@ server <- function(input, output, session) {
     }
 
 
-    if (x$stage == 'Design stage') {
-      if (x$to_predict == 'Enrollment and event') {
+    if (x$stage == "Design stage") {
+      if (x$to_predict == "Enrollment and event") {
         updateRadioButtons(session, "event_prior", selected=x$event_prior)
       }
 
-      if (x$event_prior == 'Exponential') {
+      if (x$event_prior == "Exponential") {
         updateMatrixInput(
           session, paste0("exponential_survival_", x$k),
           value=x$exponential_survival)
       }
 
-      if (x$event_prior == 'Weibull') {
+      if (x$event_prior == "Weibull") {
         updateMatrixInput(
           session, paste0("weibull_survival_", x$k),
           value=x$weibull_survival)
       }
 
-      if (x$event_prior == 'Log-logistic') {
+      if (x$event_prior == "Log-logistic") {
         updateMatrixInput(
           session, paste0("llogis_survival_", x$k),
           value=x$llogis_survival)
       }
 
-      if (x$event_prior == 'Log-normal') {
+      if (x$event_prior == "Log-normal") {
         updateMatrixInput(
           session, paste0("lnorm_survival_", x$k),
           value=x$lnorm_survival)
       }
 
-      if (x$event_prior == 'Piecewise exponential') {
+      if (x$event_prior == "Piecewise exponential") {
         updateMatrixInput(
           session, paste0("piecewise_exponential_survival_", x$k),
           value=x$piecewise_exponential_survival)
       }
     } else {
-      if ((x$stage == 'Real-time before enrollment completion' &&
-           x$to_predict == 'Enrollment and event') ||
-          x$stage == 'Real-time after enrollment completion') {
+      if ((x$stage == "Real-time before enrollment completion" &&
+           x$to_predict == "Enrollment and event") ||
+          x$stage == "Real-time after enrollment completion") {
 
         updateRadioButtons(session, "event_model", selected=x$event_model)
 
@@ -3300,45 +3300,45 @@ server <- function(input, output, session) {
     }
 
 
-    if (x$stage == 'Design stage') {
-      if (x$to_predict == 'Enrollment and event') {
+    if (x$stage == "Design stage") {
+      if (x$to_predict == "Enrollment and event") {
         updateRadioButtons(session, "dropout_prior",
                            selected=x$dropout_prior)
       }
 
-      if (x$dropout_prior == 'Exponential') {
+      if (x$dropout_prior == "Exponential") {
         updateMatrixInput(
           session, paste0("exponential_dropout_", x$k),
           value=x$exponential_dropout)
       }
 
-      if (x$dropout_prior == 'Weibull') {
+      if (x$dropout_prior == "Weibull") {
         updateMatrixInput(
           session, paste0("weibull_dropout_", x$k),
           value=x$weibull_dropout)
       }
 
-      if (x$dropout_prior == 'Log-logistic') {
+      if (x$dropout_prior == "Log-logistic") {
         updateMatrixInput(
           session, paste0("llogis_dropout_", x$k),
           value=x$llogis_dropout)
       }
 
-      if (x$dropout_prior == 'Log-normal') {
+      if (x$dropout_prior == "Log-normal") {
         updateMatrixInput(
           session, paste0("lnorm_dropout_", x$k),
           value=x$lnorm_dropout)
       }
 
-      if (x$dropout_prior == 'Piecewise exponential') {
+      if (x$dropout_prior == "Piecewise exponential") {
         updateMatrixInput(
           session, paste0("piecewise_exponential_dropout_", x$k),
           value=x$piecewise_exponential_dropout)
       }
     } else {
-      if ((x$stage == 'Real-time before enrollment completion' &&
-           x$to_predict == 'Enrollment and event') ||
-          x$stage == 'Real-time after enrollment completion') {
+      if ((x$stage == "Real-time before enrollment completion" &&
+           x$to_predict == "Enrollment and event") ||
+          x$stage == "Real-time after enrollment completion") {
 
         updateRadioButtons(session, "dropout_model",
                            selected=x$dropout_model)
