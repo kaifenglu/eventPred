@@ -123,7 +123,7 @@ fitDropout <- function(df, dropout_model = "exponential",
   if (piecewiseDropoutTime[1] != 0) {
     stop("piecewiseDropoutTime must start with 0");
   }
-  if (length(piecewiseDropoutTime) > 1 &
+  if (length(piecewiseDropoutTime) > 1 &&
       any(diff(piecewiseDropoutTime) <= 0)) {
     stop("piecewiseDropoutTime should be increasing")
   }
@@ -175,7 +175,6 @@ fitDropout <- function(df, dropout_model = "exponential",
 
     n0 = nrow(df1)
     c0 = df1[, sum(get("dropout"))]
-    ex0 = df1[, sum(get("time"))]
 
     x = model.matrix(formula, df1)
     q = ncol(x) - 1
@@ -387,9 +386,6 @@ fitDropout <- function(df, dropout_model = "exponential",
         "The number of dropouts must be >=", q + 1,
         "to fit a Cox model."))
 
-      erify::check_positive(c0 - m_dropout + 1, supplement = paste(
-        "m_dropout must be <= the observed number of dropouts", c0))
-
       reg <- phregr(df1, time = "time", event = "dropout",
                     covariates = covariates)
 
@@ -407,6 +403,10 @@ fitDropout <- function(df, dropout_model = "exponential",
       }
 
       M <- nrow(bh)
+      erify::check_positive(M - m_dropout + 1, supplement = paste(
+        "m_dropout must be <= the number of distinct observed dropout times",
+        M))
+
       tcut <- c(0, bh$time)
       dt <- diff(tcut)
       lambda1 <- haz/dt
@@ -440,8 +440,10 @@ fitDropout <- function(df, dropout_model = "exponential",
       time = seq(0, max(df1$time))
 
       # extrapolate beyond the last observed dropout time
-      lambda2 <- sum(bh$haz[(M-m_dropout+1):M])/
-        (bh$time[M] - bh$time[M-m_dropout])
+      m_use <- min(m_dropout, M)
+      idx <- (M-m_use+1):M
+      lambda2 <- sum(bh$haz[idx])/
+        (bh$time[M] - bh$time[M-m_use])
 
       lambda <- c(lambda1, lambda2)
 
