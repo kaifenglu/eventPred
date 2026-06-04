@@ -1,0 +1,8 @@
+^renv$
+^renv\.lock$
+^.*\.Rproj$
+^\.Rproj\.user$
+notes
+^data-raw$
+^\.positai$
+^\.claude$

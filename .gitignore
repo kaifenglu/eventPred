@@ -1,0 +1,8 @@
+^renv$
+renv.lock
+.Rproj.user
+.Rhistory
+eventPred.Rcheck/
+eventPred.Rproj
+notes
+.positai
