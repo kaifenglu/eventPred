@@ -1,0 +1,13 @@
+pandoc: 3.8.3
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  event_prediction_after_enrollment_completion: event_prediction_after_enrollment_completion.html
+  event_prediction_at_the_design_stage: event_prediction_at_the_design_stage.html
+  event_prediction_before_enrollment_completion: event_prediction_before_enrollment_completion.html
+  event_prediction_incorporating_covariates: event_prediction_incorporating_covariates.html
+  event_prediction_incorporating_prior_information: event_prediction_incorporating_prior_information.html
+last_built: 2026-06-04T03:11Z
+urls:
+  reference: https://kaifenglu.github.io/eventPred/reference
+  article: https://kaifenglu.github.io/eventPred/articles
