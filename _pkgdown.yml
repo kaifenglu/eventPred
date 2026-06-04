@@ -1,0 +1,19 @@
+template:
+  bootstrap: 5
+  math-rendering: mathjax
+  params:
+    bootswatch: flatly
+    mathjax: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+navbar:
+  left:
+  - text: Home
+    href: index.html
+  - text: Reference
+    href: reference/index.html
+  - text: Articles
+    href: articles/index.html
+  - text: News
+    href: news/index.html
+url: https://kaifenglu.github.io/eventPred/
+destination: docs
+
