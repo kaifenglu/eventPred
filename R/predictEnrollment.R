@@ -657,7 +657,6 @@ predictEnrollment <- function(df = NULL, target_n = NA,
 
         g1 <- list()
         for (i in c(9999, 1:ngroups)) {
-          dfsi <- dfs[get("treatment") == i]
           dfbi <- dfb[get("treatment") == i]
           dfai <- dfa[get("treatment") == i]
 
