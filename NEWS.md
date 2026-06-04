@@ -1,3 +1,7 @@
+# eventPred 0.3.0
+
+* add prior and posterior model fits in getPrediction output when prior is provided
+
 # eventPred 0.2.9
 
 * add the generate_plot and interactive_plot parameters to allow users to decide whether to generate plots and if to generate interactive or static plots

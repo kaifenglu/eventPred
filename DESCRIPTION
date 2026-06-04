@@ -1,7 +1,6 @@
 Package: eventPred
 Title: Event Prediction
-Version: 0.2.9
-Date: 2025-06-10
+Version: 0.3.0
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6160-7119"))
@@ -11,7 +10,6 @@ Description: Predicts enrollment and events at the design or analysis stage
 License: GPL (>= 2)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 Imports: 
     data.table (>= 1.14.10),
     magrittr (>= 2.0.0),
@@ -41,3 +39,5 @@ LazyData: true
 URL: https://github.com/kaifenglu/eventPred
 BugReports: https://github.com/kaifenglu/eventPred/issues
 Config/testthat/edition: 3
+Config/roxygen2/version: 8.0.0
+RoxygenNote: 7.3.3
