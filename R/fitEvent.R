@@ -123,7 +123,7 @@ fitEvent <- function(df, event_model = "model averaging",
   if (piecewiseSurvivalTime[1] != 0) {
     stop("piecewiseSurvivalTime must start with 0");
   }
-  if (length(piecewiseSurvivalTime) > 1 &
+  if (length(piecewiseSurvivalTime) > 1 &&
       any(diff(piecewiseSurvivalTime) <= 0)) {
     stop("piecewiseSurvivalTime should be increasing")
   }
@@ -175,7 +175,6 @@ fitEvent <- function(df, event_model = "model averaging",
 
     n0 = nrow(df1)
     d0 = df1[, sum(get("event"))]
-    ex0 = df1[, sum(get("time"))]
 
     x = model.matrix(formula, df1)
     q = ncol(x) - 1
@@ -385,9 +384,6 @@ fitEvent <- function(df, event_model = "model averaging",
         "The number of events must be >=", q + 1,
         "to fit a Cox model."))
 
-      erify::check_positive(d0 - m + 1, supplement = paste(
-        "m must be <= the observed number of events", d0))
-
       reg <- phregr(df1, time = "time", event = "event",
                     covariates = covariates)
 
@@ -405,6 +401,9 @@ fitEvent <- function(df, event_model = "model averaging",
       }
 
       M <- nrow(bh)
+      erify::check_positive(M - m + 1, supplement = paste(
+        "m must be <= the number of distinct observed event times", M))
+
       tcut <- c(0, bh$time)
       dt <- diff(tcut)
       lambda1 <- haz/dt
@@ -438,7 +437,9 @@ fitEvent <- function(df, event_model = "model averaging",
       time = seq(0, max(df1$time))
 
       # extrapolate beyond the last observed event time
-      lambda2 <- sum(bh$haz[(M-m+1):M])/(bh$time[M] - bh$time[M-m])
+      m_use <- min(m, M)
+      idx <- (M-m_use+1):M
+      lambda2 <- sum(bh$haz[idx])/(bh$time[M] - bh$time[M-m_use])
       lambda <- c(lambda1, lambda2)
 
       # baseline survival
