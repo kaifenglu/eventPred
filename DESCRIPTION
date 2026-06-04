@@ -29,8 +29,8 @@ Imports:
     rlang (>= 1.0.6),
     lrstat (>= 0.2.12)
 Suggests: 
-    knitr,
-    rmarkdown,
+    knitr (>= 1.45),
+    rmarkdown (>= 2.25),
     testthat (>= 3.0.0),
     pkgdown (>= 2.2.0)
 Depends: 
