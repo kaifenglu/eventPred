@@ -31,12 +31,13 @@ Imports:
 Suggests: 
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0) 
+    testthat (>= 3.0.0),
+    pkgdown (>= 2.2.0)
 Depends: 
     R (>= 3.5.0)
 VignetteBuilder: knitr
 LazyData: true
-URL: https://github.com/kaifenglu/eventPred
+URL: https://kaifenglu.github.io/eventPred/, https://github.com/kaifenglu/eventPred
 BugReports: https://github.com/kaifenglu/eventPred/issues
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
