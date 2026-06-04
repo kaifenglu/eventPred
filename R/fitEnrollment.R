@@ -79,8 +79,6 @@ fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
   dt$randdt <- as.Date(dt$randdt)
   dt$cutoffdt <- as.Date(dt$cutoffdt)
 
-  trialsdt = dt[1, get("trialsdt")]
-  cutoffdt = dt[1, get("cutoffdt")]
   n0 = nrow(dt)
 
   # up to the last randomization date to account for enrollment completion
