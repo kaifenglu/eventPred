@@ -190,9 +190,46 @@
 #' of model parameters to be combined with observed data likelihood
 #' for enhanced modeling flexibility.
 #'
-#' @return A list that includes the fits of observed data models,
-#' as well as simulated enrollment data for new subjects and
-#' simulated event data for ongoing and new subjects.
+#' @return A list containing model-fit objects and prediction objects.
+#'
+#' The model-fit objects summarize either:
+#' \itemize{
+#' \item the fitted models based on the observed data, or
+#' \item the posterior distribution of the model parameters when prior
+#'   information is supplied.
+#' }
+#'
+#' The prediction objects may include:
+#' \itemize{
+#' \item simulated enrollment data for future subjects, and
+#' \item simulated event data for both ongoing subjects and future subjects.
+#' }
+#'
+#' At the design stage, all predictions are based solely on prior
+#' information. In that case, the output includes \code{enroll_prior},
+#' \code{event_prior}, and \code{dropout_prior}.
+#'
+#' At the analysis stage, predictions are based on:
+#' \itemize{
+#' \item the observed-data likelihood when no prior is provided, or
+#' \item the posterior distribution when prior information is provided.
+#' }
+#'
+#' When prior information is incorporated, the parameter vector
+#' \code{theta} in \code{enroll_post}, \code{event_post},
+#' \code{event_post_with_covariates}, \code{dropout_post}, and
+#' \code{dropout_post_with_covariates} represents a weighted average of
+#' the prior mean and the maximum likelihood estimate. The corresponding
+#' variance-covariance matrix \code{vtheta} is the inverse of the total
+#' information matrix, where the total information is the sum of:
+#' \itemize{
+#' \item the information from the prior distribution, and
+#' \item the information from the observed-data likelihood.
+#' }
+#'
+#' In addition to the model-fit objects, the output also includes the
+#' analysis stage at which prediction is performed, the prediction target,
+#' and the enrollment and event prediction results when applicable.
 #'
 #' @author Kaifeng Lu, \email{kaifenglu@@gmail.com}
 #'
@@ -249,6 +286,12 @@ getPrediction <- function(
     stop("At least one of target_n and target_d must be specified")
   if (!is.na(target_n) && !is.na(target_d) && target_d > target_n)
     stop("target_d cannot exceed target_n")
+
+  if (is.null(df) && tolower(to_predict) == "event only") {
+    stop(paste(
+      "Design-stage event prediction requires enrollment prediction.",
+      "Use to_predict = 'enrollment and event' when df is NULL"))
+  }
 
 
   # check by_treatment, ngroups, and alloc
@@ -346,8 +389,9 @@ getPrediction <- function(
 
       if (tolower(enroll_prior$model) == "piecewise poisson" &&
           (length(enroll_prior$accrualTime) < length(accrualTime) ||
-           !all.equal(enroll_prior$accrualTime[1:length(accrualTime)],
-                      accrualTime))) {
+           !isTRUE(all.equal(
+             enroll_prior$accrualTime[1:length(accrualTime)],
+             accrualTime)))) {
         stop(paste("accrualTime of piecewise Poisson must be a subset of",
                    "that in enroll_prior"))
       }
@@ -437,8 +481,10 @@ getPrediction <- function(
         if (tolower(event_prior2[[j]]$model) == "piecewise exponential" &&
             (length(event_prior2[[j]]$piecewiseSurvivalTime) <
              length(piecewiseSurvivalTime) ||
-             !all.equal(event_prior2[[j]]$piecewiseSurvivalTime[
-               1:length(piecewiseSurvivalTime)], piecewiseSurvivalTime))) {
+             !isTRUE(all.equal(
+               event_prior2[[j]]$piecewiseSurvivalTime[
+                 1:length(piecewiseSurvivalTime)],
+               piecewiseSurvivalTime)))) {
           stop(paste("piecewiseSurvivalTime of piecewise exponential model",
                      "must be a subset of that in event_prior"))
         }
@@ -527,8 +573,10 @@ getPrediction <- function(
         if (tolower(dropout_prior2[[j]]$model) == "piecewise exponential" &&
             (length(dropout_prior2[[j]]$piecewiseDropoutTime) <
              length(piecewiseDropoutTime) ||
-             !all.equal(dropout_prior2[[j]]$piecewiseDropoutTime[
-               1:length(piecewiseDropoutTime)], piecewiseDropoutTime))) {
+             !isTRUE(all.equal(
+               dropout_prior2[[j]]$piecewiseDropoutTime[
+                 1:length(piecewiseDropoutTime)],
+               piecewiseDropoutTime)))) {
           stop(paste("piecewiseDropoutTime of piecewise exponential model",
                      "must be a subset of that in dropout_prior"))
         }
@@ -658,8 +706,10 @@ getPrediction <- function(
         if (tolower(event_prior2_w_x[[j]]$model) == "piecewise exponential" &&
             (length(event_prior2_w_x[[j]]$piecewiseSurvivalTime) <
              length(piecewiseSurvivalTime) ||
-             !all.equal(event_prior2_w_x[[j]]$piecewiseSurvivalTime[
-               1:length(piecewiseSurvivalTime)], piecewiseSurvivalTime))) {
+             !isTRUE(all.equal(
+               event_prior2_w_x[[j]]$piecewiseSurvivalTime[
+                 1:length(piecewiseSurvivalTime)],
+               piecewiseSurvivalTime)))) {
           stop(paste("piecewiseSurvivalTime of piecewise exponential model",
                      "must be a subset of that in",
                      "event_prior_with_covariates"))
@@ -759,8 +809,10 @@ getPrediction <- function(
         if (tolower(dropout_prior2_w_x[[j]]$model) == "piecewise exponential"
             && (length(dropout_prior2_w_x[[j]]$piecewiseDropoutTime) <
                 length(piecewiseDropoutTime) ||
-                !all.equal(dropout_prior2_w_x[[j]]$piecewiseDropoutTime[
-                  1:length(piecewiseDropoutTime)], piecewiseDropoutTime))) {
+                !isTRUE(all.equal(
+                  dropout_prior2_w_x[[j]]$piecewiseDropoutTime[
+                    1:length(piecewiseDropoutTime)],
+                  piecewiseDropoutTime)))) {
           stop(paste("piecewiseDropoutTime of piecewise exponential model",
                      "must be a subset of that in",
                      "dropout_prior_with_covariates"))
@@ -807,9 +859,6 @@ getPrediction <- function(
     dt$randdt <- as.Date(dt$randdt)
     dt$cutoffdt <- as.Date(dt$cutoffdt)
 
-    trialsdt = dt[1, get("trialsdt")]
-    cutoffdt = dt[1, get("cutoffdt")]
-
     # summarize observed data
     observed <- summarizeObserved(dt, to_predict, showplot,
                                   by_treatment,
@@ -836,6 +885,8 @@ getPrediction <- function(
                                   generate_plot, interactive_plot)
       enroll_fit1 <- enroll_fit$fit
 
+      enroll_fit2 <- enroll_fit1
+
       # combine prior and likelihood to yield posterior
       if (!is.null(enroll_prior)) {
         if (tolower(enroll_model) == "piecewise poisson" &&
@@ -861,14 +912,14 @@ getPrediction <- function(
                   enroll_fit1$theta)
         }
 
-        enroll_fit1 <- enroll_prior
-        enroll_fit1$vtheta = solve(info)
-        enroll_fit1$theta = as.numeric(enroll_fit1$vtheta %*% mu)
+        enroll_fit2 <- enroll_prior
+        enroll_fit2$vtheta = solve(info)
+        enroll_fit2$theta = as.numeric(enroll_fit2$vtheta %*% mu)
       }
 
       # enrollment prediction at the analysis stage
       enroll_pred <- predictEnrollment(
-        df = dt, target_n, enroll_fit = enroll_fit1,
+        df = dt, target_n, enroll_fit = enroll_fit2,
         lags, pilevel, nyears, nreps, showsummary, showplot = FALSE,
         by_treatment, ngroups, alloc, treatment_label,
         fix_parameter, generate_plot, interactive_plot)
@@ -888,13 +939,6 @@ getPrediction <- function(
     if (!is.null(df)) { # event prediction at analysis stage
       erify::check_n(target_d - observed$d0,
                      supplement = "Event target reached.")
-
-      if (by_treatment) {
-        sum_by_trt <- dt[, list(
-          n0 = .N, d0 = sum(get("event")), c0 = sum(get("dropout")),
-          r0 = sum(!(get("event") | get("dropout")))),
-          by = "treatment"]
-      }
 
       # convert prior by treatment to prior overall
       if (!is.null(event_prior) && !by_treatment &&
@@ -919,8 +963,9 @@ getPrediction <- function(
 
           if (model == "piecewise exponential") {
             for (j in 2:m0) {
-              if (!all.equal(event_prior[[j]]$piecewiseSurvivalTime,
-                             event_prior[[1]]$piecewiseSurvivalTime)) {
+              if (!isTRUE(all.equal(
+                event_prior[[j]]$piecewiseSurvivalTime,
+                event_prior[[1]]$piecewiseSurvivalTime))) {
                 stop(paste("piecewiseSurvivalTime must be equal across",
                            "treatments in event_prior"))
               }
@@ -982,8 +1027,9 @@ getPrediction <- function(
 
           if (model == "piecewise exponential") {
             for (j in 2:m0) {
-              if (!all.equal(event_prior_w_x[[j]]$piecewiseSurvivalTime,
-                             event_prior_w_x[[1]]$piecewiseSurvivalTime)) {
+              if (!isTRUE(all.equal(
+                event_prior_w_x[[j]]$piecewiseSurvivalTime,
+                event_prior_w_x[[1]]$piecewiseSurvivalTime))) {
                 stop(paste("piecewiseSurvivalTime must be equal across",
                            "treatments in event_prior_with_covariates"))
               }
@@ -1023,7 +1069,7 @@ getPrediction <- function(
 
 
       # fit the event model without covariates
-      if (!(to_predict == "event only" && !is.null(covariates_event))) {
+      if (!(tolower(to_predict) == "event only" && !is.null(covariates_event))) {
         event_fit <- fitEvent(dt, event_model,
                               piecewiseSurvivalTime,
                               k, scale, m,
@@ -1037,6 +1083,8 @@ getPrediction <- function(
         } else {
           event_fit1 <- purrr::map(event_fit, function(fit) fit$fit)
         }
+
+        event_fit2 <- event_fit1
 
         # combine prior and likelihood to yield posterior
         if (!is.null(event_prior)) {
@@ -1072,19 +1120,21 @@ getPrediction <- function(
                       event_fit1[[j]]$theta)
             }
 
-            event_fit2 <- event_prior2[[j]]
-            event_fit2$vtheta = solve(info)
-            event_fit2$theta = as.numeric(event_fit2$vtheta %*% mu)
+            event_fit3 <- event_prior2[[j]]
+            event_fit3$vtheta = solve(info)
+            event_fit3$theta = as.numeric(event_fit3$vtheta %*% mu)
 
-            event_fit1[[j]] <- event_fit2
+            event_fit2[[j]] <- event_fit3
           }
         }
 
         if (!by_treatment) {
           event_fit1 <- event_fit1[[1]]
+          event_fit2 <- event_fit2[[1]]
         }
       } else {
         event_fit1 <- NULL
+        event_fit2 <- NULL
       }
 
 
@@ -1104,6 +1154,8 @@ getPrediction <- function(
           event_fit1_w_x <- purrr::map(event_fit_w_x,
                                        function(fit) fit$fit)
         }
+
+        event_fit2_w_x <- event_fit1_w_x
 
         # combine prior and likelihood to yield posterior
         if (!is.null(event_prior_w_x)) {
@@ -1139,20 +1191,21 @@ getPrediction <- function(
                       event_fit1_w_x[[j]]$theta)
             }
 
-            event_fit2_w_x <- event_prior2_w_x[[j]]
-            event_fit2_w_x$vtheta = solve(info)
-            event_fit2_w_x$theta = as.numeric(event_fit2_w_x$vtheta
-                                              %*% mu)
+            event_fit3_w_x <- event_prior2_w_x[[j]]
+            event_fit3_w_x$vtheta = solve(info)
+            event_fit3_w_x$theta = as.numeric(event_fit3_w_x$vtheta %*% mu)
 
-            event_fit1_w_x[[j]] <- event_fit2_w_x
+            event_fit2_w_x[[j]] <- event_fit3_w_x
           }
         }
 
         if (!by_treatment) {
           event_fit1_w_x <- event_fit1_w_x[[1]]
+          event_fit2_w_x <- event_fit2_w_x[[1]]
         }
       } else {
         event_fit1_w_x <- NULL
+        event_fit2_w_x <- NULL
       }
 
 
@@ -1182,8 +1235,9 @@ getPrediction <- function(
 
             if (model == "piecewise exponential") {
               for (j in 2:m0) {
-                if (!all.equal(dropout_prior[[j]]$piecewiseDropoutTime,
-                               dropout_prior[[1]]$piecewiseDropoutTime)) {
+                if (!isTRUE(all.equal(
+                  dropout_prior[[j]]$piecewiseDropoutTime,
+                  dropout_prior[[1]]$piecewiseDropoutTime))) {
                   stop(paste("piecewiseDropoutTime must be equal across",
                              "treatments in dropout_prior"))
                 }
@@ -1245,8 +1299,9 @@ getPrediction <- function(
 
             if (model == "piecewise exponential") {
               for (j in 2:m0) {
-                if (!all.equal(dropout_prior_w_x[[j]]$piecewiseDropoutTime,
-                               dropout_prior_w_x[[1]]$piecewiseDropoutTime)) {
+                if (!isTRUE(all.equal(
+                  dropout_prior_w_x[[j]]$piecewiseDropoutTime,
+                  dropout_prior_w_x[[1]]$piecewiseDropoutTime))) {
                   stop(paste("piecewiseDropoutTime must be equal across",
                              "treatments in dropout_prior_with_covariates"))
                 }
@@ -1286,7 +1341,7 @@ getPrediction <- function(
 
 
         # fit the dropout model without covariates
-        if (!(to_predict == "event only" && !is.null(covariates_dropout))) {
+        if (!(tolower(to_predict) == "event only" && !is.null(covariates_dropout))) {
           dropout_fit <- fitDropout(dt, dropout_model,
                                     piecewiseDropoutTime,
                                     k_dropout, scale_dropout, m_dropout,
@@ -1300,6 +1355,8 @@ getPrediction <- function(
           } else {
             dropout_fit1 <- purrr::map(dropout_fit, function(fit) fit$fit)
           }
+
+          dropout_fit2 <- dropout_fit1
 
           # combine prior and likelihood to yield posterior
           if (!is.null(dropout_prior)) {
@@ -1335,19 +1392,21 @@ getPrediction <- function(
                         dropout_fit1[[j]]$theta)
               }
 
-              dropout_fit2 <- dropout_prior2[[j]]
-              dropout_fit2$vtheta = solve(info)
-              dropout_fit2$theta = as.numeric(dropout_fit2$vtheta %*% mu)
+              dropout_fit3 <- dropout_prior2[[j]]
+              dropout_fit3$vtheta = solve(info)
+              dropout_fit3$theta = as.numeric(dropout_fit3$vtheta %*% mu)
 
-              dropout_fit1[[j]] <- dropout_fit2
+              dropout_fit2[[j]] <- dropout_fit3
             }
           }
 
           if (!by_treatment) {
             dropout_fit1 <- dropout_fit1[[1]]
+            dropout_fit2 <- dropout_fit2[[1]]
           }
         } else {
           dropout_fit1 <- NULL
+          dropout_fit2 <- NULL
         }
 
 
@@ -1367,6 +1426,8 @@ getPrediction <- function(
             dropout_fit1_w_x <- purrr::map(dropout_fit_w_x,
                                            function(fit) fit$fit)
           }
+
+          dropout_fit2_w_x <- dropout_fit1_w_x
 
           # combine prior and likelihood to yield posterior
           if (!is.null(dropout_prior_w_x)) {
@@ -1402,20 +1463,21 @@ getPrediction <- function(
                         dropout_fit1_w_x[[j]]$theta)
               }
 
-              dropout_fit2_w_x <- dropout_prior2_w_x[[j]]
-              dropout_fit2_w_x$vtheta = solve(info)
-              dropout_fit2_w_x$theta = as.numeric(dropout_fit2_w_x$vtheta
-                                                  %*% mu)
+              dropout_fit3_w_x <- dropout_prior2_w_x[[j]]
+              dropout_fit3_w_x$vtheta = solve(info)
+              dropout_fit3_w_x$theta = as.numeric(dropout_fit3_w_x$vtheta %*% mu)
 
-              dropout_fit1_w_x[[j]] <- dropout_fit2_w_x
+              dropout_fit2_w_x[[j]] <- dropout_fit3_w_x
             }
           }
 
           if (!by_treatment) {
             dropout_fit1_w_x <- dropout_fit1_w_x[[1]]
+            dropout_fit2_w_x <- dropout_fit2_w_x[[1]]
           }
         } else {
           dropout_fit1_w_x <- NULL
+          dropout_fit2_w_x <- NULL
         }
 
         # event prediction with a dropout model
@@ -1423,27 +1485,27 @@ getPrediction <- function(
           event_pred <- predictEvent(
             df = dt, target_d,
             newSubjects = enroll_pred$newSubjects,
-            event_fit = event_fit1, m,
-            dropout_fit = dropout_fit1, m_dropout,
+            event_fit = event_fit2, m,
+            dropout_fit = dropout_fit2, m_dropout,
             fixedFollowup, followupTime, pilevel,
             nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
-            covariates_event, event_fit1_w_x,
-            covariates_dropout, dropout_fit1_w_x,
+            covariates_event, event_fit2_w_x,
+            covariates_dropout, dropout_fit2_w_x,
             fix_parameter, generate_plot, interactive_plot)
         } else {
           event_pred <- predictEvent(
             df = dt, target_d,
             newSubjects = NULL,
-            event_fit = event_fit1, m,
-            dropout_fit = dropout_fit1, m_dropout,
+            event_fit = event_fit2, m,
+            dropout_fit = dropout_fit2, m_dropout,
             fixedFollowup, followupTime, pilevel,
             nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
-            covariates_event, event_fit1_w_x,
-            covariates_dropout, dropout_fit1_w_x,
+            covariates_event, event_fit2_w_x,
+            covariates_dropout, dropout_fit2_w_x,
             fix_parameter, generate_plot, interactive_plot)
         }
       } else {  # no dropout model
@@ -1451,13 +1513,13 @@ getPrediction <- function(
           event_pred <- predictEvent(
             df = dt, target_d,
             newSubjects = enroll_pred$newSubjects,
-            event_fit = event_fit1, m,
+            event_fit = event_fit2, m,
             dropout_fit = NULL, m_dropout,
             fixedFollowup, followupTime, pilevel,
             nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
-            covariates_event, event_fit1_w_x,
+            covariates_event, event_fit2_w_x,
             covariates_dropout,
             dropout_fit_with_covariates = NULL,
             fix_parameter, generate_plot, interactive_plot)
@@ -1465,13 +1527,13 @@ getPrediction <- function(
           event_pred <- predictEvent(
             df = dt, target_d,
             newSubjects = NULL,
-            event_fit = event_fit1, m,
+            event_fit = event_fit2, m,
             dropout_fit = NULL, m_dropout,
             fixedFollowup, followupTime, pilevel,
             nyears, target_t, nreps,
             showEnrollment, showEvent, showDropout, showOngoing,
             showsummary, showplot = FALSE, by_treatment,
-            covariates_event, event_fit1_w_x,
+            covariates_event, event_fit2_w_x,
             covariates_dropout,
             dropout_fit_with_covariates = NULL,
             fix_parameter, generate_plot, interactive_plot)
@@ -1569,104 +1631,223 @@ getPrediction <- function(
   if (is.null(df)) { # design stage prediction
     if (tolower(to_predict) == "enrollment only") {
       if (generate_plot && showplot) print(enroll_pred$enroll_pred_plot)
-
-      list(stage = "Design stage",
-           to_predict = "Enrollment only",
-           enroll_fit = enroll_prior, enroll_pred = enroll_pred,
-           subject_data = subject_data)
+      out <- list(
+        stage = "Design stage",
+        to_predict = "Enrollment only",
+        enroll_prior = enroll_prior, enroll_pred = enroll_pred,
+        subject_data = subject_data)
     } else if (tolower(to_predict) == "enrollment and event") {
       if (generate_plot && showplot) print(event_pred$event_pred_plot)
 
       if (!is.null(dropout_prior)) {
-        list(stage = "Design stage",
-             to_predict = "Enrollment and event",
-             enroll_fit = enroll_prior, enroll_pred = enroll_pred,
-             event_fit = event_prior,
-             dropout_fit = dropout_prior, event_pred = event_pred,
-             subject_data = subject_data)
+        out <- list(
+          stage = "Design stage",
+          to_predict = "Enrollment and event",
+          enroll_prior = enroll_prior, enroll_pred = enroll_pred,
+          event_prior = event_prior,
+          dropout_prior = dropout_prior, event_pred = event_pred,
+          subject_data = subject_data)
       } else {
-        list(stage = "Design stage",
-             to_predict = "Enrollment and event",
-             enroll_fit = enroll_prior, enroll_pred = enroll_pred,
-             event_fit = event_prior, event_pred = event_pred,
-             subject_data = subject_data)
+        out <- list(
+          stage = "Design stage",
+          to_predict = "Enrollment and event",
+          enroll_prior = enroll_prior, enroll_pred = enroll_pred,
+          event_prior = event_prior, event_pred = event_pred,
+          subject_data = subject_data)
       }
     }
   } else { # analysis stage prediction
     if (tolower(to_predict) == "enrollment only") {
       if (generate_plot && showplot) print(enroll_pred$enroll_pred_plot)
 
-      list(stage = "Real-time before enrollment completion",
-           to_predict = "Enrollment only",
-           observed = observed, enroll_fit = enroll_fit,
-           enroll_pred = enroll_pred,
-           subject_data = subject_data)
+      out <- list(
+        stage = "Real-time before enrollment completion",
+        to_predict = "Enrollment only",
+        observed = observed, enroll_fit = enroll_fit1,
+        enroll_pred = enroll_pred,
+        subject_data = subject_data)
+
+      if (!is.null(enroll_prior)) {
+        out$enroll_prior <- enroll_prior
+        out$enroll_post <- enroll_fit2
+      }
     } else if (tolower(to_predict) == "enrollment and event") {
       if (generate_plot && showplot) print(event_pred$event_pred_plot)
 
       if (tolower(dropout_model) != "none") {
         if (!is.null(covariates_event) &&
             !is.null(covariates_dropout)) {
-          list(stage = "Real-time before enrollment completion",
-               to_predict = "Enrollment and event",
-               observed = observed, enroll_fit = enroll_fit,
-               enroll_pred = enroll_pred,
-               event_fit = event_fit,
-               event_fit_with_covariates = event_fit_w_x,
-               dropout_fit = dropout_fit,
-               dropout_fit_with_covariates = dropout_fit_w_x,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time before enrollment completion",
+            to_predict = "Enrollment and event",
+            observed = observed, enroll_fit = enroll_fit1,
+            enroll_pred = enroll_pred,
+            event_fit = event_fit1,
+            event_fit_with_covariates = event_fit1_w_x,
+            dropout_fit = dropout_fit1,
+            dropout_fit_with_covariates = dropout_fit1_w_x,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(enroll_prior)) {
+            out$enroll_prior <- enroll_prior
+            out$enroll_post <- enroll_fit2
+          }
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
+
+          if (!is.null(dropout_prior)) {
+            out$dropout_prior <- dropout_prior1
+            out$dropout_post <- dropout_fit2
+          }
+
+          if (!is.null(event_prior_with_covariates)) {
+            out$event_prior_with_covariates <- event_prior1_w_x
+            out$event_post_with_covariates <- event_fit2_w_x
+          }
+
+          if (!is.null(dropout_prior_with_covariates)) {
+            out$dropout_prior_with_covariates <- dropout_prior1_w_x
+            out$dropout_post_with_covariates <- dropout_fit2_w_x
+          }
         } else if (!is.null(covariates_event) &&
                    is.null(covariates_dropout)) {
-          list(stage = "Real-time before enrollment completion",
-               to_predict = "Enrollment and event",
-               observed = observed, enroll_fit = enroll_fit,
-               enroll_pred = enroll_pred,
-               event_fit = event_fit,
-               event_fit_with_covariates = event_fit_w_x,
-               dropout_fit = dropout_fit,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time before enrollment completion",
+            to_predict = "Enrollment and event",
+            observed = observed, enroll_fit = enroll_fit1,
+            enroll_pred = enroll_pred,
+            event_fit = event_fit1,
+            event_fit_with_covariates = event_fit1_w_x,
+            dropout_fit = dropout_fit1,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(enroll_prior)) {
+            out$enroll_prior <- enroll_prior
+            out$enroll_post <- enroll_fit2
+          }
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
+
+          if (!is.null(dropout_prior)) {
+            out$dropout_prior <- dropout_prior1
+            out$dropout_post <- dropout_fit2
+          }
+
+          if (!is.null(event_prior_with_covariates)) {
+            out$event_prior_with_covariates <- event_prior1_w_x
+            out$event_post_with_covariates <- event_fit2_w_x
+          }
         } else if (is.null(covariates_event) &&
                    !is.null(covariates_dropout)) {
-          list(stage = "Real-time before enrollment completion",
-               to_predict = "Enrollment and event",
-               observed = observed, enroll_fit = enroll_fit,
-               enroll_pred = enroll_pred,
-               event_fit = event_fit,
-               dropout_fit = dropout_fit,
-               dropout_fit_with_covariates = dropout_fit_w_x,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time before enrollment completion",
+            to_predict = "Enrollment and event",
+            observed = observed, enroll_fit = enroll_fit1,
+            enroll_pred = enroll_pred,
+            event_fit = event_fit1,
+            dropout_fit = dropout_fit1,
+            dropout_fit_with_covariates = dropout_fit1_w_x,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(enroll_prior)) {
+            out$enroll_prior <- enroll_prior
+            out$enroll_post <- enroll_fit2
+          }
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
+
+          if (!is.null(dropout_prior)) {
+            out$dropout_prior <- dropout_prior1
+            out$dropout_post <- dropout_fit2
+          }
+
+          if (!is.null(dropout_prior_with_covariates)) {
+            out$dropout_prior_with_covariates <- dropout_prior1_w_x
+            out$dropout_post_with_covariates <- dropout_fit2_w_x
+          }
         } else {
-          list(stage = "Real-time before enrollment completion",
-               to_predict = "Enrollment and event",
-               observed = observed, enroll_fit = enroll_fit,
-               enroll_pred = enroll_pred,
-               event_fit = event_fit,
-               dropout_fit = dropout_fit,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time before enrollment completion",
+            to_predict = "Enrollment and event",
+            observed = observed, enroll_fit = enroll_fit1,
+            enroll_pred = enroll_pred,
+            event_fit = event_fit1,
+            dropout_fit = dropout_fit1,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(enroll_prior)) {
+            out$enroll_prior <- enroll_prior
+            out$enroll_post <- enroll_fit2
+          }
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
+
+          if (!is.null(dropout_prior)) {
+            out$dropout_prior <- dropout_prior1
+            out$dropout_post <- dropout_fit2
+          }
         }
       } else { # no dropout model
         if (!is.null(covariates_event)) {
-          list(stage = "Real-time before enrollment completion",
-               to_predict = "Enrollment and event",
-               observed = observed, enroll_fit = enroll_fit,
-               enroll_pred = enroll_pred,
-               event_fit = event_fit,
-               event_fit_with_covariates = event_fit_w_x,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time before enrollment completion",
+            to_predict = "Enrollment and event",
+            observed = observed, enroll_fit = enroll_fit1,
+            enroll_pred = enroll_pred,
+            event_fit = event_fit1,
+            event_fit_with_covariates = event_fit1_w_x,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(enroll_prior)) {
+            out$enroll_prior <- enroll_prior
+            out$enroll_post <- enroll_fit2
+          }
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
+
+          if (!is.null(event_prior_with_covariates)) {
+            out$event_prior_with_covariates <- event_prior1_w_x
+            out$event_post_with_covariates <- event_fit2_w_x
+          }
         } else {
-          list(stage = "Real-time before enrollment completion",
-               to_predict = "Enrollment and event",
-               observed = observed, enroll_fit = enroll_fit,
-               enroll_pred = enroll_pred,
-               event_fit = event_fit,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time before enrollment completion",
+            to_predict = "Enrollment and event",
+            observed = observed, enroll_fit = enroll_fit1,
+            enroll_pred = enroll_pred,
+            event_fit = event_fit1,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(enroll_prior)) {
+            out$enroll_prior <- enroll_prior
+            out$enroll_post <- enroll_fit2
+          }
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
         }
       }
     } else if (tolower(to_predict) == "event only") {
@@ -1675,57 +1856,115 @@ getPrediction <- function(
       if (tolower(dropout_model) != "none") {
         if (!is.null(covariates_event) &&
             !is.null(covariates_dropout)) {
-          list(stage = "Real-time after enrollment completion",
-               to_predict = "Event only",
-               observed = observed,
-               event_fit_with_covariates = event_fit_w_x,
-               dropout_fit_with_covariates = dropout_fit_w_x,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time after enrollment completion",
+            to_predict = "Event only",
+            observed = observed,
+            event_fit_with_covariates = event_fit1_w_x,
+            dropout_fit_with_covariates = dropout_fit1_w_x,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(event_prior_with_covariates)) {
+            out$event_prior_with_covariates <- event_prior1_w_x
+            out$event_post_with_covariates <- event_fit2_w_x
+          }
+
+          if (!is.null(dropout_prior_with_covariates)) {
+            out$dropout_prior_with_covariates <- dropout_prior1_w_x
+            out$dropout_post_with_covariates <- dropout_fit2_w_x
+          }
         } else if (!is.null(covariates_event) &&
                    is.null(covariates_dropout)) {
-          list(stage = "Real-time after enrollment completion",
-               to_predict = "Event only",
-               observed = observed,
-               event_fit_with_covariates = event_fit_w_x,
-               dropout_fit = dropout_fit,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time after enrollment completion",
+            to_predict = "Event only",
+            observed = observed,
+            event_fit_with_covariates = event_fit1_w_x,
+            dropout_fit = dropout_fit1,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(event_prior_with_covariates)) {
+            out$event_prior_with_covariates <- event_prior1_w_x
+            out$event_post_with_covariates <- event_fit2_w_x
+          }
+
+          if (!is.null(dropout_prior)) {
+            out$dropout_prior <- dropout_prior1
+            out$dropout_post <- dropout_fit2
+          }
         } else if (is.null(covariates_event) &&
                    !is.null(covariates_dropout)) {
-          list(stage = "Real-time after enrollment completion",
-               to_predict = "Event only",
-               observed = observed,
-               event_fit = event_fit,
-               dropout_fit_with_covariates = dropout_fit_w_x,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time after enrollment completion",
+            to_predict = "Event only",
+            observed = observed,
+            event_fit = event_fit1,
+            dropout_fit_with_covariates = dropout_fit1_w_x,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
+
+          if (!is.null(dropout_prior_with_covariates)) {
+            out$dropout_prior_with_covariates <- dropout_prior1_w_x
+            out$dropout_post_with_covariates <- dropout_fit2_w_x
+          }
         } else {
-          list(stage = "Real-time after enrollment completion",
-               to_predict = "Event only",
-               observed = observed,
-               event_fit = event_fit,
-               dropout_fit = dropout_fit,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time after enrollment completion",
+            to_predict = "Event only",
+            observed = observed,
+            event_fit = event_fit1,
+            dropout_fit = dropout_fit1,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
+
+          if (!is.null(dropout_prior)) {
+            out$dropout_prior <- dropout_prior1
+            out$dropout_post <- dropout_fit2
+          }
         }
       } else { # no dropout model
         if (!is.null(covariates_event)) {
-          list(stage = "Real-time after enrollment completion",
-               to_predict = "Event only",
-               observed = observed,
-               event_fit_with_covariates = event_fit_w_x,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time after enrollment completion",
+            to_predict = "Event only",
+            observed = observed,
+            event_fit_with_covariates = event_fit1_w_x,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(event_prior_with_covariates)) {
+            out$event_prior_with_covariates <- event_prior1_w_x
+            out$event_post_with_covariates <- event_fit2_w_x
+          }
         } else {
-          list(stage = "Real-time after enrollment completion",
-               to_predict = "Event only",
-               observed = observed,
-               event_fit = event_fit,
-               event_pred = event_pred,
-               subject_data = subject_data)
+          out <- list(
+            stage = "Real-time after enrollment completion",
+            to_predict = "Event only",
+            observed = observed,
+            event_fit = event_fit1,
+            event_pred = event_pred,
+            subject_data = subject_data)
+
+          if (!is.null(event_prior)) {
+            out$event_prior <- event_prior1
+            out$event_post <- event_fit2
+          }
         }
       }
     }
   }
+
+  out
 }
