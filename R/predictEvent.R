@@ -642,7 +642,6 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     cutofftpdt = as.Date(tp - 1, origin = trialsdt)
     n0 = dt[, .N]
     d0 = dt[, sum(get("event"))]
-    c0 = dt[, sum(get("dropout"))]
     r0 = ongoingSubjects[, .N]
 
     # subjects who have had the event or dropped out
@@ -652,7 +651,6 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     tp = 1
     n0 = 0
     d0 = 0
-    c0 = 0
     r0 = 0
   }
 
@@ -1060,9 +1058,11 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           } else if (model == "cox") {
             tcut = event_fit[[j]]$piecewiseSurvivalTime
             M = length(tcut) - 1
-            w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
+            m_use = min(m, M)
+            idx = (M-m_use+1):M
+            w = diff(tcut)[idx]/(tcut[M+1] - tcut[M-m_use+1])
             lambda1 = exp(theta[1:M])
-            lambda2 = sum(w*lambda1[(M-m+1):M])
+            lambda2 = sum(w*lambda1[idx])
             gamma = c(theta[1:M], log(lambda2))
             survivalTimeNew[cols] = qpwexp(
               runif(ncols), gamma, M+1, tcut, lower.tail = FALSE)
@@ -1153,9 +1153,11 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           } else if (model == "cox") {
             tcut = event_fit[[j]]$piecewiseSurvivalTime
             M = length(tcut) - 1
-            w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
+            m_use = min(m, M)
+            idx = (M-m_use+1):M
+            w = diff(tcut)[idx]/(tcut[M+1] - tcut[M-m_use+1])
             lambda1 = exp(theta[1:M])
-            lambda2 = sum(w*lambda1[(M-m+1):M])
+            lambda2 = sum(w*lambda1[idx])
             gamma = c(theta[1:M], log(lambda2))
             p = ppwexp(u0, gamma, M+1, tcut, lower.tail = FALSE)
             survivalTimeOngoing[cols] = qpwexp(
@@ -1258,9 +1260,11 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           } else if (model == "cox") {
             tcut = event_fit_w_x[[j]]$piecewiseSurvivalTime
             M = length(tcut) - 1
-            w = diff(tcut)[(M-m+1):M]/(tcut[M+1] - tcut[M-m+1])
+            m_use = min(m, M)
+            idx = (M-m_use+1):M
+            w = diff(tcut)[idx]/(tcut[M+1] - tcut[M-m_use+1])
             lambda1 = exp(theta[1:M])
-            lambda2 = sum(w*lambda1[(M-m+1):M])
+            lambda2 = sum(w*lambda1[idx])
             gamma = c(theta[1:M], log(lambda2))
             xbeta = as.numeric(as.matrix(x1[,-1]) %*%
                                  theta[(M+1):(M+q_event)])
@@ -1345,10 +1349,12 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           } else if (model == "cox") {
             tcut = dropout_fit[[j]]$piecewiseDropoutTime
             M = length(tcut) - 1
-            w = diff(tcut)[(M-m_dropout+1):M]/
-              (tcut[M+1] - tcut[M-m_dropout+1])
+            m_use = min(m_dropout, M)
+            idx = (M-m_use+1):M
+            w = diff(tcut)[idx]/
+              (tcut[M+1] - tcut[M-m_use+1])
             lambda1 = exp(theta[1:M])
-            lambda2 = sum(w*lambda1[(M-m_dropout+1):M])
+            lambda2 = sum(w*lambda1[idx])
             gamma = c(theta[1:M], log(lambda2))
             dropoutTimeNew[cols] = qpwexp(
               runif(ncols), gamma, M+1, tcut, lower.tail = FALSE)
@@ -1439,10 +1445,12 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           } else if (model == "cox") {
             tcut = dropout_fit[[j]]$piecewiseDropoutTime
             M = length(tcut) - 1
-            w = diff(tcut)[(M-m_dropout+1):M]/
-              (tcut[M+1] - tcut[M-m_dropout+1])
+            m_use = min(m_dropout, M)
+            idx = (M-m_use+1):M
+            w = diff(tcut)[idx]/
+              (tcut[M+1] - tcut[M-m_use+1])
             lambda1 = exp(theta[1:M])
-            lambda2 = sum(w*lambda1[(M-m_dropout+1):M])
+            lambda2 = sum(w*lambda1[idx])
             gamma = c(theta[1:M], log(lambda2))
             p = ppwexp(u0, gamma, M+1, tcut, lower.tail = FALSE)
             dropoutTimeOngoing[cols] = qpwexp(
@@ -1470,7 +1478,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
 
           if (model == "exponential") {
             rate = exp(as.numeric(x1 %*% theta))
-            dropoutTimeOngoing[cols] = rexp(ncols)/rate + u0
+            dropoutTimeOngoing[cols] = rexp(ncols, rate) + u0
           } else if (model == "weibull") {
             shape = exp(-theta[q_dropout+2])
             scale = exp(as.numeric(x1 %*% theta[1:(q_dropout+1)]))
@@ -1545,10 +1553,12 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           } else if (model == "cox") {
             tcut = dropout_fit_w_x[[j]]$piecewiseDropoutTime
             M = length(tcut) - 1
-            w = diff(tcut)[(M-m_dropout+1):M]/
-              (tcut[M+1] - tcut[M-m_dropout+1])
+            m_use = min(m_dropout, M)
+            idx = (M-m_use+1):M
+            w = diff(tcut)[idx]/
+              (tcut[M+1] - tcut[M-m_use+1])
             lambda1 = exp(theta[1:M])
-            lambda2 = sum(w*lambda1[(M-m_dropout+1):M])
+            lambda2 = sum(w*lambda1[idx])
             gamma = c(theta[1:M], log(lambda2))
             xbeta = as.numeric(as.matrix(x1[,-1]) %*%
                                  theta[(M+1):(M+q_dropout)])
