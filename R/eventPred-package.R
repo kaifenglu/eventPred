@@ -163,8 +163,8 @@
 #' estimation of treatment effects. Stat in Med. 2002; 21:2175-2197.
 #'
 #'
-#' @importFrom data.table copy data.table
-#'   rbindlist setDT setorderv uniqueN .I .N .SD :=
+#' @importFrom data.table copy data.table rbindlist setDT setorderv
+#' @importFrom data.table uniqueN .I .N .SD :=
 #' @importFrom magrittr %>%
 #' @importFrom plotly plot_ly add_lines add_ribbons hide_legend layout
 #' @importFrom survival Surv survfit survreg
@@ -175,13 +175,13 @@
 #' @importFrom numDeriv grad
 #' @importFrom purrr list_c map map_dbl
 #' @importFrom stats as.formula dweibull dlnorm loess.smooth model.matrix
-#'   optim optimHess pexp plnorm plogis pnorm pweibull qlogis qlnorm qnorm
-#'   quantile rbinom reorder rexp rlnorm rlogis rmultinom rnorm runif
-#'   rweibull sd uniroot var
+#' @importFrom stats optim optimHess pexp plnorm plogis pnorm pweibull
+#' @importFrom stats qlogis qlnorm qnorm quantile rbinom reorder rexp
+#' @importFrom stats rlnorm rlogis rmultinom rnorm runif rweibull sd
+#' @importFrom stats uniroot var
 #' @importFrom flexsurv flexsurvspline psurvspline qsurvspline rsurvspline
-#'   dllogis pllogis
-#' @importFrom erify check_bool check_class check_content check_n
-#'   check_positive
+#' @importFrom flexsurv dllogis pllogis
+#' @importFrom erify check_bool check_class check_content check_n check_positive
 #' @importFrom lrstat phregr
 #' @importFrom rlang .data
 #' @importFrom shiny shinyAppDir
