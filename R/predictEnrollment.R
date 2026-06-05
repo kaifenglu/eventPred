@@ -46,6 +46,8 @@
 #' @param generate_plot Whether to generate plots.
 #' @param interactive_plot Whether to produce interactive plots using
 #'   plotly or static plots using ggplot2.
+#' @param nthreads Integer number of threads to use for `data.table' (0 means
+#'   the default data.table behavior).
 #'
 #' @details
 #' The \code{enroll_fit} variable can be used for enrollment prediction
@@ -88,7 +90,9 @@
 #'     theta = log(26/9*seq(1, 9)/30.4375),
 #'     vtheta = diag(9)*1e-8,
 #'     accrualTime = seq(0, 8)*30.4375),
-#'   pilevel = 0.90, nreps = 100)
+#'   pilevel = 0.90,
+#'   nreps = 100,
+#'   nthreads = 1)
 #'
 #' @export
 #'
@@ -100,7 +104,15 @@ predictEnrollment <- function(df = NULL, target_n = NA,
                               alloc = NULL, treatment_label = NULL,
                               fix_parameter = FALSE,
                               generate_plot = TRUE,
-                              interactive_plot = TRUE) {
+                              interactive_plot = TRUE,
+                              nthreads = 0) {
+
+  if (nthreads > 0) {
+    old_nthreads <- data.table::getDTthreads()
+    n_physical_cores <- parallel::detectCores(logical = FALSE)
+    data.table::setDTthreads(min(as.integer(nthreads), n_physical_cores))
+    on.exit(data.table::setDTthreads(old_nthreads), add = TRUE)
+  }
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
   erify::check_n(target_n)

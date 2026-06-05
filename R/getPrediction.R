@@ -138,6 +138,8 @@
 #' @param generate_plot Whether to generate plots.
 #' @param interactive_plot Whether to produce interactive plots using
 #'   plotly or static plots using ggplot2.
+#' @param nthreads Integer number of threads to use for `data.table' (0 means
+#'   the default data.table behavior).
 #'
 #' @details
 #' For the time-decay model, the mean function is
@@ -238,11 +240,14 @@
 #' set.seed(3000)
 #'
 #' pred <- getPrediction(
-#'   df = interimData2, to_predict = "event only",
+#'   df = interimData2,
+#'   to_predict = "event only",
 #'   target_d = 200,
 #'   event_model = "weibull",
 #'   dropout_model = "exponential",
-#'   pilevel = 0.90, nreps = 100)
+#'   pilevel = 0.90,
+#'   nreps = 100,
+#'   nthreads = 1)
 #'
 #' @export
 #'
@@ -272,7 +277,15 @@ getPrediction <- function(
     dropout_prior_with_covariates = NULL,
     fix_parameter = FALSE,
     generate_plot = TRUE,
-    interactive_plot = TRUE) {
+    interactive_plot = TRUE,
+    nthreads = 0) {
+
+  if (nthreads > 0) {
+    old_nthreads <- data.table::getDTthreads()
+    n_physical_cores <- parallel::detectCores(logical = FALSE)
+    data.table::setDTthreads(min(as.integer(nthreads), n_physical_cores))
+    on.exit(data.table::setDTthreads(old_nthreads), add = TRUE)
+  }
 
   if (!is.null(df)) erify::check_class(df, "data.frame")
 

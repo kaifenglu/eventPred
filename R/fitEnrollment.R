@@ -16,6 +16,8 @@
 #' @param generate_plot Whether to generate plots.
 #' @param interactive_plot Whether to produce interactive plots using
 #'   plotly or static plots using ggplot2.
+#' @param nthreads Integer number of threads to use for `data.table' (0 means
+#'   the default data.table behavior).
 #'
 #' @details
 #' For the time-decay model, the mean function is
@@ -46,15 +48,25 @@
 #' @examples
 #'
 #' enroll_fit <- fitEnrollment(
-#'   df = interimData1, enroll_model = "b-spline",
-#'   nknots = 1)
+#'   df = interimData1,
+#'   enroll_model = "b-spline",
+#'   nknots = 1,
+#'   nthreads = 1)
 #'
 #' @export
 #'
 fitEnrollment <- function(df, enroll_model = "b-spline", nknots = 0,
                           accrualTime = 0, showplot = TRUE,
                           generate_plot = TRUE,
-                          interactive_plot = TRUE) {
+                          interactive_plot = TRUE,
+                          nthreads = 0) {
+
+  if (nthreads > 0) {
+    old_nthreads <- data.table::getDTthreads()
+    n_physical_cores <- parallel::detectCores(logical = FALSE)
+    data.table::setDTthreads(min(as.integer(nthreads), n_physical_cores))
+    on.exit(data.table::setDTthreads(old_nthreads), add = TRUE)
+  }
 
   erify::check_class(df, "data.frame")
 

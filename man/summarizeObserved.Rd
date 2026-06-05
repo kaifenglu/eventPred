@@ -10,7 +10,8 @@ summarizeObserved(
   showplot = TRUE,
   by_treatment = FALSE,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 }
 \arguments{
@@ -36,6 +37,9 @@ it is set to \code{FALSE}.}
 
 \item{interactive_plot}{Whether to produce interactive plots using
 plotly or static plots using ggplot2.}
+
+\item{nthreads}{Integer number of threads to use for `data.table' (0 means
+the default data.table behavior).}
 }
 \value{
 A list that includes a range of summary statistics,
@@ -53,11 +57,13 @@ and time to dropout.
 
 observed1 <- summarizeObserved(
   df = interimData1,
-  to_predict = "enrollment and event")
+  to_predict = "enrollment and event",
+  nthreads = 1)
 
 observed2 <- summarizeObserved(
   df = interimData2,
-  to_predict = "event only")
+  to_predict = "event only",
+  nthreads = 1)
 
 }
 \author{

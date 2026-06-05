@@ -31,7 +31,8 @@ predictEvent(
   dropout_fit_with_covariates = NULL,
   fix_parameter = FALSE,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 }
 \arguments{
@@ -133,6 +134,9 @@ their approximate posterior distribution.}
 
 \item{interactive_plot}{Whether to produce interactive plots using
 plotly or static plots using ggplot2.}
+
+\item{nthreads}{Integer number of threads to use for `data.table' (0 means
+the default data.table behavior).}
 }
 \value{
 A list of prediction results which includes important
@@ -182,17 +186,22 @@ set.seed(2000)
 event_fits <- fitEvent(
   df = interimData2,
   event_model = "piecewise exponential",
-  piecewiseSurvivalTime = c(0, 140, 352))
+  piecewiseSurvivalTime = c(0, 140, 352),
+  nthreads = 1)
 
 dropout_fits <- fitDropout(
   df = interimData2,
-  dropout_model = "exponential")
+  dropout_model = "exponential",
+  nthreads = 1)
 
 event_pred <- predictEvent(
-  df = interimData2, target_d = 200,
+  df = interimData2,
+  target_d = 200,
   event_fit = event_fits$fit,
   dropout_fit = dropout_fits$fit,
-  pilevel = 0.90, nreps = 100)
+  pilevel = 0.90,
+  nreps = 100,
+  nthreads = 1)
 
 }
 \references{

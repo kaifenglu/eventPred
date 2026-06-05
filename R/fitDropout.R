@@ -44,6 +44,8 @@
 #' @param generate_plot Whether to generate plots.
 #' @param interactive_plot Whether to produce interactive plots using
 #'   plotly or static plots using ggplot2.
+#' @param nthreads Integer number of threads to use for `data.table' (0 means
+#'   the default data.table behavior).
 #'
 #' @return A list of results from the model fit including key information
 #' such as the dropout model, \code{model}, the estimated model parameters,
@@ -100,7 +102,8 @@
 #'
 #' dropout_fit <- fitDropout(
 #'   df = interimData2,
-#'   dropout_model = "exponential")
+#'   dropout_model = "exponential",
+#'   nthreads = 1)
 #'
 #' @export
 #'
@@ -111,7 +114,15 @@ fitDropout <- function(df, dropout_model = "exponential",
                        showplot = TRUE, by_treatment = FALSE,
                        covariates = NULL,
                        generate_plot = TRUE,
-                       interactive_plot = TRUE) {
+                       interactive_plot = TRUE,
+                       nthreads = 0) {
+
+  if (nthreads > 0) {
+    old_nthreads <- data.table::getDTthreads()
+    n_physical_cores <- parallel::detectCores(logical = FALSE)
+    data.table::setDTthreads(min(as.integer(nthreads), n_physical_cores))
+    on.exit(data.table::setDTthreads(old_nthreads), add = TRUE)
+  }
 
   erify::check_class(df, "data.frame")
 

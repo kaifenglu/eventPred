@@ -48,7 +48,8 @@ getPrediction(
   dropout_prior_with_covariates = NULL,
   fix_parameter = FALSE,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 }
 \arguments{
@@ -231,6 +232,9 @@ their approximate posterior distribution.}
 
 \item{interactive_plot}{Whether to produce interactive plots using
 plotly or static plots using ggplot2.}
+
+\item{nthreads}{Integer number of threads to use for `data.table' (0 means
+the default data.table behavior).}
 }
 \value{
 A list containing model-fit objects and prediction objects.
@@ -334,11 +338,14 @@ for enhanced modeling flexibility.
 set.seed(3000)
 
 pred <- getPrediction(
-  df = interimData2, to_predict = "event only",
+  df = interimData2,
+  to_predict = "event only",
   target_d = 200,
   event_model = "weibull",
   dropout_model = "exponential",
-  pilevel = 0.90, nreps = 100)
+  pilevel = 0.90,
+  nreps = 100,
+  nthreads = 1)
 
 }
 \author{
