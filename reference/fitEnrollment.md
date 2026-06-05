@@ -12,7 +12,8 @@ fitEnrollment(
   accrualTime = 0,
   showplot = TRUE,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 ```
 
@@ -54,6 +55,11 @@ fitEnrollment(
   Whether to produce interactive plots using plotly or static plots
   using ggplot2.
 
+- nthreads:
+
+  Integer number of threads to use for \`data.table' (0 means the
+  default data.table behavior).
+
 ## Value
 
 A list of results from the model fit including key information such as
@@ -88,6 +94,8 @@ Kaifeng Lu, <kaifenglu@gmail.com>
 ``` r
 
 enroll_fit <- fitEnrollment(
-  df = interimData1, enroll_model = "b-spline",
-  nknots = 1)
+  df = interimData1,
+  enroll_model = "b-spline",
+  nknots = 1,
+  nthreads = 1)
 ```

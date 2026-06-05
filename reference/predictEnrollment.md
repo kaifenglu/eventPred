@@ -23,7 +23,8 @@ predictEnrollment(
   treatment_label = NULL,
   fix_parameter = FALSE,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 ```
 
@@ -113,6 +114,11 @@ predictEnrollment(
   Whether to produce interactive plots using plotly or static plots
   using ggplot2.
 
+- nthreads:
+
+  Integer number of threads to use for \`data.table' (0 means the
+  default data.table behavior).
+
 ## Value
 
 A list of prediction results, which includes important information such
@@ -159,7 +165,9 @@ enroll_pred <- predictEnrollment(
     theta = log(26/9*seq(1, 9)/30.4375),
     vtheta = diag(9)*1e-8,
     accrualTime = seq(0, 8)*30.4375),
-  pilevel = 0.90, nreps = 100)
+  pilevel = 0.90,
+  nreps = 100,
+  nthreads = 1)
 #> Time from trial start until 300 subjects 
 #>  Median prediction day: 469 
 #>  Prediction interval: 443, 509 

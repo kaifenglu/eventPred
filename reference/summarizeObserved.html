@@ -67,7 +67,8 @@ and time to dropout.</p>
 <span>  showplot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  by_treatment <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  generate_plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  interactive_plot <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  interactive_plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  nthreads <span class="op">=</span> <span class="fl">0</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -109,6 +110,11 @@ it is set to <code>FALSE</code>.</p></dd>
 <dd><p>Whether to produce interactive plots using
 plotly or static plots using ggplot2.</p></dd>
 
+
+<dt id="arg-nthreads">nthreads<a class="anchor" aria-label="anchor" href="#arg-nthreads"></a></dt>
+<dd><p>Integer number of threads to use for `data.table' (0 means
+the default data.table behavior).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -125,11 +131,13 @@ data sets, and plots depending on the value of <code>to_predict</code>.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">observed1</span> <span class="op">&lt;-</span> <span class="fu">summarizeObserved</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  df <span class="op">=</span> <span class="va">interimData1</span>,</span></span>
-<span class="r-in"><span>  to_predict <span class="op">=</span> <span class="st">"enrollment and event"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  to_predict <span class="op">=</span> <span class="st">"enrollment and event"</span>,</span></span>
+<span class="r-in"><span>  nthreads <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">observed2</span> <span class="op">&lt;-</span> <span class="fu">summarizeObserved</span><span class="op">(</span></span></span>
 <span class="r-in"><span>  df <span class="op">=</span> <span class="va">interimData2</span>,</span></span>
-<span class="r-in"><span>  to_predict <span class="op">=</span> <span class="st">"event only"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  to_predict <span class="op">=</span> <span class="st">"event only"</span>,</span></span>
+<span class="r-in"><span>  nthreads <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>

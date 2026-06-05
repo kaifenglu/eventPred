@@ -35,7 +35,8 @@ predictEvent(
   dropout_fit_with_covariates = NULL,
   fix_parameter = FALSE,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 ```
 
@@ -184,6 +185,11 @@ predictEvent(
   Whether to produce interactive plots using plotly or static plots
   using ggplot2.
 
+- nthreads:
+
+  Integer number of threads to use for \`data.table' (0 means the
+  default data.table behavior).
+
 ## Value
 
 A list of prediction results which includes important information such
@@ -239,17 +245,22 @@ set.seed(2000)
 event_fits <- fitEvent(
   df = interimData2,
   event_model = "piecewise exponential",
-  piecewiseSurvivalTime = c(0, 140, 352))
+  piecewiseSurvivalTime = c(0, 140, 352),
+  nthreads = 1)
 
 dropout_fits <- fitDropout(
   df = interimData2,
-  dropout_model = "exponential")
+  dropout_model = "exponential",
+  nthreads = 1)
 
 event_pred <- predictEvent(
-  df = interimData2, target_d = 200,
+  df = interimData2,
+  target_d = 200,
   event_fit = event_fits$fit,
   dropout_fit = dropout_fits$fit,
-  pilevel = 0.90, nreps = 100)
+  pilevel = 0.90,
+  nreps = 100,
+  nthreads = 1)
 #> Time from cutoff until 200 events: 129 days 
 #>  Median prediction date: 2021-02-26 
 #>  Prediction interval: 2021-01-09, 2021-05-09 

@@ -15,7 +15,8 @@ summarizeObserved(
   showplot = TRUE,
   by_treatment = FALSE,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 ```
 
@@ -52,6 +53,11 @@ summarizeObserved(
   Whether to produce interactive plots using plotly or static plots
   using ggplot2.
 
+- nthreads:
+
+  Integer number of threads to use for \`data.table' (0 means the
+  default data.table behavior).
+
 ## Value
 
 A list that includes a range of summary statistics, data sets, and plots
@@ -67,9 +73,11 @@ Kaifeng Lu, <kaifenglu@gmail.com>
 
 observed1 <- summarizeObserved(
   df = interimData1,
-  to_predict = "enrollment and event")
+  to_predict = "enrollment and event",
+  nthreads = 1)
 
 observed2 <- summarizeObserved(
   df = interimData2,
-  to_predict = "event only")
+  to_predict = "event only",
+  nthreads = 1)
 ```

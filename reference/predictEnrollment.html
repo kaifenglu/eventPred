@@ -68,7 +68,8 @@ interval for the expected time to reach the enrollment target.</p>
 <span>  treatment_label <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fix_parameter <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  generate_plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  interactive_plot <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  interactive_plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  nthreads <span class="op">=</span> <span class="fl">0</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -166,6 +167,11 @@ their approximate posterior distributions.</p></dd>
 <dd><p>Whether to produce interactive plots using
 plotly or static plots using ggplot2.</p></dd>
 
+
+<dt id="arg-nthreads">nthreads<a class="anchor" aria-label="anchor" href="#arg-nthreads"></a></dt>
+<dd><p>Integer number of threads to use for `data.table' (0 means
+the default data.table behavior).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -214,7 +220,9 @@ accrual in clinical trials. Stat in Med. 2010; 29:649-658.</p>
 <span class="r-in"><span>    theta <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/Log.html" class="external-link">log</a></span><span class="op">(</span><span class="fl">26</span><span class="op">/</span><span class="fl">9</span><span class="op">*</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">9</span><span class="op">)</span><span class="op">/</span><span class="fl">30.4375</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>    vtheta <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/diag.html" class="external-link">diag</a></span><span class="op">(</span><span class="fl">9</span><span class="op">)</span><span class="op">*</span><span class="fl">1e-8</span>,</span></span>
 <span class="r-in"><span>    accrualTime <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">8</span><span class="op">)</span><span class="op">*</span><span class="fl">30.4375</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>  pilevel <span class="op">=</span> <span class="fl">0.90</span>, nreps <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  pilevel <span class="op">=</span> <span class="fl">0.90</span>,</span></span>
+<span class="r-in"><span>  nreps <span class="op">=</span> <span class="fl">100</span>,</span></span>
+<span class="r-in"><span>  nthreads <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Time from trial start until 300 subjects </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  Median prediction day: 469 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  Prediction interval: 443, 509 </span>

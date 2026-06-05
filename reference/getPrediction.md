@@ -50,7 +50,8 @@ getPrediction(
   dropout_prior_with_covariates = NULL,
   fix_parameter = FALSE,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 ```
 
@@ -307,6 +308,11 @@ getPrediction(
   Whether to produce interactive plots using plotly or static plots
   using ggplot2.
 
+- nthreads:
+
+  Integer number of threads to use for \`data.table' (0 means the
+  default data.table behavior).
+
 ## Value
 
 A list containing model-fit objects and prediction objects.
@@ -404,11 +410,14 @@ Kaifeng Lu, <kaifenglu@gmail.com>
 set.seed(3000)
 
 pred <- getPrediction(
-  df = interimData2, to_predict = "event only",
+  df = interimData2,
+  to_predict = "event only",
   target_d = 200,
   event_model = "weibull",
   dropout_model = "exponential",
-  pilevel = 0.90, nreps = 100)
+  pilevel = 0.90,
+  nreps = 100,
+  nthreads = 1)
 #> Time from cutoff until 200 events: 130 days 
 #>  Median prediction date: 2021-02-27 
 #>  Prediction interval: 2021-01-08, 2021-05-18 

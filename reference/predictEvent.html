@@ -85,7 +85,8 @@ number of events.</p>
 <span>  dropout_fit_with_covariates <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fix_parameter <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  generate_plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  interactive_plot <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  interactive_plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  nthreads <span class="op">=</span> <span class="fl">0</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -245,6 +246,11 @@ their approximate posterior distribution.</p></dd>
 <dd><p>Whether to produce interactive plots using
 plotly or static plots using ggplot2.</p></dd>
 
+
+<dt id="arg-nthreads">nthreads<a class="anchor" aria-label="anchor" href="#arg-nthreads"></a></dt>
+<dd><p>Integer number of threads to use for `data.table' (0 means
+the default data.table behavior).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -300,17 +306,22 @@ times in clinical trials. Pharm Stat. 2008; 7:107-120.</p>
 <span class="r-in"><span><span class="va">event_fits</span> <span class="op">&lt;-</span> <span class="fu"><a href="fitEvent.html">fitEvent</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>  df <span class="op">=</span> <span class="va">interimData2</span>,</span></span>
 <span class="r-in"><span>  event_model <span class="op">=</span> <span class="st">"piecewise exponential"</span>,</span></span>
-<span class="r-in"><span>  piecewiseSurvivalTime <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">140</span>, <span class="fl">352</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  piecewiseSurvivalTime <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">140</span>, <span class="fl">352</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  nthreads <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">dropout_fits</span> <span class="op">&lt;-</span> <span class="fu"><a href="fitDropout.html">fitDropout</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>  df <span class="op">=</span> <span class="va">interimData2</span>,</span></span>
-<span class="r-in"><span>  dropout_model <span class="op">=</span> <span class="st">"exponential"</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  dropout_model <span class="op">=</span> <span class="st">"exponential"</span>,</span></span>
+<span class="r-in"><span>  nthreads <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="va">event_pred</span> <span class="op">&lt;-</span> <span class="fu">predictEvent</span><span class="op">(</span></span></span>
-<span class="r-in"><span>  df <span class="op">=</span> <span class="va">interimData2</span>, target_d <span class="op">=</span> <span class="fl">200</span>,</span></span>
+<span class="r-in"><span>  df <span class="op">=</span> <span class="va">interimData2</span>,</span></span>
+<span class="r-in"><span>  target_d <span class="op">=</span> <span class="fl">200</span>,</span></span>
 <span class="r-in"><span>  event_fit <span class="op">=</span> <span class="va">event_fits</span><span class="op">$</span><span class="va">fit</span>,</span></span>
 <span class="r-in"><span>  dropout_fit <span class="op">=</span> <span class="va">dropout_fits</span><span class="op">$</span><span class="va">fit</span>,</span></span>
-<span class="r-in"><span>  pilevel <span class="op">=</span> <span class="fl">0.90</span>, nreps <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  pilevel <span class="op">=</span> <span class="fl">0.90</span>,</span></span>
+<span class="r-in"><span>  nreps <span class="op">=</span> <span class="fl">100</span>,</span></span>
+<span class="r-in"><span>  nthreads <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Time from cutoff until 200 events: 129 days </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  Median prediction date: 2021-02-26 </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  Prediction interval: 2021-01-09, 2021-05-09 </span>

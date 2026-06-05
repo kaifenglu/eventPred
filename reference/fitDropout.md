@@ -16,7 +16,8 @@ fitDropout(
   by_treatment = FALSE,
   covariates = NULL,
   generate_plot = TRUE,
-  interactive_plot = TRUE
+  interactive_plot = TRUE,
+  nthreads = 0
 )
 ```
 
@@ -95,6 +96,11 @@ fitDropout(
   Whether to produce interactive plots using plotly or static plots
   using ggplot2.
 
+- nthreads:
+
+  Integer number of threads to use for \`data.table' (0 means the
+  default data.table behavior).
+
 ## Value
 
 A list of results from the model fit including key information such as
@@ -152,5 +158,6 @@ Kaifeng Lu, <kaifenglu@gmail.com>
 
 dropout_fit <- fitDropout(
   df = interimData2,
-  dropout_model = "exponential")
+  dropout_model = "exponential",
+  nthreads = 1)
 ```
