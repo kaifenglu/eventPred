@@ -857,7 +857,8 @@ getPrediction <- function(
 
     if (any(is.na(dt[, mget(req_cols)]))) {
       stop(paste("The following columns of df have missing values:",
-                 paste(req_cols[sapply(dt, function(x) any(is.na(x)))],
+                 paste(req_cols[sapply(dt[, mget(req_cols)], function(x)
+                   any(is.na(x)))],
                        collapse = ", ")))
     }
 
