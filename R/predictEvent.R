@@ -652,7 +652,11 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
     arrivalTimeOngoing <- ongoingSubjects$arrivalTime
     treatmentOngoing <- ongoingSubjects$treatment
     treatment_descriptionOngoing <- ongoingSubjects$treatment_description
-    time0Ongoing <- ongoingSubjects$time
+
+    # simulate new event/dropout time after data cut for ongoing subjects
+    time0Ongoing <- as.numeric(ongoingSubjects$cutoffdt -
+                                 ongoingSubjects$randdt + 1)
+
     tp = ongoingSubjects[, min(get("totalTime"))]
     cutofftpdt = as.Date(tp - 1, origin = trialsdt)
     n0 = dt[, .N]
@@ -1602,7 +1606,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
       if (!is.null(dropout_fit) || !is.null(dropout_fit_w_x)) {
         timex = pmin(survivalTime, dropoutTime)
         eventx = 1*(timex == survivalTime)
-        dropoutx = 1*(timex == dropoutTime)
+        dropoutx = 1*(timex == dropoutTime & timex != survivalTime)
       } else {
         timex = survivalTime
         eventx = 1
@@ -1612,7 +1616,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
       if (!is.null(dropout_fit) || !is.null(dropout_fit_w_x)) {
         timex = pmin(survivalTime, dropoutTime, followupTime)
         eventx = 1*(timex == survivalTime)
-        dropoutx = 1*(timex == dropoutTime)
+        dropoutx = 1*(timex == dropoutTime & timex != survivalTime)
       } else {
         timex = pmin(survivalTime, followupTime)
         eventx = 1*(timex == survivalTime)
@@ -1689,7 +1693,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
       if (sdf(tmax, target_d, d0, newEvents) <= qs[j]) {
         pred_day[j] = uniroot(function(x)
           sdf(x, target_d, d0, newEvents) - qs[j],
-          c(tp, tmax), tol = 1)$root
+          c(t0, tmax), tol = 1)$root
         pred_day[j] = ceiling(pred_day[j])
       }
     }
@@ -1742,14 +1746,14 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
   # observed time points
   if (!is.null(df)) {
     t2 = sort(unique(c(dt$arrivalTime, dt$totalTime)))
-    t = unique(c(t2[t2 >= tp], seq(t0, t1, 30), t1))
+    t = unique(c(t2[t2 >= t0], seq(t0, t1, 30), t1))
   } else {
     t = unique(c(seq(t0, t1, 30), t1))
   }
 
   # future time points at which to predict number of events
   if (!all(is.na(target_t))) {
-    t = sort(unique(t, target_t + t0))
+    t = sort(unique(c(t, target_t + t0)))
   }
 
   if (!by_treatment) {
@@ -1809,7 +1813,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           upper = NA,
           mean = cumsum(get("event")),  # Reuses n
           var = 0)]), use.names = TRUE)[
-            get("t") <= tp][order(get("t"))]
+            get("t") <= t0][order(get("t"))]
 
       # observed number of dropouts before data cut
       dfa3 <- data.table::rbindlist(list(
@@ -1821,7 +1825,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
           upper = NA,
           mean = cumsum(get("dropout")),  # Reuses n
           var = 0)]), use.names = TRUE)[
-            get("t") <= tp][order(get("t"))]
+            get("t") <= t0][order(get("t"))]
 
       # observed number of ongoing subjects before data cutoff
       dfa4 <- data.table::rbindlist(list(
@@ -1837,20 +1841,20 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                        upper = NA,
                        mean = get("n"),
                        var = 0)]), use.names = TRUE)[
-                         get("t") <= tp][order(get("t"))]
+                         get("t") <= t0][order(get("t"))]
 
 
-      # add time tp
+      # add time t0
       dfa2 <- data.table::rbindlist(list(
-        dfa2, data.table::copy(dfa2)[.N][, `:=`(t = tp)]),
+        dfa2, data.table::copy(dfa2)[.N][, `:=`(t = t0)]),
         use.names = TRUE)[, .SD[.N], by = "t"]
 
       dfa3 <- data.table::rbindlist(list(
-        dfa3, data.table::copy(dfa3)[.N][, `:=`(t = tp)]),
+        dfa3, data.table::copy(dfa3)[.N][, `:=`(t = t0)]),
         use.names = TRUE)[, .SD[.N], by = "t"]
 
       dfa4 <- data.table::rbindlist(list(
-        dfa4, data.table::copy(dfa4)[.N][, `:=`(t = tp)]),
+        dfa4, data.table::copy(dfa4)[.N][, `:=`(t = t0)]),
         use.names = TRUE)[, .SD[.N], by = "t"]
 
 
@@ -2016,29 +2020,6 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                               angle = 90, hjust = -0.1, vjust = 0,
                               size = 4) +
             ggplot2::labs(x = "", colour = NULL, fill = NULL)
-        }
-
-        if (tp < t0) {
-          if (interactive_plot) {
-            g1 <- g1 %>%
-              plotly::add_lines(
-                x = rep(cutofftpdt, 2), y = c(min(dfa$n), max(dfb$upper)),
-                name = "prediction start",
-                line = list(dash="dash"), showlegend = FALSE) %>%
-              plotly::layout(
-                annotations = list(
-                  x = cutofftpdt, y = 0, text = "prediction start",
-                  xanchor = "left", yanchor = "bottom", textangle = -90,
-                  font = list(size=12), showarrow = FALSE))
-          } else {
-            g1 <- g1 +
-              ggplot2::geom_vline(xintercept = cutofftpdt,
-                                  linetype = "dashed") +
-              ggplot2::annotate("text", x = cutofftpdt, y = 0,
-                                label = "prediction start",
-                                angle = -90, hjust = -0.1, vjust = 0,
-                                size = 4)
-          }
         }
 
         if (showEvent) {
@@ -2233,7 +2214,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             upper = NA,
             mean = cumsum(get("event")),  # Reuses n
             var = 0), by = trtcols]),
-        use.names = TRUE)[get("t") <= tp][
+        use.names = TRUE)[get("t") <= t0][
           do.call("order", lapply(trttcols, as.name))]
 
       # observed number of dropouts before data cut
@@ -2248,7 +2229,7 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
             mean = cumsum(get("dropout")),  # Reuses n
             var = 0),
             by = trtcols]),
-        use.names = TRUE)[get("t") <= tp][
+        use.names = TRUE)[get("t") <= t0][
           do.call("order", lapply(trttcols, as.name))]
 
       # observed number of ongoing subjects before data cutoff
@@ -2266,24 +2247,24 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
               upper = NA,
               mean = get("n"),
               var = 0), by = trttcols]),
-        use.names = TRUE)[get("t") <= tp][
+        use.names = TRUE)[get("t") <= t0][
           do.call("order", lapply(trttcols, as.name))]
 
 
-      # add time tp
+      # add time t0
       dfa2 <- data.table::rbindlist(list(
         dfa2, data.table::copy(dfa2)[
-          , .SD[.N], by = trtcols][, `:=`(t = tp)]),
+          , .SD[.N], by = trtcols][, `:=`(t = t0)]),
         use.names = TRUE)[, .SD[.N], by = trttcols]
 
       dfa3 <- data.table::rbindlist(list(
         dfa3, data.table::copy(dfa3)[
-          , .SD[.N], by = trtcols][, `:=`(t = tp)]),
+          , .SD[.N], by = trtcols][, `:=`(t = t0)]),
         use.names = TRUE)[, .SD[.N], by = trttcols]
 
       dfa4 <- data.table::rbindlist(list(
         dfa4, data.table::copy(dfa4)[
-          , .SD[.N], by = trtcols][, `:=`(t = tp)]),
+          , .SD[.N], by = trtcols][, `:=`(t = t0)]),
         use.names = TRUE)[, .SD[.N], by = trttcols]
 
 
@@ -2454,20 +2435,6 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                             colour = NULL, fill = NULL)
           }
 
-          if (tp < t0) {
-            if (interactive_plot) {
-              g1[[(i+1) %% 9999]] <- g1[[(i+1) %% 9999]] %>%
-                plotly::add_lines(
-                  x = rep(cutofftpdt, 2), y = c(min(dfai$n), max(dfbi$upper)),
-                  name = "prediction start",
-                  line = list(dash="dash"), showlegend = FALSE)
-            } else {
-              g1[[(i+1) %% 9999]] <- g1[[(i+1) %% 9999]] +
-                ggplot2::geom_vline(xintercept = cutofftpdt,
-                                    linetype = "dashed")
-            }
-          }
-
           if (i == 9999) {
             if (interactive_plot) {
               g1[[1]] <- g1[[1]] %>%
@@ -2481,22 +2448,6 @@ predictEvent <- function(df = NULL, target_d = NA, newSubjects = NULL,
                 ggplot2::annotate("text", x = cutoffdt, y = 0,
                                   label = "cutoff", angle = 90,
                                   vjust = -0.5, size = 4)
-            }
-
-            if (tp < t0) {
-              if (interactive_plot) {
-                g1[[1]] <- g1[[1]] %>%
-                  plotly::layout(
-                    annotations = list(
-                      x = cutofftpdt, y = 0, text = "prediction start",
-                      xanchor = "left", yanchor = "bottom", textangle = -90,
-                      font = list(size=12), showarrow = FALSE))
-              } else {
-                g1[[1]] <- g1[[1]] +
-                  ggplot2::annotate("text", x = cutofftpdt, y = 0,
-                                    label = "prediction start", angle = 90,
-                                    vjust = -0.5, size = 4)
-              }
             }
 
             if (showEvent) {
