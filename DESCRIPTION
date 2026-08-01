@@ -1,6 +1,6 @@
 Package: eventPred
 Title: Event Prediction
-Version: 0.3.0
+Version: 0.3.1
 Authors@R: 
     person("Kaifeng", "Lu", , "kaifenglu@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-6160-7119"))
@@ -29,10 +29,20 @@ Imports:
     rlang (>= 1.0.6),
     lrstat (>= 0.2.12)
 Suggests: 
+    DT (>= 0.23),
+    dplyr (>= 1.0.0),
+    jsonlite (>= 1.8.0),
     knitr (>= 1.45),
+    prompter (>= 1.0.0),
     rmarkdown (>= 2.25),
+    readxl (>= 1.4.0),
+    shinybusy (>= 0.3.1),
+    shinyFeedback (>= 0.4.0),
+    shinyjs (>= 2.1.0),
+    shinyMatrix (>= 0.8.0),
     testthat (>= 3.0.0),
-    pkgdown (>= 2.2.0)
+    pkgdown (>= 2.2.0),
+    writexl (>= 1.4.2)
 Depends: 
     R (>= 3.5.0)
 VignetteBuilder: knitr
