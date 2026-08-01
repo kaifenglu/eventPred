@@ -1,6 +1,55 @@
 # Changelog
 
+## eventPred 0.3.1
+
+- fix [`unique()`](https://rdrr.io/r/base/unique.html) call in
+  `predictEvent` to correctly include user-specified `target_t` time
+  points on the prediction grid by using
+  `sort(unique(c(t, target_t + t0)))` instead of
+  `sort(unique(t, target_t + t0))`
+- fix simultaneous event/dropout tie-breaking in `predictEvent` so that
+  when simulated event and dropout times are equal, dropout is not
+  recorded, giving event priority
+- fix `rbindlist` argument order in `predictEnrollment` for the
+  by-treatment observed-data branch so that the day-1 anchor row (`df0`)
+  is listed before `dfa1`, preventing it from overwriting valid
+  enrollment counts at day 1
+- fix ggplot2 ribbon `fill` aesthetic in `predictEnrollment` at the
+  design stage (by-treatment) to place `fill = "prediction interval"`
+  inside `aes()`, consistent with other ribbons in the function
+- fix off-by-one denominator in Cox model extrapolation in `fitEvent`
+  and `fitDropout` so that the weighted-average hazard is computed as
+  `sum(bh$haz[idx]) / (tcut[M+1] - tcut[M-m_use+1])`, preventing an
+  invalid `bh$time[0]` access when `m == M`
+- fix `saveInputs` handler in `app.R` to save `target_n`, `target_d`,
+  `pilevel`, `nyears`, and `target_t` as raw `input$` values, ensuring
+  the save/load round-trip is consistent and does not fail when
+  `pred_at_t` is unchecked
+- remove bind_rows from app.R for shiny app as it is redundant and not
+  needed
+- change time0Ongoing in `predictEvent` from time to cutoffdt - randdt +
+  1 so that prediction starts at cutoffdt for ongoing subjects
+- remove the vertical reference line at the earliest totalTime for
+  ongoing subjects in prediction plots
+- add jsonlite and other shiny-app related packages to Suggests in
+  DESCRIPTION with explicit minimum versions
+- add .Rhistory to .Rbuildignore
+- fix event_pred_at_t text rendering in shiny app at design stage by
+  defining pred_at_t object in both design and analysis branches
+- fix dropout fit plot rendering in shiny app when dropout_model is None
+  by guarding against NULL dropout fit objects
+- fix input restoration in shiny app by using the correct update
+  functions for pilevel and fix_parameter
+- preserve original covariate names in fitEvent and fitDropout to avoid
+  case-mismatch failures in formula evaluation
+- fix B-spline enrollment prediction rate averaging index in
+  predictEnrollment when lags is larger than available history
+- improve missing-value validation messages in app.R and getPrediction.R
+  so reported columns are limited to required columns
+
 ## eventPred 0.3.0
+
+CRAN release: 2026-06-05
 
 - add prior and posterior model fits in getPrediction output when prior
   is provided

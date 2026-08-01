@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">eventPred</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,7 +40,29 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.3.0" id="eventpred-030">eventPred 0.3.0<a class="anchor" aria-label="anchor" href="#eventpred-030"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.3.1" id="eventpred-031">eventPred 0.3.1<a class="anchor" aria-label="anchor" href="#eventpred-031"></a></h2>
+<ul><li>fix <code><a href="https://rdrr.io/r/base/unique.html" class="external-link">unique()</a></code> call in <code>predictEvent</code> to correctly include user-specified <code>target_t</code> time points on the prediction grid by using <code>sort(unique(c(t, target_t + t0)))</code> instead of <code>sort(unique(t, target_t + t0))</code>
+</li>
+<li>fix simultaneous event/dropout tie-breaking in <code>predictEvent</code> so that when simulated event and dropout times are equal, dropout is not recorded, giving event priority</li>
+<li>fix <code>rbindlist</code> argument order in <code>predictEnrollment</code> for the by-treatment observed-data branch so that the day-1 anchor row (<code>df0</code>) is listed before <code>dfa1</code>, preventing it from overwriting valid enrollment counts at day 1</li>
+<li>fix ggplot2 ribbon <code>fill</code> aesthetic in <code>predictEnrollment</code> at the design stage (by-treatment) to place <code>fill = "prediction interval"</code> inside <code>aes()</code>, consistent with other ribbons in the function</li>
+<li>fix off-by-one denominator in Cox model extrapolation in <code>fitEvent</code> and <code>fitDropout</code> so that the weighted-average hazard is computed as <code>sum(bh$haz[idx]) / (tcut[M+1] - tcut[M-m_use+1])</code>, preventing an invalid <code>bh$time[0]</code> access when <code>m == M</code>
+</li>
+<li>fix <code>saveInputs</code> handler in <code>app.R</code> to save <code>target_n</code>, <code>target_d</code>, <code>pilevel</code>, <code>nyears</code>, and <code>target_t</code> as raw <code>input$</code> values, ensuring the save/load round-trip is consistent and does not fail when <code>pred_at_t</code> is unchecked</li>
+<li>remove bind_rows from app.R for shiny app as it is redundant and not needed</li>
+<li>change time0Ongoing in <code>predictEvent</code> from time to cutoffdt - randdt + 1 so that prediction starts at cutoffdt for ongoing subjects</li>
+<li>remove the vertical reference line at the earliest totalTime for ongoing subjects in prediction plots</li>
+<li>add jsonlite and other shiny-app related packages to Suggests in DESCRIPTION with explicit minimum versions</li>
+<li>add .Rhistory to .Rbuildignore</li>
+<li>fix event_pred_at_t text rendering in shiny app at design stage by defining pred_at_t object in both design and analysis branches</li>
+<li>fix dropout fit plot rendering in shiny app when dropout_model is None by guarding against NULL dropout fit objects</li>
+<li>fix input restoration in shiny app by using the correct update functions for pilevel and fix_parameter</li>
+<li>preserve original covariate names in fitEvent and fitDropout to avoid case-mismatch failures in formula evaluation</li>
+<li>fix B-spline enrollment prediction rate averaging index in predictEnrollment when lags is larger than available history</li>
+<li>improve missing-value validation messages in app.R and getPrediction.R so reported columns are limited to required columns</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.3.0" id="eventpred-030">eventPred 0.3.0<a class="anchor" aria-label="anchor" href="#eventpred-030"></a></h2><p class="text-muted">CRAN release: 2026-06-05</p>
 <ul><li>add prior and posterior model fits in getPrediction output when prior is provided</li>
 </ul></div>
     <div class="section level2">
@@ -296,7 +318,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>
