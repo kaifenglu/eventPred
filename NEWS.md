@@ -7,7 +7,7 @@
 * fix off-by-one denominator in Cox model extrapolation in `fitEvent` and `fitDropout` so that the weighted-average hazard is computed as `sum(bh$haz[idx]) / (tcut[M+1] - tcut[M-m_use+1])`, preventing an invalid `bh$time[0]` access when `m == M`
 * fix `saveInputs` handler in `app.R` to save `target_n`, `target_d`, `pilevel`, `nyears`, and `target_t` as raw `input$` values, ensuring the save/load round-trip is consistent and does not fail when `pred_at_t` is unchecked
 * remove bind_rows from app.R for shiny app as it is redundant and not needed
-* change time0Ongoing in predictEvent from time to cutoffdt - randdt + 1 so that prediction starts at cutoffdt for ongoing subjects
+* change time0Ongoing in `predictEvent` from time to cutoffdt - randdt + 1 so that prediction starts at cutoffdt for ongoing subjects
 * remove the vertical reference line at the earliest totalTime for ongoing subjects in prediction plots
 * add jsonlite and other shiny-app related packages to Suggests in DESCRIPTION with explicit minimum versions
 * add .Rhistory to .Rbuildignore
