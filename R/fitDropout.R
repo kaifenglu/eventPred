@@ -152,7 +152,6 @@ fitDropout <- function(df, dropout_model = "exponential",
       stop("All covariates must exist in df")
     }
 
-    covariates <- tolower(covariates)
     xnames = paste(covariates, collapse = "+")
     formula = as.formula(paste("survival::Surv(time, dropout) ~", xnames))
   } else {
@@ -453,8 +452,7 @@ fitDropout <- function(df, dropout_model = "exponential",
       # extrapolate beyond the last observed dropout time
       m_use <- min(m_dropout, M)
       idx <- (M-m_use+1):M
-      lambda2 <- sum(bh$haz[idx])/
-        (bh$time[M] - bh$time[M-m_use])
+      lambda2 <- sum(bh$haz[idx])/(tcut[M+1] - tcut[M-m_use+1])
 
       lambda <- c(lambda1, lambda2)
 
@@ -508,7 +506,7 @@ fitDropout <- function(df, dropout_model = "exponential",
             xaxis = list(title = "Days since randomization",
                          zeroline = FALSE),
             yaxis = list(title = "Survival probability", zeroline = FALSE),
-            title = list(text = "Fitted time to dropout survival curve"),
+            title = list(text = "Fitted time to censoring survival curve"),
             annotations = list(
               x = c(0.7, 0.7, 0.7), y = c(0.95, 0.90, 0.85), xref = "paper",
               yref = "paper", text = paste("<i>", c(modeltext, aictext,
@@ -528,7 +526,7 @@ fitDropout <- function(df, dropout_model = "exponential",
           ggplot2::labs(
             x = "Days since randomization",
             y = "Survival probability",
-            title = "Fitted time to dropout survival curve") +
+            title = "Fitted time to censoring survival curve") +
           ggplot2::annotate("text", x = x_pos, y = y_pos, label = modeltext,
                             hjust = 1.1, vjust = 1.5, size = 5,
                             colour = "red", fontface = "italic") +
