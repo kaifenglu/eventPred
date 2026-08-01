@@ -345,7 +345,7 @@ predictEnrollment <- function(df = NULL, target_n = NA,
       lambda = exp(x %*% t(theta))
       # moving average for enrollment rate after t0
       t0x = nrow(lambda)  # to account for enrollment pause
-      lambdaT = colMeans(lambda[(t0x - lags):t0x,])
+      lambdaT = colMeans(lambda[max(t0x - lags, 1):t0x,])
 
       for (i in 1:nreps) {
         index = (i-1)*n1 + (1:n1)
@@ -654,7 +654,7 @@ predictEnrollment <- function(df = NULL, target_n = NA,
         upper = NA_real_, mean = n0, var = 0)]
 
       dfa1 <- data.table::rbindlist(list(
-        dfa1, df0, dft0), use.names = TRUE)[
+        df0, dfa1, dft0), use.names = TRUE)[
           , .SD[.N], by = c("treatment", "treatment_description", "t")]
 
       # concatenate subjects enrolled before and after data cut
@@ -763,8 +763,8 @@ predictEnrollment <- function(df = NULL, target_n = NA,
               ggplot2::geom_line(data = dfbi, ggplot2::aes(
                 x = .data$t, y = .data$n, colour = "median prediction")) +
               ggplot2::geom_ribbon(data = dfbi, ggplot2::aes(
-                x = .data$t, ymin = .data$lower, ymax = .data$upper),
-                fill = "prediction interval", alpha = 0.5) +
+                x = .data$t, ymin = .data$lower, ymax = .data$upper,
+                fill = "prediction interval"), alpha = 0.5) +
               ggplot2::labs(
                 x = "Days since trial start",
                 y = "Subjects", colour = NULL, fill = NULL,
