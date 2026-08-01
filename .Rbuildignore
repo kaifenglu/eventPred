@@ -10,3 +10,4 @@ notes
 ^docs$
 ^pkgdown$
 ^\.github$
+^\.Rhistory$
