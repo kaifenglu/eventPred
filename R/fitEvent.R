@@ -152,7 +152,6 @@ fitEvent <- function(df, event_model = "model averaging",
       stop("All covariates must exist in df")
     }
 
-    covariates <- tolower(covariates)
     xnames = paste(covariates, collapse = "+")
     formula = as.formula(paste("survival::Surv(time, event) ~", xnames))
   } else {
@@ -450,7 +449,7 @@ fitEvent <- function(df, event_model = "model averaging",
       # extrapolate beyond the last observed event time
       m_use <- min(m, M)
       idx <- (M-m_use+1):M
-      lambda2 <- sum(bh$haz[idx])/(bh$time[M] - bh$time[M-m_use])
+      lambda2 <- sum(bh$haz[idx])/(tcut[M+1] - tcut[M-m_use+1])
       lambda <- c(lambda1, lambda2)
 
       # baseline survival
