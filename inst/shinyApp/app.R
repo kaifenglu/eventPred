@@ -6,11 +6,13 @@ library(shinybusy)
 library(readxl)
 library(writexl)
 library(data.table)
+library(dplyr)
 library(DT)
 library(purrr)
 library(prompter)
 library(ggplot2)
 library(plotly, warn.conflicts = FALSE)
+library(jsonlite)
 library(eventPred)
 
 
@@ -1589,7 +1591,8 @@ server <- function(input, output, session) {
 
     if (any(is.na(df[, ..req_cols]))) {
       stop(paste("The following columns have missing values:",
-                 paste(req_cols[sapply(df, function(x) any(is.na(x)))],
+                 paste(req_cols[sapply(df[, ..req_cols], function(x)
+                   any(is.na(x)))],
                        collapse = ", ")))
     }
 
@@ -2086,8 +2089,8 @@ server <- function(input, output, session) {
   # event fit information criteria
   output$event_fit_ic <- renderText({
     if (input$by_treatment && k() > 1 && !is.null(event_fit())) {
-      aic = sum(sapply(event_fit(), function(fit) fit$fit$aic))
-      bic = sum(sapply(event_fit(), function(fit) fit$fit$bic))
+      aic = sum(sapply(event_fit(), function(fit1) fit1$fit$aic))
+      bic = sum(sapply(event_fit(), function(fit1) fit1$fit$bic))
       aictext = paste("Total AIC:", formatC(aic, format = "f", digits = 2))
       bictext = paste("Total BIC:", formatC(bic, format = "f", digits = 2))
       text1 = paste0("<i>", aictext, ", ", bictext, "</i>")
@@ -2103,8 +2106,8 @@ server <- function(input, output, session) {
   output$dropout_fit_ic <- renderText({
     if (input$by_treatment && k() > 1 && input$dropout_model != "None"
         && !is.null(dropout_fit())) {
-      aic = sum(sapply(dropout_fit(), function(fit) fit$fit$aic))
-      bic = sum(sapply(dropout_fit(), function(fit) fit$fit$bic))
+      aic = sum(sapply(dropout_fit(), function(fit1) fit1$fit$aic))
+      bic = sum(sapply(dropout_fit(), function(fit1) fit1$fit$bic))
       aictext = paste("Total AIC:", formatC(aic, format = "f", digits = 2))
       bictext = paste("Total BIC:", formatC(bic, format = "f", digits = 2))
       text1 = paste0("<i>", aictext, ", ", bictext, "</i>")
@@ -2131,8 +2134,8 @@ server <- function(input, output, session) {
       })
 
       output[[paste0("dropout_fit_output", i)]] <- renderPlotly({
-        if (i <= k()) {
-          if (input$by_treatment && k() > 1 && !is.null(dropout_fit())) {
+        if (i <= k() && !is.null(dropout_fit()) && input$dropout_model != "None") {
+          if (input$by_treatment && k() > 1) {
             dropout_fit()[[i]]$fit_plot
           } else {
             dropout_fit()$fit_plot
@@ -2323,6 +2326,7 @@ server <- function(input, output, session) {
         }
       } else {
         if (!is.null(pred()$event_pred$pred_at_t)) {
+          dx <- pred()$event_pred$pred_at_t
           str1 <- paste0("Predicted number of events by day ", dx$t)
           str2 <- paste0("Median prediction: ", round(dx$n))
           str3 <- paste0("Prediction interval: ", round(dx$lower),
@@ -2521,22 +2525,6 @@ server <- function(input, output, session) {
               xaxis = list(title = "", zeroline = FALSE),
               yaxis = list(zeroline = FALSE))
 
-          if (observed()$tp < observed()$t0) {
-            g <- g %>%
-              plotly::add_lines(
-                x = rep(observed()$cutofftpdt, 2),
-                y = c(min(dfa$n), max(dfb$upper)),
-                name = "prediction start",
-                line = list(dash="dash"),
-                showlegend = FALSE) %>%
-              plotly::layout(
-                annotations = list(
-                  x = observed()$cutofftpdt, y = 0,
-                  text = "prediction start",
-                  xanchor = "left", yanchor = "bottom", textangle = -90,
-                  font = list(size=12), showarrow = FALSE))
-          }
-
           if (showEvent()) {
             g <- g %>%
               plotly::add_lines(
@@ -2696,18 +2684,6 @@ server <- function(input, output, session) {
                   xanchor = "center", yanchor = "bottom",
                   showarrow = FALSE, xref="paper", yref="paper"))
 
-
-            if (observed()$tp < observed()$t0) {
-              g[[(i+1) %% 9999]] <- g[[(i+1) %% 9999]] %>%
-                plotly::add_lines(
-                  x = rep(observed()$cutofftpdt, 2),
-                  y = c(min(dfai$n), max(dfbi$upper)),
-                  name = "prediction start",
-                  line = list(dash="dash"),
-                  showlegend = FALSE)
-            }
-
-
             if (i == 9999) {
               g[[1]] <- g[[1]] %>%
                 plotly::layout(
@@ -2715,16 +2691,6 @@ server <- function(input, output, session) {
                     x = observed()$cutoffdt, y = 0, text = "cutoff",
                     xanchor = "left", yanchor = "bottom", textangle = -90,
                     font = list(size = 12), showarrow = FALSE))
-
-              if (observed()$tp < observed()$t0) {
-                g[[1]] <- g[[1]] %>%
-                  plotly::layout(
-                    annotations = list(
-                      x = observed()$cutofftpdt, y = 0,
-                      text = "prediction start",
-                      xanchor = "left", yanchor = "bottom", textangle = -90,
-                      font = list(size=12), showarrow = FALSE))
-              }
 
               if (showEvent()) {
                 g[[1]] <- g[[1]] %>%
@@ -2882,9 +2848,9 @@ server <- function(input, output, session) {
       } else {
         eventsummarydata <- data.table::rbindlist(list(
           pred()$event_pred$enroll_pred_df,
-          bind_rows(pred()$event_pred$event_pred_df),
-          bind_rows(pred()$event_pred$dropout_pred_df),
-          bind_rows(pred()$event_pred$ongoing_pred_df)),
+          pred()$event_pred$event_pred_df,
+          pred()$event_pred$dropout_pred_df,
+          pred()$event_pred$ongoing_pred_df),
           use.names = TRUE)
       }
       writexl::write_xlsx(eventsummarydata, file)
@@ -3063,12 +3029,12 @@ server <- function(input, output, session) {
         stage = input$stage,
         to_predict = input$to_predict,
         to_predict2 = input$to_predict2,
-        target_n = target_n(),
+        target_n = input$target_n,
         target_d = input$target_d,
-        pilevel = pilevel(),
-        nyears = nyears(),
+        pilevel = input$pilevel,
+        nyears = input$nyears,
         pred_at_t = input$pred_at_t,
-        target_t = target_t(),
+        target_t = input$target_t,
         to_show = input$to_show,
         by_treatment = input$by_treatment,
         k = k(),
@@ -3187,7 +3153,7 @@ server <- function(input, output, session) {
       updateCheckboxGroupInput(session, "to_show", selected=x$to_show)
     }
 
-    updateNumericInput(session, "pilevel", value=x$pilevel)
+    updateRadioButtons(session, "pilevel", selected=x$pilevel)
     updateNumericInput(session, "nyears", value=x$nyears)
 
     if (x$to_predict == "Enrollment and event" ||
@@ -3212,7 +3178,7 @@ server <- function(input, output, session) {
         value=x$treatment_allocation)
     }
 
-    updateNumericInput(session, "fix_parameter", value=x$fix_parameter)
+    updateCheckboxInput(session, "fix_parameter", value=x$fix_parameter)
     updateNumericInput(session, "nreps", value=x$nreps)
     updateNumericInput(session, "seed", value=x$seed)
 
